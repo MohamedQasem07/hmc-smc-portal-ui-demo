@@ -1,0 +1,339 @@
+/* =========================================================================
+ * PORTAL-UX-P2A — Premium Theme "Aegis"
+ * -----------------------------------------------------------------------
+ * A scoped premium visual direction for HMC / SMC Clinic Portal.
+ *
+ * Inspiration:
+ *   - Red Sea coastal medicine (oceanic teal accent)
+ *   - Premium clinical operations (deep navy anchors)
+ *   - International medical assistance dignity
+ *   - High-end resort hospitality refinement
+ *
+ * Scope: every token below activates ONLY inside elements carrying
+ *        the `theme-premium` class. P1 routes are unaffected and recoverable
+ *        from the baseline snapshot at any time.
+ * ========================================================================= */
+
+.theme-premium {
+  /* ---------- Brand color stack ---------- */
+  --p-brand-deep:    #0A1B3D;   /* deep navy — anchors */
+  --p-brand-primary: #122B53;   /* primary navy */
+  --p-brand-mid:     #1E4180;   /* mid navy — accents */
+  --p-brand-sky:     #5E83B5;   /* lighter navy — hover */
+  --p-brand-pale:    #DCE5F1;
+
+  --p-teal:          #0FB5A9;   /* signature sea teal */
+  --p-teal-2:        #2DD4C7;   /* gradient stop */
+  --p-teal-soft:     #E0F8F6;   /* surface tint */
+
+  --p-gold:          #D9A574;   /* warm sand — premium accents, sparing */
+  --p-gold-soft:     #FBF5EC;
+
+  /* ---------- Surface stack ---------- */
+  --p-canvas:        #F6F8FB;
+  --p-canvas-warm:   #FAF9F6;
+  --p-surface:       #FFFFFF;
+  --p-surface-tint:  #F8FAFC;
+  --p-surface-deep:  #EEF2F8;
+
+  /* ---------- Ink stack ---------- */
+  --p-ink-950:       #060E1F;
+  --p-ink-900:       #0A1326;
+  --p-ink-800:       #182238;
+  --p-ink-700:       #2C3D5C;
+  --p-ink-600:       #455774;
+  --p-ink-500:       #6B7B95;
+  --p-ink-400:       #8C9AB4;
+  --p-ink-300:       #A6B3C9;
+  --p-ink-200:       #C8D1E1;
+  --p-ink-100:       #E2E8F2;
+
+  /* ---------- Hairlines ---------- */
+  --p-border:        rgba(15, 27, 56, 0.07);
+  --p-border-strong: rgba(15, 27, 56, 0.12);
+  --p-border-glass:  rgba(255, 255, 255, 0.18);
+
+  /* ---------- Status palette ---------- */
+  --p-cash:          #18A877;
+  --p-cash-soft:     #E2F7EE;
+  --p-insurance:     #0FB5A9;
+  --p-insurance-soft:#E0F8F6;
+  --p-pending:       #E1A148;
+  --p-pending-soft:  #FBF1DE;
+  --p-transfer:      #6F5DCE;
+  --p-transfer-soft: #ECE7FB;
+  --p-mixed:         #E26A6A;
+  --p-mixed-soft:    #FBE6E5;
+  --p-finalized:     #0A8F62;
+  --p-finalized-soft:#D8F0E6;
+
+  /* ---------- Shadow scale ---------- */
+  --p-shadow-soft:    0 1px 2px rgba(10,27,61,0.05), 0 2px 6px rgba(10,27,61,0.04);
+  --p-shadow-medium:  0 4px 12px rgba(10,27,61,0.06), 0 2px 4px rgba(10,27,61,0.04);
+  --p-shadow-card:    0 1px 2px rgba(10,27,61,0.04), 0 8px 24px rgba(10,27,61,0.06);
+  --p-shadow-hover:   0 8px 32px rgba(10,27,61,0.12), 0 4px 8px rgba(10,27,61,0.06);
+  --p-shadow-float:   0 16px 48px rgba(10,27,61,0.18), 0 8px 16px rgba(10,27,61,0.08);
+  --p-shadow-glow:    0 8px 30px rgba(15, 181, 169, 0.22), 0 0 0 1px rgba(15, 181, 169, 0.10);
+  --p-shadow-deep:    0 24px 64px rgba(10,27,61,0.24), 0 12px 32px rgba(10,27,61,0.16);
+
+  /* ---------- Radii ---------- */
+  --p-radius-input:  0.75rem;   /* 12px */
+  --p-radius-card:   1rem;      /* 16px */
+  --p-radius-hero:   1.5rem;    /* 24px */
+  --p-radius-pill:   9999px;
+
+  /* ---------- Motion ---------- */
+  --p-ease-soft:     cubic-bezier(0.22, 0.61, 0.36, 1);
+  --p-ease-out:      cubic-bezier(0.16, 1, 0.3, 1);
+  --p-dur-fast:      160ms;
+  --p-dur-base:      220ms;
+  --p-dur-slow:      360ms;
+
+  /* ---------- Hero gradient — multi-stop coastal mesh ---------- */
+  --p-mesh-1: radial-gradient(ellipse 80% 60% at 0% 0%, rgba(15, 181, 169, 0.45) 0%, transparent 60%);
+  --p-mesh-2: radial-gradient(ellipse 70% 60% at 100% 0%, rgba(30, 65, 128, 0.55) 0%, transparent 65%);
+  --p-mesh-3: radial-gradient(ellipse 60% 80% at 50% 100%, rgba(217, 165, 116, 0.20) 0%, transparent 60%);
+  --p-mesh-bg: linear-gradient(135deg, #0A1B3D 0%, #122B53 50%, #08213F 100%);
+
+  /* ---------- Typography ---------- */
+  --p-font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --p-font-ui:      'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --p-font-mono:    ui-monospace, 'SFMono-Regular', 'Menlo', 'Consolas', monospace;
+}
+
+/* =========================================================================
+   Premium primitives — class-based so they only apply inside `.theme-premium`
+   ========================================================================= */
+
+/* Hero gradient surface — used for login backdrop, admin header band */
+.theme-premium .p-mesh {
+  position: relative;
+  background-color: #0A1B3D;
+  background-image:
+    radial-gradient(ellipse 80% 60% at 0% 0%, rgba(15, 181, 169, 0.45) 0%, transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 0%, rgba(30, 65, 128, 0.55) 0%, transparent 65%),
+    radial-gradient(ellipse 60% 80% at 50% 100%, rgba(217, 165, 116, 0.20) 0%, transparent 60%),
+    linear-gradient(135deg, #0A1B3D 0%, #122B53 50%, #08213F 100%);
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  color: white;
+  isolation: isolate;
+}
+
+.theme-premium .p-mesh::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 18% 22%, rgba(255,255,255,0.04) 0%, transparent 12%),
+    radial-gradient(circle at 78% 70%, rgba(255,255,255,0.03) 0%, transparent 12%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Soft mesh — lighter version for admin hero bands */
+.theme-premium .p-mesh-light {
+  background:
+    radial-gradient(ellipse 50% 70% at 0% 0%, rgba(15, 181, 169, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 60% 80% at 100% 0%, rgba(30, 65, 128, 0.10) 0%, transparent 55%),
+    linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+}
+
+/* Glass panel — translucent + backdrop-filter where supported */
+.theme-premium .p-glass {
+  background: rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  border: 1px solid var(--p-border-glass);
+  border-radius: var(--p-radius-hero);
+}
+
+.theme-premium .p-glass-light {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius-card);
+}
+
+/* Premium card — refined elevation with subtle gradient stroke */
+.theme-premium .p-card {
+  background: var(--p-surface);
+  border-radius: var(--p-radius-card);
+  border: 1px solid var(--p-border);
+  box-shadow: var(--p-shadow-card);
+  transition: box-shadow var(--p-dur-base) var(--p-ease-soft),
+              transform var(--p-dur-base) var(--p-ease-soft),
+              border-color var(--p-dur-base) var(--p-ease-soft);
+}
+.theme-premium .p-card:hover {
+  box-shadow: var(--p-shadow-hover);
+  border-color: var(--p-border-strong);
+  transform: translateY(-1px);
+}
+
+/* Hero card — slightly larger radius, embedded glow */
+.theme-premium .p-hero-card {
+  border-radius: var(--p-radius-hero);
+  background: var(--p-surface);
+  border: 1px solid var(--p-border);
+  box-shadow: var(--p-shadow-card);
+  position: relative;
+  overflow: hidden;
+}
+.theme-premium .p-hero-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(15, 181, 169, 0.04) 0%, transparent 35%);
+  pointer-events: none;
+}
+
+/* Primary brand action — pill button with brand gradient + soft glow */
+.theme-premium .p-btn-primary {
+  background: linear-gradient(135deg, #0FB5A9 0%, #0A8F87 100%);
+  color: white;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  border: 1px solid rgba(15, 181, 169, 0.5);
+  box-shadow: var(--p-shadow-glow);
+  border-radius: var(--p-radius-pill);
+  transition: transform var(--p-dur-fast) var(--p-ease-soft), box-shadow var(--p-dur-base) var(--p-ease-soft), filter var(--p-dur-fast);
+}
+.theme-premium .p-btn-primary:hover { transform: translateY(-1px); filter: brightness(1.05); box-shadow: 0 12px 36px rgba(15, 181, 169, 0.32), 0 0 0 1px rgba(15, 181, 169, 0.20); }
+.theme-premium .p-btn-primary:active { transform: translateY(0); }
+
+.theme-premium .p-btn-dark {
+  background: linear-gradient(135deg, #122B53 0%, #0A1B3D 100%);
+  color: white;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.06);
+  box-shadow: 0 8px 24px rgba(10, 27, 61, 0.28);
+  border-radius: var(--p-radius-pill);
+  transition: transform var(--p-dur-fast) var(--p-ease-soft), filter var(--p-dur-fast);
+}
+.theme-premium .p-btn-dark:hover { transform: translateY(-1px); filter: brightness(1.08); }
+
+.theme-premium .p-btn-ghost {
+  background: rgba(255, 255, 255, 0.7);
+  color: var(--p-ink-700);
+  font-weight: 600;
+  border: 1px solid var(--p-border-strong);
+  border-radius: var(--p-radius-pill);
+  backdrop-filter: blur(8px);
+  transition: background var(--p-dur-fast) var(--p-ease-soft), border-color var(--p-dur-fast);
+}
+.theme-premium .p-btn-ghost:hover { background: rgba(255,255,255,1); border-color: var(--p-brand-sky); }
+
+/* Premium pill — used for status / KPI hints */
+.theme-premium .p-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border-radius: var(--p-radius-pill);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* Editorial uppercase eyebrow — used above headings */
+.theme-premium .p-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--p-teal);
+}
+
+/* Display headings */
+.theme-premium .p-display {
+  font-family: var(--p-font-display);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.04;
+  color: var(--p-ink-900);
+}
+.theme-premium .p-display-light { color: white; }
+
+.theme-premium .p-h1 {
+  font-family: var(--p-font-display);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  color: var(--p-ink-900);
+}
+
+.theme-premium .p-h2 {
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  color: var(--p-ink-900);
+}
+
+.theme-premium .p-numeric {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.02em;
+}
+
+/* Subtle decorative grid overlay for hero areas */
+.theme-premium .p-grid-overlay {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+}
+
+/* Decorative dot ring — used as motif on hero cards */
+.theme-premium .p-dot-ring {
+  background-image: radial-gradient(circle, rgba(15, 181, 169, 0.18) 1px, transparent 1.5px);
+  background-size: 10px 10px;
+  background-position: center;
+}
+
+/* Smooth entry animation */
+@keyframes p-rise {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes p-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
+@keyframes p-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.theme-premium .p-rise          { animation: p-rise var(--p-dur-slow) var(--p-ease-out) both; }
+.theme-premium .p-rise-1        { animation: p-rise var(--p-dur-slow) var(--p-ease-out) both; animation-delay: 60ms; }
+.theme-premium .p-rise-2        { animation: p-rise var(--p-dur-slow) var(--p-ease-out) both; animation-delay: 120ms; }
+.theme-premium .p-rise-3        { animation: p-rise var(--p-dur-slow) var(--p-ease-out) both; animation-delay: 180ms; }
+.theme-premium .p-rise-4        { animation: p-rise var(--p-dur-slow) var(--p-ease-out) both; animation-delay: 240ms; }
+.theme-premium .p-fade-in       { animation: p-fade var(--p-dur-base) var(--p-ease-soft) both; }
+
+/* Scrollbar refinement inside premium */
+.theme-premium *::-webkit-scrollbar { width: 8px; height: 8px; }
+.theme-premium *::-webkit-scrollbar-thumb { background: rgba(15, 27, 56, 0.18); border-radius: 999px; }
+.theme-premium *::-webkit-scrollbar-thumb:hover { background: rgba(15, 27, 56, 0.32); }
+.theme-premium *::-webkit-scrollbar-track { background: transparent; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .theme-premium .p-rise,
+  .theme-premium .p-rise-1,
+  .theme-premium .p-rise-2,
+  .theme-premium .p-rise-3,
+  .theme-premium .p-rise-4,
+  .theme-premium .p-fade-in { animation: none; }
+}
+
+/* Focus visible — branded teal ring */
+.theme-premium :focus-visible {
+  outline: 2px solid var(--p-teal);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
