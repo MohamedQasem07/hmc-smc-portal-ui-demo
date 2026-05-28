@@ -85,3 +85,103 @@ tbody tr.row-hover:hover {
 
 /* Prevent layout shift in mobile bottom-nav-padded views */
 .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+/* =========================================================================
+   P2C.R3 — Print CSS
+   Strip operational chrome (nav, sidebars, mobile bottom nav, action
+   buttons, filter chips, demo banners). Only the report/table content
+   prints, cleanly on A4.
+   ========================================================================= */
+@media print {
+  @page {
+    size: A4;
+    margin: 12mm 10mm;
+  }
+
+  html, body, #root {
+    background: white !important;
+    color: #111 !important;
+    height: auto !important;
+    min-height: 0 !important;
+  }
+  body {
+    font-size: 11pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Hide all operational chrome */
+  header, aside, nav,
+  .no-print, [data-no-print],
+  .print-hide,
+  .p-btn-primary, .p-btn-ghost {
+    display: none !important;
+  }
+
+  /* Hide the persistent mobile bottom nav and any sticky bars */
+  .md\:hidden.fixed,
+  .sticky {
+    position: static !important;
+    display: none !important;
+  }
+
+  /* Keep print-only blocks visible */
+  .print-only, [data-print-only] {
+    display: block !important;
+  }
+
+  /* Reset shells, drop the dark navy chrome */
+  .theme-premium {
+    background: white !important;
+  }
+  .theme-premium [class*="bg-"], .theme-premium [style*="background"] {
+    background: white !important;
+  }
+
+  /* Layout: full-width content with no shell padding */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    width: 100% !important;
+  }
+  main > div {
+    max-width: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  /* Tables should be borderless-clean and avoid page break inside rows */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    page-break-inside: auto !important;
+  }
+  thead { display: table-header-group !important; }
+  tr, td, th { page-break-inside: avoid !important; }
+  th, td {
+    border: 1px solid #CBD5E1 !important;
+    padding: 4pt 6pt !important;
+    color: #111 !important;
+    background: white !important;
+  }
+
+  /* Cards keep visible borders but lose elevation + tint */
+  .p-card {
+    box-shadow: none !important;
+    border: 1px solid #CBD5E1 !important;
+    background: white !important;
+    page-break-inside: avoid !important;
+  }
+
+  /* Allow link text colors to be readable */
+  a, a:visited { color: #111 !important; text-decoration: none !important; }
+
+  /* Hide form controls — they don't belong in a printed statement */
+  input, select, textarea, button {
+    display: none !important;
+  }
+
+  /* Show selected option's text in place of <select> by relying on
+     a `.print-value` span you can add adjacent to the select in code. */
+  .print-value { display: inline !important; }
+}

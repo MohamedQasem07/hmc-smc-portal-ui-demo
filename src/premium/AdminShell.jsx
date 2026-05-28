@@ -1,12 +1,13 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileBarChart2, FileLock2, Settings,
   Bell, Search, ChevronDown, Sparkles, BookOpen, Plus, Banknote,
-  Stethoscope, Menu, X, History, Calendar,
+  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users,
 } from 'lucide-react'
 import { BrandWordmark } from './BrandMark'
 import { Avatar, StatusPill } from './primitives'
+import { useUserMode } from '../context/UserModeContext'
 import { cn } from '../lib/cn'
 
 /**
@@ -36,6 +37,9 @@ const NAV_ITEMS = [
   { id: 'reports-daily',  label: 'Daily Report',      icon: FileBarChart2,   to: '/design-preview/admin/reports/daily',   indent: true },
   { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/design-preview/admin/reports/monthly', indent: true },
   { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/design-preview/admin/repatriation' },
+  { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/design-preview/admin/p2c-cases', section: 'Clinic & Reception' },
+  { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/design-preview/admin/insurance-completion', section: 'Clinic & Reception' },
+  { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/design-preview/admin/users-staff', section: 'Administration' },
   { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/design-preview/admin-control-center', section: 'Configuration' },
   { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/design-preview/admin-dashboard', restricted: true, section: 'Protected' },
 ]
@@ -59,7 +63,7 @@ function PremiumSidebar({ active }) {
           <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} emphasis={n.emphasis} indent={n.indent} />
         ))}
 
-        {['Configuration', 'Protected'].map((sec) => (
+        {['Clinic & Reception', 'Administration', 'Configuration', 'Protected'].map((sec) => (
           <div key={sec}>
             <NavSection label={sec} className="mt-4" />
             {NAV_ITEMS.filter((n) => n.section === sec).map((n) => (
@@ -72,21 +76,44 @@ function PremiumSidebar({ active }) {
         <NavLink to="/design-preview/admin-dashboard" icon={Settings} label="Settings" />
       </nav>
 
-      <div className="relative z-10 px-4 pb-4 pt-3 border-t shrink-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-        <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-          <div className="flex items-center gap-2.5">
-            <Avatar name="Demo Administrator" size={36} tone="teal" />
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-white truncate">Demo Administrator</div>
-              <div className="text-[11px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>Financial Director</div>
-            </div>
-          </div>
-          <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold" style={{ color: '#7FE7DE' }}>
-            <Sparkles className="w-3 h-3" /> Admin · Full access
+      <SidebarUserCard />
+    </aside>
+  )
+}
+
+function SidebarUserCard() {
+  const navigate = useNavigate()
+  const { currentUser, signOut } = useUserMode()
+  const name = currentUser?.displayName || 'Demo Administrator'
+  const role = currentUser?.role === 'admin' ? 'Financial Director'
+    : currentUser?.role === 'clinic_nurse' ? 'External Clinic User'
+    : currentUser?.role === 'reception_kawther' ? 'Al-Kawther Reception'
+    : currentUser?.role === 'reception_sheraton' ? 'Sheraton Reception'
+    : 'Demo Administrator'
+  function doSignOut() {
+    signOut()
+    navigate('/design-preview/login', { replace: true })
+  }
+  return (
+    <div className="relative z-10 px-4 pb-4 pt-3 border-t shrink-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+      <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-2.5">
+          <Avatar name={name} size={36} tone="teal" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-white truncate">{name}</div>
+            <div className="text-[11px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>{role}</div>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={doSignOut}
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-[12px] font-semibold transition-colors"
+          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <LogOut className="w-3.5 h-3.5" /> Sign Out
+        </button>
       </div>
-    </aside>
+    </div>
   )
 }
 
@@ -154,11 +181,7 @@ function PremiumTopBar({ placeholder, active }) {
             <Bell className="w-4 h-4" style={{ color: 'var(--p-ink-600)' }} />
             <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full" style={{ background: 'var(--p-mixed)' }} />
           </button>
-          <button className="inline-flex items-center gap-2 h-10 px-3 rounded-full transition-colors hover:bg-[var(--p-surface-tint)]" style={{ border: '1px solid var(--p-border-strong)' }}>
-            <Avatar name="Demo Administrator" size={26} tone="teal" />
-            <span className="text-xs font-semibold" style={{ color: 'var(--p-ink-700)' }}>Admin</span>
-            <ChevronDown className="w-3 h-3" style={{ color: 'var(--p-ink-400)' }} />
-          </button>
+          <TopBarUserMenu />
         </div>
       </header>
 
@@ -172,7 +195,7 @@ function PremiumTopBar({ placeholder, active }) {
           <Menu className="w-5 h-5" />
         </button>
         <BrandWordmark variant="light" compact />
-        <Avatar name="Demo Administrator" size={32} tone="teal" />
+        <MobileSignOutButton />
       </header>
 
       {menuOpen && (
@@ -193,7 +216,7 @@ function PremiumTopBar({ placeholder, active }) {
               {NAV_ITEMS.filter((n) => !n.section).map((n) => (
                 <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} emphasis={n.emphasis} indent={n.indent} />
               ))}
-              {['Configuration', 'Protected'].map((sec) => (
+              {['Administration', 'Configuration', 'Protected'].map((sec) => (
                 <div key={sec}>
                   <NavSection label={sec} className="mt-4" />
                   {NAV_ITEMS.filter((n) => n.section === sec).map((n) => (
@@ -202,9 +225,106 @@ function PremiumTopBar({ placeholder, active }) {
                 </div>
               ))}
             </nav>
+            <MobileSignOutFooter />
           </aside>
         </div>
       )}
     </>
+  )
+}
+
+function TopBarUserMenu() {
+  const navigate = useNavigate()
+  const { currentUser, signOut } = useUserMode()
+  const [open, setOpen] = useState(false)
+  const name = currentUser?.displayName || 'Admin'
+  const short = currentUser?.role === 'admin' ? 'Admin'
+    : currentUser?.role === 'clinic_nurse' ? 'Clinic'
+    : currentUser?.role === 'reception_kawther' ? 'Al-Kawther'
+    : currentUser?.role === 'reception_sheraton' ? 'Sheraton'
+    : 'User'
+  function doSignOut() {
+    setOpen(false)
+    signOut()
+    navigate('/design-preview/login', { replace: true })
+  }
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex items-center gap-2 h-10 px-3 rounded-full transition-colors hover:bg-[var(--p-surface-tint)]"
+        style={{ border: '1px solid var(--p-border-strong)' }}
+      >
+        <Avatar name={name} size={26} tone="teal" />
+        <span className="text-xs font-semibold" style={{ color: 'var(--p-ink-700)' }}>{short}</span>
+        <ChevronDown className="w-3 h-3" style={{ color: 'var(--p-ink-400)' }} />
+      </button>
+      {open && (
+        <>
+          <button type="button" className="fixed inset-0 z-30" onClick={() => setOpen(false)} aria-hidden />
+          <div
+            className="absolute right-0 top-12 z-40 w-64 rounded-2xl overflow-hidden"
+            style={{ background: 'white', border: '1px solid var(--p-border)', boxShadow: 'var(--p-shadow-card)' }}
+          >
+            <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--p-border)' }}>
+              <div className="text-sm font-semibold" style={{ color: 'var(--p-ink-900)' }}>{name}</div>
+              <div className="text-[11px] mt-0.5" style={{ color: 'var(--p-ink-500)' }}>{currentUser?.username ? `@${currentUser.username}` : '—'}</div>
+            </div>
+            <button
+              type="button"
+              onClick={doSignOut}
+              className="w-full px-4 py-3 text-left text-sm font-semibold flex items-center gap-2 transition-colors hover:bg-[var(--p-surface-tint)]"
+              style={{ color: 'var(--p-ink-700)' }}
+            >
+              <LogOut className="w-4 h-4" /> Sign out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function MobileSignOutButton() {
+  const navigate = useNavigate()
+  const { signOut } = useUserMode()
+  return (
+    <button
+      type="button"
+      onClick={() => { signOut(); navigate('/design-preview/login', { replace: true }) }}
+      aria-label="Sign out"
+      className="w-9 h-9 rounded-lg flex items-center justify-center"
+      style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}
+    >
+      <LogOut className="w-4 h-4" />
+    </button>
+  )
+}
+
+function MobileSignOutFooter() {
+  const navigate = useNavigate()
+  const { currentUser, signOut } = useUserMode()
+  const name = currentUser?.displayName || 'Admin'
+  return (
+    <div className="relative z-10 px-4 pb-4 pt-3 border-t shrink-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
+      <div className="rounded-2xl p-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="flex items-center gap-2.5">
+          <Avatar name={name} size={32} tone="teal" />
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-white truncate">{name}</div>
+            <div className="text-[11px] truncate" style={{ color: 'rgba(255,255,255,0.55)' }}>{currentUser?.username ? `@${currentUser.username}` : 'Signed in'}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => { signOut(); navigate('/design-preview/login', { replace: true }) }}
+          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-[12px] font-semibold transition-colors"
+          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.08)' }}
+        >
+          <LogOut className="w-3.5 h-3.5" /> Sign Out
+        </button>
+      </div>
+    </div>
   )
 }

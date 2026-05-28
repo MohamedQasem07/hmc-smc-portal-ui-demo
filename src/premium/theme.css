@@ -331,6 +331,29 @@
   .theme-premium .p-fade-in { animation: none; }
 }
 
+/* P2C form input — shared by clinic + reception new-case forms */
+.theme-premium .p-input {
+  display: block;
+  width: 100%;
+  height: 44px;
+  padding: 0 14px;
+  border-radius: var(--p-radius-input, 12px);
+  border: 1px solid var(--p-border-strong);
+  background: var(--p-surface);
+  color: var(--p-ink-900);
+  font-size: 14px;
+  transition: border-color var(--p-dur-fast), box-shadow var(--p-dur-fast);
+  outline: none;
+}
+.theme-premium .p-input:focus {
+  border-color: var(--p-teal);
+  box-shadow: 0 0 0 3px rgba(15,181,169,0.15);
+}
+.theme-premium textarea.p-input {
+  height: auto;
+  padding: 10px 14px;
+}
+
 /* Focus visible — branded teal ring */
 .theme-premium :focus-visible {
   outline: 2px solid var(--p-teal);

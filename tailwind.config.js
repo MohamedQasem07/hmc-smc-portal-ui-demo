@@ -102,6 +102,24 @@ export default {
       fontSize: {
         '2xs': ['0.6875rem', { lineHeight: '1rem' }],
       },
+      gridTemplateColumns: {
+        // Extended for R2 payment-line grid (24 fine-grained columns)
+        '24': 'repeat(24, minmax(0, 1fr))',
+      },
+      gridColumn: {
+        'span-13':  'span 13 / span 13',
+        'span-14':  'span 14 / span 14',
+        'span-15':  'span 15 / span 15',
+        'span-16':  'span 16 / span 16',
+        'span-17':  'span 17 / span 17',
+        'span-18':  'span 18 / span 18',
+        'span-19':  'span 19 / span 19',
+        'span-20':  'span 20 / span 20',
+        'span-21':  'span 21 / span 21',
+        'span-22':  'span 22 / span 22',
+        'span-23':  'span 23 / span 23',
+        'span-24':  'span 24 / span 24',
+      },
       boxShadow: {
         // Soft, medical-clean shadow language.
         card: '0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06)',
