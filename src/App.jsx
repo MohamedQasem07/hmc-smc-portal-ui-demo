@@ -8,6 +8,7 @@ import { ToastProvider } from './components/ui/Toast'
 import { UserModeProvider, useUserMode } from './context/UserModeContext'
 import { DemoStateProvider } from './context/DemoStateContext'
 import { IS_SUPABASE } from './lib/api/config'
+import { diag, installPageDiagnostics } from './lib/diag'
 
 import NotFound from './pages/NotFound'
 
@@ -93,13 +94,22 @@ function RecoveryWatcher() {
   return null
 }
 
+/** TEMP diagnostics: log every route change. */
+function RouteDiag() {
+  const loc = useLocation()
+  useEffect(() => { diag('route ->', loc.pathname + loc.search + loc.hash) }, [loc])
+  return null
+}
+
 export default function App() {
+  useEffect(() => { installPageDiagnostics() }, [])
   return (
     <UserModeProvider>
       <DemoStateProvider>
       <ToastProvider>
         <Router>
           <RecoveryWatcher />
+          <RouteDiag />
           <Routes>
             {/* Application entry → Login. */}
             <Route path="/" element={<Navigate to="/login" replace />} />

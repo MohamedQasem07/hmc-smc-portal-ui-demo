@@ -1,9 +1,10 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { DEMO_USERS } from '../data/mock'
 import { P2C_DEMO_USERS, EXTERNAL_CLINICS } from '../data/p2c'
 import { scopeForUser } from '../data/staffUsers'
 import { IS_SUPABASE } from '../lib/api/config'
 import { sbGetSessionUser, sbSignIn, sbSignOut, sbOnAuthChange } from '../lib/api/auth'
+import { diag } from '../lib/diag'
 
 /**
  * UserModeContext — role state + session.
@@ -81,6 +82,7 @@ export function UserModeProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(IS_SUPABASE ? null : initialSession)
   const [authReady, setAuthReady] = useState(!IS_SUPABASE)
   const [recoveryMode, setRecoveryMode] = useState(false)
+  const lastUidRef = useRef(null)
 
   const setDemoRole = (next, nextClinic) => {
     setDemoRoleState(next)
@@ -117,19 +119,21 @@ export function UserModeProvider({ children }) {
     let active = true
     let sub
     sbGetSessionUser()
-      .then((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
+      .then((u) => { if (active) { lastUidRef.current = u?.userId || null; setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true); diag('initial session ->', u?.userId || 'none') } })
       .catch(() => { if (active) setAuthReady(true) })
     sbOnAuthChange((u, event) => {
       if (!active) return
-      // Benign token refresh on tab focus / visibility change — same session and
-      // user. Do NOT touch state, or the route/open form would reset (this was
-      // the "reloads on Alt+Tab" report, together with the single-client fix).
+      diag('auth event:', event, '| user:', u?.userId || null, '| lastUid:', lastUidRef.current)
       if (event === 'TOKEN_REFRESHED') return
       if (event === 'PASSWORD_RECOVERY') { setRecoveryMode(true); return }
-      if (event === 'SIGNED_OUT') { setRecoveryMode(false); setCurrentUser(null); return }
-      // Only adopt a real user; never null-out the session on an ambiguous event,
-      // which would bounce a working admin to /login and wipe an open form.
-      if (u) { setCurrentUser(u); mirrorScope(u) }
+      if (event === 'SIGNED_OUT') { lastUidRef.current = null; setRecoveryMode(false); setCurrentUser(null); diag('currentUser -> null (SIGNED_OUT)'); return }
+      if (!u) return  // ambiguous event with no user — never null the session here
+      // Supabase RE-EMITS SIGNED_IN on every tab focus / visibility regain. If it
+      // is the same user, do NOTHING — adopting a fresh object reference is what
+      // made dependent providers re-run and the route remount (form wiped).
+      if (lastUidRef.current === u.userId) { diag('ignore re-emit (same user', u.userId + ')'); return }
+      lastUidRef.current = u.userId
+      setCurrentUser(u); mirrorScope(u); diag('currentUser ->', u.userId, u.role)
     })
       .then((s) => { sub = s })
       .catch(() => {})

@@ -11,6 +11,7 @@ import {
   createPortalUser, setUserActive, setUserRole, linkUserStaff, generateSetPasswordLink,
 } from '../../../../lib/api/portalData'
 import { cn } from '../../../../lib/cn'
+import { diag } from '../../../../lib/diag'
 
 /* =========================================================================
  * LiveUsersStaffConfig (Sprint 1) — supabase mode only. Admin-only.
@@ -89,6 +90,7 @@ function LinkBox({ email, otp, link, onClose }) {
 export default function LiveUsersStaffConfig() {
   const [tab, setTab] = useState('users')
   const [feedback, setFeedback] = useState(null)
+  useEffect(() => { diag('LiveUsersStaffConfig MOUNT'); return () => diag('LiveUsersStaffConfig UNMOUNT') }, [])
   const ok = (m) => setFeedback({ tone: 'ok', m })
   const err = (e) => setFeedback({ tone: 'err', m: e?.message || String(e) })
   return (
