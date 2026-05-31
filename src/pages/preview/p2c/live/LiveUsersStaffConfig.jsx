@@ -72,7 +72,7 @@ function LinkBox({ email, otp, link, onClose }) {
   return (
     <div className="rounded-xl p-3 space-y-2 text-[12px]" style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8' }}>
       <div className="flex items-center gap-1.5 font-bold" style={{ color: 'var(--p-ink-800)' }}>
-        <Link2 className="w-3.5 h-3.5" /> One-time set-password link for {email}
+        <Link2 className="w-3.5 h-3.5" /> One-time set / reset-password link for {email}
         {onClose && <button className="ml-auto" onClick={onClose}><X className="w-3.5 h-3.5" /></button>}
       </div>
       <div className="flex items-center gap-2">
@@ -96,8 +96,8 @@ export default function LiveUsersStaffConfig() {
       <div className="rounded-xl px-3 py-2.5 flex items-start gap-2 text-[12px]"
         style={{ background: 'var(--p-brand-pale)', color: 'var(--p-ink-800)', border: '1px solid #BCCDE8' }}>
         <ShieldCheck className="w-4 h-4 mt-0.5 shrink-0" style={{ color: 'var(--p-brand-mid)' }} />
-        <span>Live, admin-only. Create logins, set roles &amp; branch <strong>scopes</strong>, link staff, and issue one-time set-password links.
-          Passwords are never stored here — users set their own via a secure server-issued link.</span>
+        <span>Live, admin-only. Create logins, set roles &amp; branch <strong>scopes</strong>, link staff, and issue one-time <strong>set / reset-password</strong> links (first-time setup or forgotten-password reset — each fresh link invalidates the prior code).
+          Passwords are never stored here — users set their own via a secure server-issued link that always targets their real login email.</span>
       </div>
       <div className="flex items-center gap-1.5">
         {[['users', 'Users & Access', Users], ['staff', 'Staff & Assignments', IdCard]].map(([id, label, Icon]) => (
@@ -173,8 +173,12 @@ function UsersConfig({ onOk, onErr }) {
       const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}#/set-password`
       const r = await generateSetPasswordLink({ userId: user.userId, redirectTo })
       if (!r.ok) throw new Error(r.error)
-      setLinkBox({ email: user.email || user.displayName, otp: r.email_otp, link: r.action_link })
-      onOk(`Set-password link generated for ${user.displayName}.`)
+      // Use the authoritative login email the Edge Function resolved from auth.users —
+      // NEVER the display name (not a valid email; it breaks the set-password page).
+      const loginEmail = r.email || user.email
+      if (!loginEmail) throw new Error("Could not resolve this user's login email.")
+      setLinkBox({ email: loginEmail, otp: r.email_otp, link: r.action_link })
+      onOk(`Set / reset-password link generated for ${user.displayName}.`)
     } catch (e) { onErr(e) } finally { setBusy(false) }
   }
 
@@ -190,7 +194,7 @@ function UsersConfig({ onOk, onErr }) {
       </div>
 
       {showAdd && <AddUserForm locations={locations} staff={staff} busy={busy} setBusy={setBusy}
-        onErr={onErr} onCreated={(res, email) => { setShowAdd(false); setLinkBox({ email, otp: res.email_otp, link: res.action_link }); onOk('User created.'); load() }} />}
+        onErr={onErr} onCreated={(res, email) => { setShowAdd(false); setLinkBox({ email: res.email || email, otp: res.email_otp, link: res.action_link }); onOk('User created.'); load() }} />}
 
       {linkBox && <LinkBox {...linkBox} onClose={() => setLinkBox(null)} />}
 
@@ -214,9 +218,9 @@ function UsersConfig({ onOk, onErr }) {
                   u.active ? 'p-btn-ghost' : 'p-btn-primary')}>
                 <Power className="w-3.5 h-3.5" /> {u.active ? 'Disable' : 'Enable'}
               </button>
-              <button onClick={() => genLink(u)} disabled={busy}
+              <button onClick={() => genLink(u)} disabled={busy} title="First-time setup OR forgotten-password reset. Issues a fresh one-time link to the user's login email and invalidates any previous pending code."
                 className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[11px] font-bold p-btn-ghost">
-                <KeyRound className="w-3.5 h-3.5" /> Set-password link
+                <KeyRound className="w-3.5 h-3.5" /> Set / Reset password link
               </button>
             </div>
 

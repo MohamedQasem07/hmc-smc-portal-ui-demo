@@ -132,14 +132,22 @@ Deno.serve(async (req) => {
     const svc = gate.svc;
 
     if (action === "generate_set_password_link" || action === "reset_password") {
-      let email = body.email as string | undefined;
-      if (!email && body.user_id) {
+      // Always resolve the canonical login/auth email from auth.users — never
+      // trust a client-supplied display name. Prefer the authoritative lookup by
+      // user_id; fall back to a passed email only if no user_id was given.
+      let email: string | undefined;
+      if (body.user_id) {
         const { data } = await svc.auth.admin.getUserById(body.user_id);
         email = data?.user?.email ?? undefined;
       }
+      if (!email && body.email) email = String(body.email).trim();
       if (!email) return json({ error: "email or user_id required" }, 400, origin);
-      const link = await genLink(svc, String(email).trim(), body.redirectTo);
-      return json({ ok: true, ...link }, 200, origin);
+      const finalEmail = String(email).trim();
+      // A fresh recovery link overwrites auth.users.recovery_token, invalidating
+      // any previous pending set/reset code for this user. Works whether or not
+      // the user already has a password (first-time setup OR forgotten-password reset).
+      const link = await genLink(svc, finalEmail, body.redirectTo);
+      return json({ ok: true, email: finalEmail, ...link }, 200, origin);
     }
 
     if (action === "create_user") {
@@ -182,7 +190,7 @@ Deno.serve(async (req) => {
 
       // 4) one-time set-password link for the new user
       const link = await genLink(svc, email, body.redirectTo);
-      return json({ ok: true, user_id: userId, ...link }, 200, origin);
+      return json({ ok: true, user_id: userId, email, ...link }, 200, origin);
     }
 
     if (action === "set_active") {
