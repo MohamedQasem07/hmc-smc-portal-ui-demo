@@ -16,7 +16,7 @@ import { isSupabaseConfigured } from './config'
  *      (anon / publishable key ONLY — never the service-role key in frontend).
  *   4. Verify RLS per role on a throwaway row BEFORE any real write.
  * ========================================================================= */
-let _client = null
+let _clientPromise = null
 
 export async function getSupabaseClient() {
   if (!isSupabaseConfigured()) {
@@ -24,15 +24,23 @@ export async function getSupabaseClient() {
       'Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY (P3B).',
     )
   }
-  if (_client) return _client
-  // The /* @vite-ignore */ hint below keeps Vite from resolving/bundling the
-  // package at build time while it is not yet installed (mock mode never
-  // reaches this line).
-  const mod = await import(/* @vite-ignore */ '@supabase/supabase-js')
-  _client = mod.createClient(
-    import.meta.env.VITE_SUPABASE_URL,
-    import.meta.env.VITE_SUPABASE_ANON_KEY,
-    { db: { schema: 'public' }, auth: { persistSession: true, autoRefreshToken: true } },
-  )
-  return _client
+  // Cache the PROMISE, not the resolved client. The dynamic import below is
+  // async, so concurrent first-callers (UserModeContext fires sbGetSessionUser
+  // AND sbOnAuthChange at mount) would each pass an `if (_client)` check while
+  // _client is still null and each call createClient — producing TWO
+  // GoTrueClient instances that then fight over the same storage key on tab
+  // focus (spurious SIGNED_OUT → bounce to /login → looks like a reload).
+  // Sharing one promise guarantees exactly one createClient per browser context.
+  if (_clientPromise) return _clientPromise
+  _clientPromise = (async () => {
+    // The /* @vite-ignore */ hint keeps Vite from resolving/bundling the package
+    // at build time (mock mode never reaches this line).
+    const mod = await import(/* @vite-ignore */ '@supabase/supabase-js')
+    return mod.createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY,
+      { db: { schema: 'public' }, auth: { persistSession: true, autoRefreshToken: true } },
+    )
+  })()
+  return _clientPromise
 }

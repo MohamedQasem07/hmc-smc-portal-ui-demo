@@ -121,7 +121,15 @@ function UsersConfig({ onOk, onErr }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
-  const [linkBox, setLinkBox] = useState(null) // { email, otp, link }
+  // Persist the generated one-time link in sessionStorage so it survives any
+  // re-render/remount and can't be lost before the admin copies it.
+  const [linkBox, setLinkBoxState] = useState(() => {
+    try { const r = sessionStorage.getItem('aegis-last-setpw-link'); return r ? JSON.parse(r) : null } catch { return null }
+  })
+  const setLinkBox = useCallback((box) => {
+    setLinkBoxState(box)
+    try { box ? sessionStorage.setItem('aegis-last-setpw-link', JSON.stringify(box)) : sessionStorage.removeItem('aegis-last-setpw-link') } catch { /* ignore */ }
+  }, [])
 
   const load = useCallback(async () => {
     setLoading(true)

@@ -120,11 +120,16 @@ export function UserModeProvider({ children }) {
       .then((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
       .catch(() => { if (active) setAuthReady(true) })
     sbOnAuthChange((u, event) => {
-      if (event === 'PASSWORD_RECOVERY') { if (active) setRecoveryMode(true); return }
-      if (active) {
-        if (event === 'SIGNED_OUT') setRecoveryMode(false)
-        setCurrentUser(u); if (u) mirrorScope(u)
-      }
+      if (!active) return
+      // Benign token refresh on tab focus / visibility change — same session and
+      // user. Do NOT touch state, or the route/open form would reset (this was
+      // the "reloads on Alt+Tab" report, together with the single-client fix).
+      if (event === 'TOKEN_REFRESHED') return
+      if (event === 'PASSWORD_RECOVERY') { setRecoveryMode(true); return }
+      if (event === 'SIGNED_OUT') { setRecoveryMode(false); setCurrentUser(null); return }
+      // Only adopt a real user; never null-out the session on an ambiguous event,
+      // which would bounce a working admin to /login and wipe an open form.
+      if (u) { setCurrentUser(u); mirrorScope(u) }
     })
       .then((s) => { sub = s })
       .catch(() => {})
