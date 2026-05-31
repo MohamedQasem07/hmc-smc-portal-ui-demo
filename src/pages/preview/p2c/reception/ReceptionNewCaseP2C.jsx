@@ -167,6 +167,7 @@ export default function ReceptionNewCaseP2C() {
       settlement: form.financialType === 'Cash' ? settlementOf(form.invoiceAmount, form.invoiceCurrency, cashTotals) : null,
       complimentary: form.financialType === 'Free / Complimentary' ? {
         reason: form.complimentaryReason, approvedBy: form.complimentaryApprovedBy,
+        approvedAt: new Date().toISOString(),
       } : null,
       transfer: null,
       treatmentMode: form.treatmentMode || 'pending',

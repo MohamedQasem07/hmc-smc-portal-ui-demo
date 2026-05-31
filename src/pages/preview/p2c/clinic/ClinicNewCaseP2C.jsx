@@ -202,6 +202,7 @@ export default function ClinicNewCaseP2C() {
       settlement: form.financialType === 'Cash' ? settlementOf(form.invoiceAmount, form.invoiceCurrency, cashTotals) : null,
       complimentary: form.financialType === 'Free / Complimentary' ? {
         reason: form.complimentaryReason, approvedBy: form.complimentaryApprovedBy,
+        approvedAt: new Date().toISOString(),
       } : null,
       transfer: form.route !== 'direct' ? {
         toBranchId:   form.route === 'to_al_kawther' ? 'al_kawther' : form.route === 'to_sheraton' ? 'sheraton' : null,

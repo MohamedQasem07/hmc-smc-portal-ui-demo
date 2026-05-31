@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   BedDouble, CreditCard, Globe2, Plus, RefreshCw, AlertTriangle, CheckCircle2,
-  Search, Save, X, ShieldCheck,
+  Search, Save, X, ShieldCheck, ClipboardList,
 } from 'lucide-react'
 import { SectionHead } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
@@ -11,6 +11,8 @@ import {
   fetchNationalities, setNationalityActive,
 } from '../../../../lib/api/portalData'
 import { cn } from '../../../../lib/cn'
+import LiveInsurerConfig from './LiveInsurerConfig'
+import LiveServiceCatalogConfig from './LiveServiceCatalogConfig'
 
 /* =========================================================================
  * LiveReferenceConfig (config-first staging) — supabase mode only.
@@ -49,7 +51,7 @@ export default function LiveReferenceConfig() {
       </div>
 
       <div className="flex items-center gap-1.5 flex-wrap">
-        {[['rooms', 'Rooms', BedDouble], ['payments', 'Payment Methods', CreditCard], ['nationalities', 'Nationalities', Globe2]].map(([id, label, Icon]) => (
+        {[['rooms', 'Rooms', BedDouble], ['payments', 'Payment Methods', CreditCard], ['nationalities', 'Nationalities', Globe2], ['insurers', 'Insurance / Assistance', ShieldCheck], ['services', 'Service Catalog', ClipboardList]].map(([id, label, Icon]) => (
           <button key={id} onClick={() => { setTab(id); setFeedback(null) }}
             className={cn('inline-flex items-center gap-1.5 h-9 px-3.5 rounded-full text-xs font-bold', tab === id ? 'p-btn-primary' : 'p-btn-ghost')}>
             <Icon className="w-3.5 h-3.5" /> {label}
@@ -62,6 +64,8 @@ export default function LiveReferenceConfig() {
       {tab === 'rooms' && <RoomsConfig onOk={ok} onErr={err} />}
       {tab === 'payments' && <PaymentMethodsConfig onOk={ok} onErr={err} />}
       {tab === 'nationalities' && <NationalitiesConfig onOk={ok} onErr={err} />}
+      {tab === 'insurers' && <LiveInsurerConfig />}
+      {tab === 'services' && <LiveServiceCatalogConfig />}
     </div>
   )
 }

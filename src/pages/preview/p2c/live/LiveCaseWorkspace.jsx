@@ -14,6 +14,7 @@ import {
   fetchCaseFinancials, upsertCashInvoiceCharge,
 } from '../../../../lib/api/portalData'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
+import LiveCaseServices from './LiveCaseServices'
 
 /* =========================================================================
  * LiveCaseWorkspace (Case Lifecycle Model) — supabase-mode only.
@@ -308,6 +309,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
           <LiveSpecialistVisits caseId={c.id} sessions={c.sessions} onChanged={async () => { if (refresh) await refresh() }}
             readOnly={isClosed} locationCode={c.currentLocationCode} />
 
+          {/* Services / checklist (Bundle 1 Phase B) */}
+          <LiveCaseServices caseId={c.id} readOnly={isClosed} />
+
           {/* Transfer info */}
           {c.transfer && (
             <section className="p-card p-5">
@@ -358,6 +362,11 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
           <Gift className="inline w-3.5 h-3.5 mr-1" /> Free / Complimentary
         </div>
         <div className="text-sm" style={{ color: 'var(--p-ink-800)' }}>{c.freeReason || '—'}</div>
+        {c.freeApprovedBy && (
+          <div className="text-[11px] mt-1" style={{ color: 'var(--p-ink-500)' }}>
+            Approved by: <strong>{c.freeApprovedBy}</strong>{c.freeApprovedAt ? ` · ${fmtDate(c.freeApprovedAt, { withTime: true })}` : ''}
+          </div>
+        )}
       </div>
     )
   }

@@ -96,6 +96,8 @@ export function portalRowToCase(row, maps) {
     closedAt: row.closed_at || null,
     visitTime: row.visit_time || null,
     freeReason: row.free_reason || null,
+    freeApprovedBy: row.free_approved_by || null,
+    freeApprovedAt: row.free_approved_at || null,
     insuranceCompletion: prep ? {
       invoiceCurrency: prep.invoice_currency,
       serviceChargePct: prep.service_charge_pct,
@@ -130,7 +132,8 @@ export function portalRowToCase(row, maps) {
 const CASE_SELECT = `
   id, our_ref, visit_date, visit_time, financial_type, operational_status, encounter_pattern, route,
   treatment_mode, registered_location_id, current_location_id, billing_facility_id, center_room_id,
-  hotel_or_location, hotel_room_number, short_clinical_note, free_reason, closed_at,
+  hotel_or_location, hotel_room_number, short_clinical_note,
+  free_reason, free_approved_by, free_approved_at, free_approval_notes, closed_at,
   patient:patient_id ( id, first_name, last_name, date_of_birth, gender, nationality, phone_country_code, phone_number, email, postal_code ),
   center_room:center_room_id ( id, room_code, room_name ),
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
@@ -191,6 +194,10 @@ export async function insertCase(newCase) {
     visit_date: (newCase.visitDate || '').slice(0, 10) || null,
     hotel_or_location: pat.hotel || null,
     short_clinical_note: pat.note || null,
+    // Free / Complimentary approval (Bundle 1 / Phase E) — reason + approver required by the UI.
+    free_reason: newCase.financialType === 'Free / Complimentary' ? (newCase.complimentary?.reason || null) : null,
+    free_approved_by: newCase.financialType === 'Free / Complimentary' ? (newCase.complimentary?.approvedBy || null) : null,
+    free_approved_at: newCase.financialType === 'Free / Complimentary' ? (newCase.complimentary?.approvedAt || new Date().toISOString()) : null,
     created_by: uid,
   }).select('id').single()
   if (cErr) throw cErr
@@ -596,7 +603,7 @@ export async function fetchAssignableStaff() {
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
   const { data, error } = await db.from('portal_staff_location_assignments')
-    .select('assignment_role, active, location_id, staff:staff_id ( id, full_name, staff_role, active )')
+    .select('assignment_role, active, location_id, staff:staff_id ( id, full_name, staff_role, specialty, active )')
     .eq('active', true)
   if (error) throw error
   return (data || [])
@@ -606,6 +613,7 @@ export async function fetchAssignableStaff() {
         staffId: st.id,
         name: st.full_name,
         role: a.assignment_role,            // 'nurse' | 'doctor'
+        specialty: st.specialty || null,
         staffActive: st.active !== false,
         locationId: a.location_id,
         locationCode: maps.locById[a.location_id]?.code || null,
@@ -773,7 +781,7 @@ export async function fetchAdminStaff() {
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
   const [{ data: staff, error: e1 }, { data: asg, error: e2 }] = await Promise.all([
-    db.from('portal_staff').select('id, staff_code, full_name, staff_role, phone, active'),
+    db.from('portal_staff').select('id, staff_code, full_name, staff_role, specialty, phone, active'),
     db.from('portal_staff_location_assignments').select('id, staff_id, location_id, assignment_role, active'),
   ])
   if (e1) throw e1
@@ -781,7 +789,7 @@ export async function fetchAdminStaff() {
   const byStaff = {}
   for (const a of (asg || [])) (byStaff[a.staff_id] ||= []).push(a)
   return (staff || []).map((s) => ({
-    id: s.id, staffCode: s.staff_code, fullName: s.full_name, role: s.staff_role, phone: s.phone, active: s.active,
+    id: s.id, staffCode: s.staff_code, fullName: s.full_name, role: s.staff_role, specialty: s.specialty || null, phone: s.phone, active: s.active,
     assignments: (byStaff[s.id] || []).filter((a) => a.active).map((a) => ({
       id: a.id, locationId: a.location_id, role: a.assignment_role,
       locationCode: maps.locById[a.location_id]?.code || null,
@@ -793,14 +801,18 @@ export async function upsertStaff(staff) {
   const db = await getSupabaseClient()
   if (staff.id) {
     const { error } = await db.from('portal_staff').update({
-      full_name: staff.fullName, staff_role: staff.role, phone: staff.phone || null, active: staff.active ?? true,
+      full_name: staff.fullName, staff_role: staff.role,
+      specialty: staff.role === 'doctor' ? (staff.specialty || null) : null,
+      phone: staff.phone || null, active: staff.active ?? true,
     }).eq('id', staff.id)
     if (error) throw error
     return staff.id
   }
   const code = staff.staffCode || ('STF-' + String(staff.role || 'oth').slice(0, 3).toUpperCase() + '-' + Date.now().toString(36).slice(-5).toUpperCase())
   const { data, error } = await db.from('portal_staff').insert({
-    staff_code: code, full_name: staff.fullName, staff_role: staff.role, phone: staff.phone || null, active: staff.active ?? true,
+    staff_code: code, full_name: staff.fullName, staff_role: staff.role,
+    specialty: staff.role === 'doctor' ? (staff.specialty || null) : null,
+    phone: staff.phone || null, active: staff.active ?? true,
   }).select('id').single()
   if (error) throw error
   return data.id
@@ -957,26 +969,21 @@ export async function releaseRoom(caseId) {
   if (upErr) throw upErr
 }
 
-/** Discharge / End Visit a case. Safe-ordered & NON-atomic (no DDL/RPC allowed):
- *  (1) close active session encounters, (2) release the room, (3) close the case
- *  LAST — so a mid-step failure never leaves a "closed but still-occupied" room.
- *  Saves the discharge date+time as portal_cases.closed_at. */
+/** Discharge / End Visit a case. ATOMIC via portal_discharge_case RPC (migration
+ *  029): one transaction closes active encounters + releases the room + closes the
+ *  case. Saves the discharge date+time as portal_cases.closed_at. */
 export async function dischargeCase(caseId, { checkOutAt, sessionIds = [] } = {}) {
   if (!caseId) throw new Error('No case id')
   const db = await getSupabaseClient()
   const when = checkOutAt || new Date().toISOString()
-  // (1) close any still-active specialist visits / sessions
-  for (const sid of sessionIds) {
-    try { await updateEncounter(sid, { checkOutAt: when, status: 'completed' }) }
-    catch (e) { console.warn('[portal] close encounter failed', e?.message) }
-  }
-  // (2) release the room (frees the board)
-  await releaseRoom(caseId)
-  // (3) close the case LAST
-  const { error } = await db.from('portal_cases')
-    .update({ operational_status: 'closed', closed_at: when, updated_at: new Date().toISOString() })
-    .eq('id', caseId)
-  if (error) throw error
+  // Atomic discharge (Bundle 1 / Phase G, migration 029): one transaction closes
+  // all active encounters + releases the active room + closes the case. No partial
+  // "closed but still-occupied" state. The RPC ignores sessionIds (it closes ALL
+  // active encounters for the case) — kept in the signature for call-site compatibility.
+  const { error } = await db.rpc('portal_discharge_case', {
+    p_case_id: caseId, p_encounter_id: null, p_checkout_at: when,
+  })
+  if (error) throw error   // surfaced by the workspace; never fake success
   return caseId
 }
 
@@ -1043,5 +1050,218 @@ export async function fetchSpecialistDoctors(locationCode = null) {
     .filter((s) => s.role === 'doctor')
     .filter((s) => !locationCode || s.locationCode === locationCode)
     .filter((s) => { if (seen.has(s.staffId)) return false; seen.add(s.staffId); return true })
-    .map((s) => ({ staffId: s.staffId, name: s.name, locationCode: s.locationCode }))
+    .map((s) => ({ staffId: s.staffId, name: s.name, specialty: s.specialty || null, locationCode: s.locationCode }))
+}
+
+/* =========================================================================
+ * Insurance / assistance master data (Bundle 1 / Phase C) — supabase mode.
+ * Tables existed pre-Bundle-1; migration 025 added nullable master fields.
+ * Reception reads the active list for intake; admin maintains the master.
+ * Existing cases keep their snapshot insurer text via portal_insurance_intakes.
+ * ========================================================================= */
+
+/** Billing facilities [{id, code}] for the admin "default facility" picker. */
+export async function fetchBillingFacilities() {
+  const maps = await loadRefMaps()
+  return Object.entries(maps.facIdByCode).map(([code, id]) => ({ id, code }))
+}
+
+/** Local assistance companies (admin list). */
+export async function fetchLocalAssistanceCompanies({ activeOnly = false } = {}) {
+  const db = await getSupabaseClient()
+  let q = db.from('portal_local_assistance_companies')
+    .select('id, name, email, phone, default_contact_person, notes, active').order('name')
+  if (activeOnly) q = q.eq('active', true)
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).map((a) => ({
+    id: a.id, name: a.name, email: a.email, phone: a.phone,
+    defaultContactPerson: a.default_contact_person || null, notes: a.notes || null, active: a.active,
+  }))
+}
+export async function upsertLocalAssistanceCompany(a) {
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const row = {
+    name: a.name, email: a.email || null, phone: a.phone || null,
+    default_contact_person: a.defaultContactPerson || null, notes: a.notes || null,
+    active: a.active ?? true, updated_at: new Date().toISOString(),
+  }
+  if (a.id) {
+    const { error } = await db.from('portal_local_assistance_companies').update(row).eq('id', a.id)
+    if (error) throw error
+    return a.id
+  }
+  const { data, error } = await db.from('portal_local_assistance_companies')
+    .insert({ ...row, created_by: uid }).select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+/** Full insurer list with master fields (admin config). Resolves assistance
+ *  name + facility code for display. */
+export async function fetchInsuranceCompaniesAdmin() {
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  const [{ data, error }, assist] = await Promise.all([
+    db.from('portal_insurance_companies')
+      .select('id, name, email, phone, active, workflow_type, default_assistance_company_id, default_contact_person, default_billing_facility_id, notes')
+      .order('name'),
+    fetchLocalAssistanceCompanies().catch(() => []),
+  ])
+  if (error) throw error
+  const assistById = Object.fromEntries(assist.map((a) => [a.id, a.name]))
+  return (data || []).map((c) => ({
+    id: c.id, name: c.name, email: c.email, phone: c.phone, active: c.active,
+    workflowType: c.workflow_type || null,
+    defaultAssistanceCompanyId: c.default_assistance_company_id || null,
+    defaultAssistanceName: c.default_assistance_company_id ? (assistById[c.default_assistance_company_id] || null) : null,
+    defaultContactPerson: c.default_contact_person || null,
+    defaultBillingFacilityId: c.default_billing_facility_id || null,
+    defaultBillingFacility: c.default_billing_facility_id ? (maps.facCodeById[c.default_billing_facility_id] || null) : null,
+    notes: c.notes || null,
+  }))
+}
+
+/** Active insurers for the intake picker (id, name + light defaults). */
+export async function fetchInsuranceCompaniesForPicker() {
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  const { data, error } = await db.from('portal_insurance_companies')
+    .select('id, name, workflow_type, default_contact_person, default_billing_facility_id, default_assistance_company_id')
+    .eq('active', true).order('name')
+  if (error) throw error
+  return (data || []).map((c) => ({
+    id: c.id, name: c.name, workflowType: c.workflow_type || null,
+    defaultContactPerson: c.default_contact_person || null,
+    defaultBillingFacility: c.default_billing_facility_id ? (maps.facCodeById[c.default_billing_facility_id] || null) : null,
+  }))
+}
+
+/** Admin upsert of an insurer master row (additive fields). */
+export async function upsertInsuranceCompany(c) {
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const row = {
+    name: c.name, email: c.email || null, phone: c.phone || null, active: c.active ?? true,
+    workflow_type: c.workflowType || null,
+    default_assistance_company_id: c.defaultAssistanceCompanyId || null,
+    default_contact_person: c.defaultContactPerson || null,
+    default_billing_facility_id: c.defaultBillingFacilityId || null,
+    notes: c.notes || null, updated_at: new Date().toISOString(),
+  }
+  if (c.id) {
+    const { error } = await db.from('portal_insurance_companies').update(row).eq('id', c.id)
+    if (error) throw error
+    return c.id
+  }
+  const { data, error } = await db.from('portal_insurance_companies')
+    .insert({ ...row, created_by: uid }).select('id').single()
+  if (error) throw error
+  return data.id
+}
+export async function setInsuranceCompanyActive(id, active) {
+  const db = await getSupabaseClient()
+  const { error } = await db.from('portal_insurance_companies')
+    .update({ active, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw error
+}
+
+/* =========================================================================
+ * Service catalog + case services (Bundle 1 / Phase B) — supabase mode.
+ * Tables created by migration 024. The portal NEVER prices or generates
+ * invoices; it only CAPTURES structured performed services for future Claude
+ * Code billing. Catalog carries NO prices. Categories are text+CHECK.
+ * ========================================================================= */
+
+export const SERVICE_CATEGORIES = ['basic', 'specialist', 'labs', 'radiology', 'procedure', 'medication', 'other']
+
+/** Service catalog (admin config = all; intake picker = activeOnly). */
+export async function fetchServiceCatalog({ activeOnly = false } = {}) {
+  const db = await getSupabaseClient()
+  let q = db.from('portal_service_catalog')
+    .select('id, category, display_name, canonical_billing_name, source_system, source_table, source_code, billing_mapping_hint, default_quantity, is_active, sort_order, notes')
+    .order('category').order('sort_order', { nullsFirst: false }).order('display_name')
+  if (activeOnly) q = q.eq('is_active', true)
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).map((s) => ({
+    id: s.id, category: s.category, displayName: s.display_name,
+    canonicalBillingName: s.canonical_billing_name || null,
+    sourceSystem: s.source_system || null, sourceTable: s.source_table || null, sourceCode: s.source_code || null,
+    billingMappingHint: s.billing_mapping_hint || null,
+    defaultQuantity: s.default_quantity, isActive: s.is_active, sortOrder: s.sort_order, notes: s.notes || null,
+  }))
+}
+export async function upsertServiceCatalogItem(item) {
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const row = {
+    category: item.category, display_name: item.displayName,
+    canonical_billing_name: item.canonicalBillingName || null,
+    source_system: item.sourceSystem || null, source_table: item.sourceTable || null, source_code: item.sourceCode || null,
+    billing_mapping_hint: item.billingMappingHint || null,
+    default_quantity: item.defaultQuantity ?? 1, is_active: item.isActive ?? true,
+    sort_order: item.sortOrder ?? null, notes: item.notes || null, updated_at: new Date().toISOString(),
+  }
+  if (item.id) {
+    const { error } = await db.from('portal_service_catalog').update(row).eq('id', item.id)
+    if (error) throw error
+    return item.id
+  }
+  const { data, error } = await db.from('portal_service_catalog')
+    .insert({ ...row, created_by: uid }).select('id').single()
+  if (error) throw error
+  return data.id
+}
+export async function setServiceCatalogActive(id, isActive) {
+  const db = await getSupabaseClient()
+  const { error } = await db.from('portal_service_catalog')
+    .update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw error
+}
+
+/** Services recorded on a case (workspace + timeline). */
+export async function fetchCaseServices(caseId) {
+  const db = await getSupabaseClient()
+  const { data, error } = await db.from('portal_case_services')
+    .select('id, case_id, encounter_id, service_catalog_id, category, display_name, canonical_billing_name, quantity, performed_at, notes, billing_status, created_at')
+    .eq('case_id', caseId)
+    .order('created_at', { ascending: true })
+  if (error) throw error
+  return (data || []).map((s) => ({
+    id: s.id, caseId: s.case_id, encounterId: s.encounter_id, serviceCatalogId: s.service_catalog_id,
+    category: s.category, displayName: s.display_name, canonicalBillingName: s.canonical_billing_name || null,
+    quantity: s.quantity, performedAt: s.performed_at, notes: s.notes || null,
+    billingStatus: s.billing_status, createdAt: s.created_at,
+  }))
+}
+
+/** Record a performed service on a case from a catalog item. billing_status is
+ *  'draft' when a canonical billing name exists, else 'needs_review' (uncertain
+ *  mapping → never fake billing). NO price is computed in the portal. */
+export async function recordCaseService(caseId, { catalogItem, quantity, performedAt, notes } = {}) {
+  if (!caseId || !catalogItem) throw new Error('Case and service are required')
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const billingStatus = catalogItem.canonicalBillingName ? 'draft' : 'needs_review'
+  const { data, error } = await db.from('portal_case_services').insert({
+    case_id: caseId,
+    service_catalog_id: catalogItem.id || null,
+    category: catalogItem.category,
+    display_name: catalogItem.displayName,
+    canonical_billing_name: catalogItem.canonicalBillingName || null,
+    quantity: Number(quantity) > 0 ? Number(quantity) : (catalogItem.defaultQuantity ?? 1),
+    performed_at: performedAt || new Date().toISOString(),
+    notes: notes || null,
+    selected_by_user_id: uid,
+    billing_status: billingStatus,
+  }).select('id').single()
+  if (error) throw error
+  return data.id
+}
+export async function removeCaseService(id) {
+  const db = await getSupabaseClient()
+  const { error } = await db.from('portal_case_services').delete().eq('id', id)
+  if (error) throw error
 }

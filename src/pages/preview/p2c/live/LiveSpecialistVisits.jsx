@@ -37,6 +37,14 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
     return () => { alive = false }
   }, [locationCode])
 
+  // Pick a doctor from the live staff list; auto-fill specialty into the note
+  // when the note is still empty (reception can still edit/clear it).
+  function onPickDoctor(name) {
+    setSpecialist(name)
+    const doc = doctors.find((d) => d.name === name)
+    if (doc?.specialty && !note.trim()) setNote(doc.specialty)
+  }
+
   async function add() {
     if (!specialist.trim() && !note.trim()) { setError('Enter a specialist/type or a note.'); return }
     setBusy(true); setError(null)
@@ -118,9 +126,9 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Doctor">
               {doctors.length > 0 ? (
-                <select className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)}>
+                <select className="p-input" value={specialist} onChange={(e) => onPickDoctor(e.target.value)}>
                   <option value="">Select doctor…</option>
-                  {doctors.map((d) => <option key={d.staffId} value={d.name}>{d.name}</option>)}
+                  {doctors.map((d) => <option key={d.staffId} value={d.name}>{d.name}{d.specialty ? ` — ${d.specialty}` : ''}</option>)}
                 </select>
               ) : (
                 <input className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)} placeholder="e.g. Dr. Ahmed" />
