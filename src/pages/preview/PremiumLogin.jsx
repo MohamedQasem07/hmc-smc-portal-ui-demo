@@ -218,6 +218,19 @@ export default function PremiumLogin() {
                   <span className="mx-2">·</span>
                 </>
               )}
+              {IS_SUPABASE && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/set-password')}
+                    className="font-semibold hover:underline"
+                    style={{ color: 'var(--p-ink-500)' }}
+                  >
+                    Set / forgot password
+                  </button>
+                  <span className="mx-2">·</span>
+                </>
+              )}
               Need an account? Contact your HMC / SMC administrator.
             </p>
           </div>

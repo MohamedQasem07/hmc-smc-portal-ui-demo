@@ -81,9 +81,61 @@ export async function sbSignOut() {
 
 export async function sbOnAuthChange(cb) {
   const db = await getSupabaseClient()
-  const { data } = db.auth.onAuthStateChange((_event, session) => {
-    if (!session?.user) { cb(null); return }
-    synthesizeUser(db, session.user).then(cb).catch(() => cb(null))
+  const { data } = db.auth.onAuthStateChange((event, session) => {
+    if (event === 'PASSWORD_RECOVERY') { cb(null, 'PASSWORD_RECOVERY'); return }
+    if (!session?.user) { cb(null, event); return }
+    synthesizeUser(db, session.user).then((u) => cb(u, event)).catch(() => cb(null, event))
   })
   return data?.subscription
+}
+
+/* ---- Password setup / recovery (first-login set-password) ----------------
+ * Anon-key only. Start a recovery session in one of two ways:
+ *   1. Email link  → sbRequestPasswordReset() sends a recovery email.
+ *   2. One-time OTP → sbVerifyRecoveryOtp(email, code) (code from the admin link
+ *      or the recovery email). Avoids any redirect-allowlist dependency.
+ * Then sbUpdatePassword() sets the chosen password. No plaintext is stored;
+ * the recovery code is one-time and time-limited. ------------------------- */
+export async function sbRequestPasswordReset(email, redirectTo) {
+  const db = await getSupabaseClient()
+  const { error } = await db.auth.resetPasswordForEmail(
+    String(email || '').trim(),
+    redirectTo ? { redirectTo } : undefined,
+  )
+  return error ? { ok: false, error: error.message } : { ok: true }
+}
+
+export async function sbVerifyRecoveryOtp(email, code) {
+  const db = await getSupabaseClient()
+  const { data, error } = await db.auth.verifyOtp({
+    email: String(email || '').trim(), token: String(code || '').trim(), type: 'recovery',
+  })
+  return error ? { ok: false, error: error.message } : { ok: true, session: data?.session || null }
+}
+
+export async function sbUpdatePassword(newPassword) {
+  const db = await getSupabaseClient()
+  const { data, error } = await db.auth.updateUser({ password: newPassword })
+  return error ? { ok: false, error: error.message } : { ok: true, user: data?.user || null }
+}
+
+/** True if a session exists right now (e.g. an active recovery session). */
+export async function sbHasSession() {
+  const db = await getSupabaseClient()
+  const { data } = await db.auth.getSession()
+  return !!data?.session
+}
+
+/** Invoke the admin-users Edge Function. The caller's JWT is attached
+ *  automatically when signed in; the owner-bootstrap action needs no session.
+ *  Returns { ok, error?, ...payload }. */
+export async function sbAdminUsers(action, payload = {}) {
+  const db = await getSupabaseClient()
+  const { data, error } = await db.functions.invoke('admin-users', { body: { action, ...payload } })
+  if (error) {
+    let msg = error.message
+    try { const body = await error.context?.json?.(); if (body?.error) msg = body.error } catch { /* ignore */ }
+    return { ok: false, error: msg }
+  }
+  return { ok: true, ...(data || {}) }
 }

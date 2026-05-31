@@ -1,10 +1,11 @@
-import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, HashRouter, Routes, Route, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 // GitHub Pages doesn't support client-side routing of nested paths via BrowserRouter
 // out of the box. Use HashRouter when DEPLOY_BASE is configured for Pages.
 const Router = import.meta.env.BASE_URL !== '/' ? HashRouter : BrowserRouter
 import { ToastProvider } from './components/ui/Toast'
-import { UserModeProvider } from './context/UserModeContext'
+import { UserModeProvider, useUserMode } from './context/UserModeContext'
 import { DemoStateProvider } from './context/DemoStateContext'
 import { IS_SUPABASE } from './lib/api/config'
 
@@ -17,6 +18,7 @@ import './premium/theme.css'
 import { RequireRole, RequireReceptionBranch } from './premium/guards'
 import PreviewIndex from './pages/preview/PreviewIndex'
 import PremiumLogin from './pages/preview/PremiumLogin'
+import SetPassword from './pages/preview/SetPassword'
 import PremiumClinicDashboard from './pages/preview/PremiumClinicDashboard'
 import PremiumAddNewCase from './pages/preview/PremiumAddNewCase'
 import PremiumAdminDashboard from './pages/preview/PremiumAdminDashboard'
@@ -77,16 +79,33 @@ function LegacyDesignPreviewRedirect() {
   return <Navigate to={`${stripped}${search}${hash}`} replace />
 }
 
+/** When a Supabase password-recovery session starts (email-link click), force
+ *  the user onto the set-password screen instead of letting the temporary
+ *  recovery session resolve to a normal dashboard. */
+function RecoveryWatcher() {
+  const { recoveryMode } = useUserMode()
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  useEffect(() => {
+    if (recoveryMode && pathname !== '/set-password') navigate('/set-password', { replace: true })
+  }, [recoveryMode, pathname, navigate])
+  return null
+}
+
 export default function App() {
   return (
     <UserModeProvider>
       <DemoStateProvider>
       <ToastProvider>
         <Router>
+          <RecoveryWatcher />
           <Routes>
             {/* Application entry → Login. */}
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<PremiumLogin />} />
+
+            {/* Public: first-login / forgot password (set your own password). */}
+            <Route path="/set-password" element={<SetPassword />} />
 
             {/* Back-compat: rewrite any legacy /design-preview/* link to the clean path. */}
             <Route path="/design-preview/*" element={<LegacyDesignPreviewRedirect />} />

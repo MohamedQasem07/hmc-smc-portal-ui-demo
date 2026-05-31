@@ -32,6 +32,7 @@ const UserModeContext = createContext({
   currentClinicScope: null,
   isSignedIn: false,
   authReady: !IS_SUPABASE,
+  recoveryMode: false,
   signIn: () => {},
   signOut: () => {},
 })
@@ -79,6 +80,7 @@ export function UserModeProvider({ children }) {
   // restore asynchronously below.
   const [currentUser, setCurrentUser] = useState(IS_SUPABASE ? null : initialSession)
   const [authReady, setAuthReady] = useState(!IS_SUPABASE)
+  const [recoveryMode, setRecoveryMode] = useState(false)
 
   const setDemoRole = (next, nextClinic) => {
     setDemoRoleState(next)
@@ -117,7 +119,13 @@ export function UserModeProvider({ children }) {
     sbGetSessionUser()
       .then((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
       .catch(() => { if (active) setAuthReady(true) })
-    sbOnAuthChange((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u) } })
+    sbOnAuthChange((u, event) => {
+      if (event === 'PASSWORD_RECOVERY') { if (active) setRecoveryMode(true); return }
+      if (active) {
+        if (event === 'SIGNED_OUT') setRecoveryMode(false)
+        setCurrentUser(u); if (u) mirrorScope(u)
+      }
+    })
       .then((s) => { sub = s })
       .catch(() => {})
     return () => { active = false; if (sub) sub.unsubscribe() }
@@ -127,7 +135,7 @@ export function UserModeProvider({ children }) {
   async function signIn(arg, password) {
     if (IS_SUPABASE) {
       const res = await sbSignIn(arg, password)   // arg = email
-      if (res.user) { setCurrentUser(res.user); mirrorScope(res.user) }
+      if (res.user) { setCurrentUser(res.user); mirrorScope(res.user); setRecoveryMode(false) }
       return res
     }
     // ---- mock path ----
@@ -165,7 +173,7 @@ export function UserModeProvider({ children }) {
       role, user, setRole,
       demoRole, clinicId, demoUser,
       setDemoRole, setClinicId,
-      currentUser, currentClinicScope, isSignedIn, authReady,
+      currentUser, currentClinicScope, isSignedIn, authReady, recoveryMode,
       signIn, signOut,
     }}>
       {children}

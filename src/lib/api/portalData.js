@@ -1,4 +1,5 @@
 import { getSupabaseClient } from './supabaseClient'
+import { sbAdminUsers } from './auth'
 import {
   FINANCIAL_TYPE_TO_PORTAL, ROUTE_TO_PORTAL, ENCOUNTER_PATTERN_TO_PORTAL,
   GENDER_TO_PORTAL, billingPrepToRow,
@@ -608,4 +609,36 @@ export async function unassignStaff(assignmentId) {
   const db = await getSupabaseClient()
   const { error } = await db.from('portal_staff_location_assignments').update({ active: false }).eq('id', assignmentId)
   if (error) throw error
+}
+
+/* =========================================================================
+ * Portal user administration (Sprint 1) — supabase mode only.
+ * These call the admin-users Edge Function (service-role, server-side). The
+ * function re-verifies the caller is an admin; nothing privileged runs in the
+ * client and no service-role key is present here. Each returns
+ * { ok, error?, ... } (link actions also return { action_link, email_otp }).
+ * ========================================================================= */
+
+/** Create a real login user: auth user + profile + scopes + optional staff link.
+ *  payload: { email, display_name, role, active, scope_location_codes:[], linked_staff_id? }
+ *  Returns { ok, user_id?, action_link?, email_otp?, error? }. The link/otp are a
+ *  one-time set-password handle to give the new user. */
+export async function createPortalUser(payload) {
+  return sbAdminUsers('create_user', payload)
+}
+/** Enable/disable a login (profile.active + auth ban). History is preserved. */
+export async function setUserActive(userId, active) {
+  return sbAdminUsers('set_active', { user_id: userId, active })
+}
+/** Change a login's portal role. */
+export async function setUserRole(userId, role) {
+  return sbAdminUsers('set_role', { user_id: userId, role })
+}
+/** Link (or unlink with null) a login to a portal_staff record. */
+export async function linkUserStaff(userId, linkedStaffId) {
+  return sbAdminUsers('link_staff', { user_id: userId, linked_staff_id: linkedStaffId || null })
+}
+/** Generate a one-time set-password link/OTP for an existing user (admin only). */
+export async function generateSetPasswordLink({ userId, email, redirectTo }) {
+  return sbAdminUsers('generate_set_password_link', { user_id: userId, email, redirectTo })
 }
