@@ -48,8 +48,11 @@ const NAV_ITEMS = [
 
 // In the live pilot (Supabase mode) hide mock-only surfaces so admins only see
 // real, backend-connected pages. Control Center is demo config cards; Invoice
-// Manager is a non-functional placeholder. Both stay available in mock mode.
-const MOCK_ONLY_NAV_IDS = ['control', 'manager']
+// Manager is a non-functional placeholder; "Cases Master" is the legacy mock
+// unified view — its route already redirects to the live /admin/p2c-cases
+// ("All P2C Cases"), which stays reachable via the "Clinic & Reception" item,
+// so the redundant nav entry is hidden in pilot. All stay available in mock mode.
+const MOCK_ONLY_NAV_IDS = ['control', 'manager', 'cases']
 const NAV_ITEMS_VISIBLE = IS_SUPABASE
   ? NAV_ITEMS.filter((n) => !MOCK_ONLY_NAV_IDS.includes(n.id))
   : NAV_ITEMS
