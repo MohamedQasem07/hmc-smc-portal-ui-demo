@@ -1,6 +1,5 @@
 import { Navigate, Outlet, useParams } from 'react-router-dom'
 import { useUserMode } from '../context/UserModeContext'
-import { diag } from '../lib/diag'
 
 /* =========================================================================
  * Route guards (P3-prep — operational access control)
@@ -51,10 +50,9 @@ export function RequireAuth() {
 
 export function RequireRole({ allow }) {
   const { isSignedIn, currentUser, authReady } = useUserMode()
-  if (!authReady) { diag('RequireRole -> AuthLoading (authReady=false)'); return <AuthLoading /> }
-  if (!isSignedIn || !currentUser) { diag('RequireRole -> /login (no currentUser)'); return <Navigate to={LOGIN} replace /> }
+  if (!authReady) return <AuthLoading />
+  if (!isSignedIn || !currentUser) return <Navigate to={LOGIN} replace />
   if (Array.isArray(allow) && !allow.includes(currentUser.role)) {
-    diag('RequireRole -> home (role', currentUser.role, 'not allowed)')
     return <Navigate to={homeForRole(currentUser.role)} replace />
   }
   return <Outlet />

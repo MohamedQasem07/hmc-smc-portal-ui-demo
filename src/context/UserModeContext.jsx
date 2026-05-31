@@ -4,7 +4,6 @@ import { P2C_DEMO_USERS, EXTERNAL_CLINICS } from '../data/p2c'
 import { scopeForUser } from '../data/staffUsers'
 import { IS_SUPABASE } from '../lib/api/config'
 import { sbGetSessionUser, sbSignIn, sbSignOut, sbOnAuthChange } from '../lib/api/auth'
-import { diag } from '../lib/diag'
 
 /**
  * UserModeContext — role state + session.
@@ -119,21 +118,20 @@ export function UserModeProvider({ children }) {
     let active = true
     let sub
     sbGetSessionUser()
-      .then((u) => { if (active) { lastUidRef.current = u?.userId || null; setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true); diag('initial session ->', u?.userId || 'none') } })
+      .then((u) => { if (active) { lastUidRef.current = u?.userId || null; setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
       .catch(() => { if (active) setAuthReady(true) })
     sbOnAuthChange((u, event) => {
       if (!active) return
-      diag('auth event:', event, '| user:', u?.userId || null, '| lastUid:', lastUidRef.current)
       if (event === 'TOKEN_REFRESHED') return
       if (event === 'PASSWORD_RECOVERY') { setRecoveryMode(true); return }
-      if (event === 'SIGNED_OUT') { lastUidRef.current = null; setRecoveryMode(false); setCurrentUser(null); diag('currentUser -> null (SIGNED_OUT)'); return }
+      if (event === 'SIGNED_OUT') { lastUidRef.current = null; setRecoveryMode(false); setCurrentUser(null); return }
       if (!u) return  // ambiguous event with no user — never null the session here
-      // Supabase RE-EMITS SIGNED_IN on every tab focus / visibility regain. If it
-      // is the same user, do NOTHING — adopting a fresh object reference is what
-      // made dependent providers re-run and the route remount (form wiped).
-      if (lastUidRef.current === u.userId) { diag('ignore re-emit (same user', u.userId + ')'); return }
+      // Supabase re-emits SIGNED_IN on every tab focus / visibility regain. If it
+      // is the same user, do NOTHING — adopting a fresh object reference made
+      // dependent providers re-run and the route remount (open form wiped).
+      if (lastUidRef.current === u.userId) return
       lastUidRef.current = u.userId
-      setCurrentUser(u); mirrorScope(u); diag('currentUser ->', u.userId, u.role)
+      setCurrentUser(u); mirrorScope(u)
     })
       .then((s) => { sub = s })
       .catch(() => {})
