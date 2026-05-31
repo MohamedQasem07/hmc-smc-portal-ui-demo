@@ -22,6 +22,7 @@ import {
 import { fmtDMY, ageFromDob, ageLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
+import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
@@ -58,6 +59,7 @@ export default function ClinicNewCaseP2C() {
   })
   const nextRef = useNextOurRef(refContext)
   const nationalityOptions = useNationalityOptions()
+  const liveInsurers = useLiveInsurers()   // live insurer master in supabase mode (mock list otherwise)
 
   const [form, setForm] = useState({
     // Visit & Timing (tourist travel — separate from encounter check-in)
@@ -129,7 +131,9 @@ export default function ClinicNewCaseP2C() {
   const needsFacility = showInsuranceBlock && !form.billingFacility
   const needsName = !form.firstName.trim() || !form.lastName.trim()
   const needsTransferDest = isOtherDestination && !form.transferDestination
-  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday
+  // Bundle 1 / Phase E — Free / Complimentary requires reason + approver before save.
+  const needsFreeApproval = showFreeBlock && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
+  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval
 
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
@@ -540,6 +544,7 @@ export default function ClinicNewCaseP2C() {
                   <Field label="Insurance Company Name *" full hint="Pick from the demo catalogue or add a new one — added insurers persist for the rest of this session.">
                     <InsurerCombobox
                       value={form.insuranceCompany}
+                      insurers={IS_SUPABASE ? liveInsurers : undefined}
                       onChange={(v) => update('insuranceCompany', v)}
                       autoFillContacts={({ email, phone }) => setForm((p) => ({ ...p, insuranceEmail: email || p.insuranceEmail, insurancePhone: phone || p.insurancePhone }))} />
                   </Field>

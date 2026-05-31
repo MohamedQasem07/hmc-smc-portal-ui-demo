@@ -1128,11 +1128,12 @@ export async function fetchInsuranceCompaniesForPicker() {
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
   const { data, error } = await db.from('portal_insurance_companies')
-    .select('id, name, workflow_type, default_contact_person, default_billing_facility_id, default_assistance_company_id')
+    .select('id, name, email, phone, workflow_type, default_contact_person, default_billing_facility_id, default_assistance_company_id')
     .eq('active', true).order('name')
   if (error) throw error
   return (data || []).map((c) => ({
-    id: c.id, name: c.name, workflowType: c.workflow_type || null,
+    id: c.id, name: c.name, email: c.email || '', phone: c.phone || '',
+    workflowType: c.workflow_type || null,
     defaultContactPerson: c.default_contact_person || null,
     defaultBillingFacility: c.default_billing_facility_id ? (maps.facCodeById[c.default_billing_facility_id] || null) : null,
   }))

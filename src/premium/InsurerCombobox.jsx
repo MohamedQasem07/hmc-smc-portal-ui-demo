@@ -16,8 +16,12 @@ import { useInsurers, useDemoState } from '../context/DemoStateContext'
  * Demo-only — no persistence across page refresh.
  * ========================================================================= */
 
-export function InsurerCombobox({ value, onChange, autoFillContacts }) {
-  const insurers = useInsurers()
+export function InsurerCombobox({ value, onChange, autoFillContacts, insurers: insurersProp }) {
+  // When `insurers` is provided (supabase mode → live master list), use it.
+  // Otherwise fall back to the mock demo catalogue (unchanged for 5173).
+  const hookInsurers = useInsurers()
+  const insurers = insurersProp || hookInsurers
+  const liveMode = Array.isArray(insurersProp)
   const { actions } = useDemoState()
   const [open, setOpen] = useState(false)
   const [q, setQ] = useState(value || '')
@@ -42,7 +46,9 @@ export function InsurerCombobox({ value, onChange, autoFillContacts }) {
 
   function addNew() {
     if (!newForm.name.trim()) return
-    actions.addInsurer({ name: newForm.name.trim(), email: newForm.email.trim(), phone: newForm.phone.trim() })
+    // Mock mode: persist to demo state. Live mode: insertCase does ilike-or-create
+    // on portal_insurance_companies, so we only need to set the typed name here.
+    if (!liveMode) actions.addInsurer({ name: newForm.name.trim(), email: newForm.email.trim(), phone: newForm.phone.trim() })
     onChange?.(newForm.name.trim())
     autoFillContacts?.({ email: newForm.email.trim(), phone: newForm.phone.trim() })
     setQ(newForm.name.trim())
