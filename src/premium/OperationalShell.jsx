@@ -54,13 +54,13 @@ function navItemsFor(role) {
   // P2C.R3 — standalone Expenses removed; expenses live inside Treasury.
   const base = role === 'clinic_nurse'
     ? [
-        { id: 'dashboard',  label: 'Home',       icon: LayoutDashboard, to: '/design-preview/clinic/dashboard' },
-        { id: 'new-case',   label: '+ New Case', icon: Plus,           to: '/design-preview/clinic/new-case', emphasis: true },
-        { id: 'cases',      label: 'My Cases',   icon: ClipboardList,  to: '/design-preview/clinic/cases' },
-        { id: 'transfers',  label: 'Transfers',  icon: Send,           to: '/design-preview/clinic/transfers' },
-        { id: 'treasury',   label: 'Treasury',   icon: Wallet,         to: '/design-preview/clinic/treasury' },
-        { id: 'attendance', label: 'Attendance', icon: Users,          to: '/design-preview/clinic/attendance' },
-        { id: 'report',     label: 'Daily',      icon: FileBarChart2,  to: '/design-preview/clinic/daily-report' },
+        { id: 'dashboard',  label: 'Home',       icon: LayoutDashboard, to: '/clinic/dashboard' },
+        { id: 'new-case',   label: '+ New Case', icon: Plus,           to: '/clinic/new-case', emphasis: true },
+        { id: 'cases',      label: 'My Cases',   icon: ClipboardList,  to: '/clinic/cases' },
+        { id: 'transfers',  label: 'Transfers',  icon: Send,           to: '/clinic/transfers' },
+        { id: 'treasury',   label: 'Treasury',   icon: Wallet,         to: '/clinic/treasury' },
+        { id: 'attendance', label: 'Attendance', icon: Users,          to: '/clinic/attendance' },
+        { id: 'report',     label: 'Daily',      icon: FileBarChart2,  to: '/clinic/daily-report' },
       ]
     : [
         { id: 'dashboard',  label: 'Home',       icon: LayoutDashboard, to: receptionRoute(role, 'dashboard') },
@@ -77,7 +77,7 @@ function navItemsFor(role) {
 
 export function receptionRoute(role, leaf) {
   const branch = role === 'reception_kawther' ? 'al-kawther' : 'sheraton'
-  return `/design-preview/reception/${branch}/${leaf}`
+  return `/reception/${branch}/${leaf}`
 }
 
 // ---------------------------------------------------------------------------
@@ -87,7 +87,7 @@ function OperationalTopBar({ role, identityName, identitySub }) {
 
   function doSignOut() {
     signOut()
-    navigate('/design-preview/login', { replace: true })
+    navigate('/login', { replace: true })
   }
 
   const displayName = currentUser?.displayName

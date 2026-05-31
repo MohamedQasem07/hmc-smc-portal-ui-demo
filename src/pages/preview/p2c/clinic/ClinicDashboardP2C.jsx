@@ -134,11 +134,11 @@ export default function ClinicDashboardP2C() {
         {/* ── Quick Actions row ────────────────────────────────────────── */}
         <section>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <QuickAction to="/design-preview/clinic/new-case" icon={Plus} label="Register New Case" tone="teal" primary />
-            <QuickAction to="/design-preview/clinic/attendance" icon={Users} label="Record Attendance" tone="navy" />
-            <QuickAction to="/design-preview/clinic/transfers" icon={Send} label="View Transfers" tone="gold" />
-            <QuickAction to="/design-preview/clinic/treasury" icon={Wallet} label="Treasury / Handover" tone="soft" />
-            <QuickAction to="/design-preview/clinic/daily-report" icon={FileBarChart2} label="Daily Report" tone="soft" />
+            <QuickAction to="/clinic/new-case" icon={Plus} label="Register New Case" tone="teal" primary />
+            <QuickAction to="/clinic/attendance" icon={Users} label="Record Attendance" tone="navy" />
+            <QuickAction to="/clinic/transfers" icon={Send} label="View Transfers" tone="gold" />
+            <QuickAction to="/clinic/treasury" icon={Wallet} label="Treasury / Handover" tone="soft" />
+            <QuickAction to="/clinic/daily-report" icon={FileBarChart2} label="Daily Report" tone="soft" />
           </div>
         </section>
 
@@ -166,7 +166,7 @@ export default function ClinicDashboardP2C() {
             <SectionHead eyebrow="Selected Date" title="Cases Snapshot"
               description={`Cases registered at ${clinicName} on ${dateLabel}.`}
               action={
-                <Link to="/design-preview/clinic/cases" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
+                <Link to="/clinic/cases" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
                   Open My Cases <ArrowRight className="w-3 h-3" />
                 </Link>
               } />
@@ -207,7 +207,7 @@ export default function ClinicDashboardP2C() {
                           <StatusPill tone={c.operationalStatus === 'Closed' ? 'finalized' : 'navy'}>{c.operationalStatus}</StatusPill>
                         </td>
                         <td className="px-3 py-2.5 text-right">
-                          <Link to={`/design-preview/clinic/cases/${c.id}`}
+                          <Link to={`/clinic/cases/${c.id}`}
                             className="inline-flex items-center gap-1 h-8 px-3 rounded-full text-[11px] font-bold p-btn-ghost">
                             Open <ArrowRight className="w-3 h-3" />
                           </Link>
@@ -225,7 +225,7 @@ export default function ClinicDashboardP2C() {
             <SectionHead eyebrow="Treasury" title="Cash + Visa Snapshot"
               description="Balances grouped by currency. Visa / Bank tracked separately."
               action={
-                <Link to="/design-preview/clinic/treasury" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
+                <Link to="/clinic/treasury" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
                   Open Treasury <ArrowRight className="w-3 h-3" />
                 </Link>
               } />
@@ -264,7 +264,7 @@ export default function ClinicDashboardP2C() {
             <SectionHead eyebrow="Attendance" title="Today's Shift Coverage"
               description="Nurses on duty + Doctor on duty."
               action={
-                <Link to="/design-preview/clinic/attendance" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
+                <Link to="/clinic/attendance" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
                   Open Attendance <ArrowRight className="w-3 h-3" />
                 </Link>
               } />
@@ -310,7 +310,7 @@ export default function ClinicDashboardP2C() {
             <SectionHead eyebrow="Transfers" title="Outgoing to Branches"
               description={`Cases from this clinic transferred on ${dateLabel}.`}
               action={
-                <Link to="/design-preview/clinic/transfers" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
+                <Link to="/clinic/transfers" className="text-xs font-bold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
                   Open Transfers <ArrowRight className="w-3 h-3" />
                 </Link>
               } />

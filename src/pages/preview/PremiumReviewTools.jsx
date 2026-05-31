@@ -53,7 +53,7 @@ export default function PremiumReviewTools() {
         {/* Top bar */}
         <header className="flex items-center justify-between mb-10">
           <BrandWordmark variant="light" />
-          <Link to="/design-preview/login" className="text-xs font-semibold inline-flex items-center gap-1.5"
+          <Link to="/login" className="text-xs font-semibold inline-flex items-center gap-1.5"
                 style={{ color: 'rgba(255,255,255,0.78)' }}>
             <ArrowLeft className="w-3.5 h-3.5" /> Back to Sign In
           </Link>
@@ -114,7 +114,7 @@ export default function PremiumReviewTools() {
             <div className="p-eyebrow">Credentials reference</div>
             <h2 className="p-h2 text-lg mt-0.5">Demo passwords for the Login screen</h2>
             <p className="text-sm mt-1.5" style={{ color: 'var(--p-ink-500)' }}>
-              Manage the full user list and reset passwords from <Link to="/design-preview/admin/users-staff" className="font-semibold underline" style={{ color: 'var(--p-teal)' }}>Users &amp; Staff</Link>.
+              Manage the full user list and reset passwords from <Link to="/admin/users-staff" className="font-semibold underline" style={{ color: 'var(--p-teal)' }}>Users &amp; Staff</Link>.
             </p>
           </div>
           <div className="p-5 sm:p-7 grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -132,7 +132,7 @@ export default function PremiumReviewTools() {
 
         {/* Legacy role preview (kept for back-compat) */}
         <div className="mt-8 text-center">
-          <Link to="/design-preview/demo-roles" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>
+          <Link to="/demo-roles" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'rgba(255,255,255,0.55)' }}>
             Open legacy Role Preview cards <ArrowRight className="w-3 h-3" />
           </Link>
         </div>
@@ -188,12 +188,12 @@ function CredentialRow({ username, password, label }) {
 }
 
 function routeForUser(u) {
-  if (!u) return '/design-preview/login'
+  if (!u) return '/login'
   switch (u.role) {
-    case 'admin':              return '/design-preview/admin-dashboard'
-    case 'clinic_nurse':       return '/design-preview/clinic/dashboard'
-    case 'reception_kawther':  return '/design-preview/reception/al-kawther/dashboard'
-    case 'reception_sheraton': return '/design-preview/reception/sheraton/dashboard'
-    default:                   return '/design-preview/login'
+    case 'admin':              return '/admin-dashboard'
+    case 'clinic_nurse':       return '/clinic/dashboard'
+    case 'reception_kawther':  return '/reception/al-kawther/dashboard'
+    case 'reception_sheraton': return '/reception/sheraton/dashboard'
+    default:                   return '/login'
   }
 }

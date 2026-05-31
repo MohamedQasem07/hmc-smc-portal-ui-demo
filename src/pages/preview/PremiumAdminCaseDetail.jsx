@@ -67,7 +67,7 @@ export default function PremiumAdminCaseDetail() {
           <MeshCorner position="tr" size={240} color="#2DD4C7" opacity={0.25} />
           <div className="relative z-10 flex flex-col lg:flex-row lg:items-end gap-4 lg:justify-between">
             <div className="max-w-3xl">
-              <Link to="/design-preview/admin/cases-master" className="p-eyebrow inline-flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
+              <Link to="/admin/cases-master" className="p-eyebrow inline-flex items-center gap-1" style={{ color: 'rgba(255,255,255,0.55)' }}>
                 <ChevronLeft className="w-3.5 h-3.5" /> Cases Master
               </Link>
               <h1 className="p-display p-display-light text-[28px] lg:text-[34px] mt-1">

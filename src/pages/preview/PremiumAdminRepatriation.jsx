@@ -154,7 +154,7 @@ export default function PremiumAdminRepatriation() {
             )}
 
             <div className="mt-5 flex items-center justify-end gap-2">
-              <Link to="/design-preview/admin-dashboard" className="p-btn-ghost h-11 px-4 text-sm inline-flex items-center gap-1.5">
+              <Link to="/admin-dashboard" className="p-btn-ghost h-11 px-4 text-sm inline-flex items-center gap-1.5">
                 <ChevronLeft className="w-4 h-4" /> Cancel
               </Link>
               <PremiumButton size="md" leftIcon={<Plus className="w-4 h-4" />} onClick={handleSave}>

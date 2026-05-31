@@ -74,7 +74,7 @@ export default function ClinicMyCasesP2C() {
           label="My Cases"
           subtitle={`${clinicName} · ${R1_TODAY_LABEL}`}
           action={
-            <Link to="/design-preview/clinic/new-case"
+            <Link to="/clinic/new-case"
               className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary">
               <Plus className="w-4 h-4" /> New Case
             </Link>
@@ -171,7 +171,7 @@ export default function ClinicMyCasesP2C() {
                         <StatusPill tone={c.operationalStatus === 'Closed' ? 'finalized' : 'navy'}>{c.operationalStatus}</StatusPill>
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap text-right">
-                        <Link to={`/design-preview/clinic/cases/${c.id}`}
+                        <Link to={`/clinic/cases/${c.id}`}
                           className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold p-btn-ghost">
                           <Eye className="w-3.5 h-3.5" /> View
                         </Link>
@@ -192,7 +192,7 @@ export default function ClinicMyCasesP2C() {
             </div>
           ) : (
             shown.map((c) => (
-              <Link key={c.id} to={`/design-preview/clinic/cases/${c.id}`}
+              <Link key={c.id} to={`/clinic/cases/${c.id}`}
                 className="block p-card px-3 py-3">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 flex-1">

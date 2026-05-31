@@ -9,6 +9,7 @@ import { BrandWordmark } from './BrandMark'
 import { Avatar, StatusPill } from './primitives'
 import { useUserMode } from '../context/UserModeContext'
 import { cn } from '../lib/cn'
+import { IS_SUPABASE } from '../lib/api/config'
 
 /**
  * AdminShell — premium dark sidebar + glass topbar for Admin preview routes.
@@ -29,20 +30,30 @@ export function AdminShell({ active = 'dashboard', searchPlaceholder = 'Search p
 
 // --------------------------------------------------------------------
 const NAV_ITEMS = [
-  { id: 'dashboard',    label: 'Dashboard',           icon: LayoutDashboard, to: '/design-preview/admin-dashboard' },
-  { id: 'new-case',     label: '+ New Case',          icon: Plus,            to: '/design-preview/admin/new-case', emphasis: true },
-  { id: 'cases',        label: 'Cases Master',        icon: ClipboardList,   to: '/design-preview/admin/cases-master' },
-  { id: 'legacy',       label: 'Old Cases',           icon: Archive,         to: '/design-preview/admin/legacy-review' },
-  { id: 'collections',  label: 'Collections & Treasury', icon: Banknote,     to: '/design-preview/admin/collections' },
-  { id: 'reports-daily',  label: 'Daily Report',      icon: FileBarChart2,   to: '/design-preview/admin/reports/daily',   indent: true },
-  { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/design-preview/admin/reports/monthly', indent: true },
-  { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/design-preview/admin/repatriation' },
-  { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/design-preview/admin/p2c-cases', section: 'Clinic & Reception' },
-  { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/design-preview/admin/insurance-completion', section: 'Clinic & Reception' },
-  { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/design-preview/admin/users-staff', section: 'Administration' },
-  { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/design-preview/admin-control-center', section: 'Configuration' },
-  { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/design-preview/admin-dashboard', restricted: true, section: 'Protected' },
+  { id: 'dashboard',    label: 'Dashboard',           icon: LayoutDashboard, to: '/admin-dashboard' },
+  { id: 'new-case',     label: '+ New Case',          icon: Plus,            to: '/admin/new-case', emphasis: true },
+  { id: 'cases',        label: 'Cases Master',        icon: ClipboardList,   to: '/admin/cases-master' },
+  { id: 'legacy',       label: 'Old Cases',           icon: Archive,         to: '/admin/legacy-review' },
+  { id: 'collections',  label: 'Collections & Treasury', icon: Banknote,     to: '/admin/collections' },
+  { id: 'reports-daily',  label: 'Daily Report',      icon: FileBarChart2,   to: '/admin/reports/daily',   indent: true },
+  { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/admin/reports/monthly', indent: true },
+  { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/admin/repatriation' },
+  { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/admin/p2c-cases', section: 'Clinic & Reception' },
+  { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/admin/insurance-completion', section: 'Clinic & Reception' },
+  { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/admin/users-staff', section: 'Administration' },
+  { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/admin-control-center', section: 'Configuration' },
+  { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/admin-dashboard', restricted: true, section: 'Protected' },
 ]
+
+// In the live pilot (Supabase mode) hide mock-only surfaces so admins only see
+// real, backend-connected pages. Control Center is demo config cards; Invoice
+// Manager is a non-functional placeholder. Both stay available in mock mode.
+const MOCK_ONLY_NAV_IDS = ['control', 'manager']
+const NAV_ITEMS_VISIBLE = IS_SUPABASE
+  ? NAV_ITEMS.filter((n) => !MOCK_ONLY_NAV_IDS.includes(n.id))
+  : NAV_ITEMS
+const NAV_SECTIONS = ['Clinic & Reception', 'Administration', 'Configuration', 'Protected']
+const NAV_SECTIONS_VISIBLE = NAV_SECTIONS.filter((sec) => NAV_ITEMS_VISIBLE.some((n) => n.section === sec))
 
 function PremiumSidebar({ active }) {
   return (
@@ -59,21 +70,25 @@ function PremiumSidebar({ active }) {
 
       <nav className="relative z-10 flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
         <NavSection label="Admin Workspace" />
-        {NAV_ITEMS.filter((n) => !n.section).map((n) => (
+        {NAV_ITEMS_VISIBLE.filter((n) => !n.section).map((n) => (
           <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} emphasis={n.emphasis} indent={n.indent} />
         ))}
 
-        {['Clinic & Reception', 'Administration', 'Configuration', 'Protected'].map((sec) => (
+        {NAV_SECTIONS_VISIBLE.map((sec) => (
           <div key={sec}>
             <NavSection label={sec} className="mt-4" />
-            {NAV_ITEMS.filter((n) => n.section === sec).map((n) => (
+            {NAV_ITEMS_VISIBLE.filter((n) => n.section === sec).map((n) => (
               <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} restricted={n.restricted} />
             ))}
           </div>
         ))}
 
-        <NavSection label="Other" className="mt-4" />
-        <NavLink to="/design-preview/admin-dashboard" icon={Settings} label="Settings" />
+        {!IS_SUPABASE && (
+          <>
+            <NavSection label="Other" className="mt-4" />
+            <NavLink to="/admin-dashboard" icon={Settings} label="Settings" />
+          </>
+        )}
       </nav>
 
       <SidebarUserCard />
@@ -92,7 +107,7 @@ function SidebarUserCard() {
     : 'Demo Administrator'
   function doSignOut() {
     signOut()
-    navigate('/design-preview/login', { replace: true })
+    navigate('/login', { replace: true })
   }
   return (
     <div className="relative z-10 px-4 pb-4 pt-3 border-t shrink-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
@@ -213,13 +228,13 @@ function PremiumTopBar({ placeholder, active }) {
             </div>
             <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-0.5">
               <NavSection label="Admin Workspace" />
-              {NAV_ITEMS.filter((n) => !n.section).map((n) => (
+              {NAV_ITEMS_VISIBLE.filter((n) => !n.section).map((n) => (
                 <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} emphasis={n.emphasis} indent={n.indent} />
               ))}
-              {['Administration', 'Configuration', 'Protected'].map((sec) => (
+              {NAV_SECTIONS_VISIBLE.map((sec) => (
                 <div key={sec}>
                   <NavSection label={sec} className="mt-4" />
-                  {NAV_ITEMS.filter((n) => n.section === sec).map((n) => (
+                  {NAV_ITEMS_VISIBLE.filter((n) => n.section === sec).map((n) => (
                     <NavLink key={n.id} to={n.to} icon={n.icon} label={n.label} active={active === n.id} restricted={n.restricted} />
                   ))}
                 </div>
@@ -246,7 +261,7 @@ function TopBarUserMenu() {
   function doSignOut() {
     setOpen(false)
     signOut()
-    navigate('/design-preview/login', { replace: true })
+    navigate('/login', { replace: true })
   }
   return (
     <div className="relative">
@@ -292,7 +307,7 @@ function MobileSignOutButton() {
   return (
     <button
       type="button"
-      onClick={() => { signOut(); navigate('/design-preview/login', { replace: true }) }}
+      onClick={() => { signOut(); navigate('/login', { replace: true }) }}
       aria-label="Sign out"
       className="w-9 h-9 rounded-lg flex items-center justify-center"
       style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}
@@ -318,7 +333,7 @@ function MobileSignOutFooter() {
         </div>
         <button
           type="button"
-          onClick={() => { signOut(); navigate('/design-preview/login', { replace: true }) }}
+          onClick={() => { signOut(); navigate('/login', { replace: true }) }}
           className="mt-3 w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-lg text-[12px] font-semibold transition-colors"
           style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.78)', border: '1px solid rgba(255,255,255,0.08)' }}
         >

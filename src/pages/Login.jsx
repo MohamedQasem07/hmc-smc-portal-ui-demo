@@ -177,7 +177,7 @@ export default function Login() {
 
           {/* P2A — entry point to the premium visual direction preview (isolated, optional) */}
           <p className="text-center text-[11px] mt-3">
-            <a href="/design-preview" className="inline-flex items-center gap-1.5 text-sky-700 hover:underline font-medium">
+            <a href="/" className="inline-flex items-center gap-1.5 text-sky-700 hover:underline font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-sky-500" /> View P2A premium visual direction preview
             </a>
           </p>

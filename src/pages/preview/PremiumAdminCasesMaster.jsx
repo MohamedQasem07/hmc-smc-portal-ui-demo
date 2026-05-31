@@ -158,7 +158,7 @@ export default function PremiumAdminCasesMaster() {
               <PremiumButton variant="ghost" size="md" leftIcon={<History className="w-4 h-4" />} onClick={() => setHistoryOpen(true)}>
                 Change History
               </PremiumButton>
-              <PremiumButton as={Link} to="/design-preview/admin/new-case" size="md" leftIcon={<Plus className="w-4 h-4" />}>
+              <PremiumButton as={Link} to="/admin/new-case" size="md" leftIcon={<Plus className="w-4 h-4" />}>
                 New Case
               </PremiumButton>
               <PrintExportActions onOpenPreview={preview.onOpenPreview} />
@@ -270,7 +270,7 @@ export default function PremiumAdminCasesMaster() {
                     </td>
                     <td className="px-3 py-3 text-[11px] whitespace-nowrap" style={{ color: 'var(--p-ink-500)' }}>{fmtRelative(c.lastModified)}</td>
                     <td className="px-3 py-3 text-end">
-                      <Link to={`/design-preview/admin/case-detail/${c.id}`} className="p-btn-ghost h-8 px-3 text-xs inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Open</Link>
+                      <Link to={`/admin/case-detail/${c.id}`} className="p-btn-ghost h-8 px-3 text-xs inline-flex items-center gap-1"><Eye className="w-3.5 h-3.5" /> Open</Link>
                     </td>
                   </tr>
                 ))}

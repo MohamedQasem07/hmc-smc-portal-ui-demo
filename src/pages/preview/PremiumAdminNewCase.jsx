@@ -65,7 +65,7 @@ export default function PremiumAdminNewCase() {
     const fac = BILLING_FACILITIES.find((f) => f.id === billingFacility)?.shortName || 'HMC'
     const ref = `DEMO-${fac}-${seq}`
     toast({ kind: 'success', title: 'Case registered — demo only', message: `Our Ref ${ref} reserved locally.` })
-    navigate('/design-preview/admin/cases-master')
+    navigate('/admin/cases-master')
   }
 
   return (
@@ -89,7 +89,7 @@ export default function PremiumAdminNewCase() {
                 Admin can register cases at any clinic and open insurance cases under HMC or SMC explicitly. All interactions are local mock state.
               </p>
             </div>
-            <Link to="/design-preview/admin-dashboard" className="p-btn-ghost h-10 px-4 text-sm inline-flex items-center gap-1.5 self-start lg:self-auto">
+            <Link to="/admin-dashboard" className="p-btn-ghost h-10 px-4 text-sm inline-flex items-center gap-1.5 self-start lg:self-auto">
               <ChevronLeft className="w-4 h-4" /> Back
             </Link>
           </div>

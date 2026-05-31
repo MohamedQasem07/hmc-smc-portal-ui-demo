@@ -16,6 +16,7 @@ import {
   R1_FINANCIAL_TYPES, encounterMeta, encounterSummary,
 } from '../../data/p2cR1'
 import { fmtRelative, fmtDate } from '../../lib/format'
+import { IS_SUPABASE } from '../../lib/api/config'
 
 /* =========================================================================
  * Admin — Clinic & Reception Cases Overview (read-only)
@@ -78,10 +79,12 @@ export default function PremiumAdminP2CCases() {
               Cross-clinic visibility — every external clinic + both branches.
             </p>
           </div>
-          <Link to="/design-preview/demo-roles"
-                className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">
-            Switch to Clinic / Reception role →
-          </Link>
+          {!IS_SUPABASE && (
+            <Link to="/demo-roles"
+                  className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">
+              Switch to Clinic / Reception role →
+            </Link>
+          )}
         </div>
 
         {/* Summary KPIs */}

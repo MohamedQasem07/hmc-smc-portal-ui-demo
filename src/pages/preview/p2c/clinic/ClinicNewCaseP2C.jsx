@@ -223,7 +223,7 @@ export default function ClinicNewCaseP2C() {
     }
 
     const newId = await actions.addCase(newCase)
-    navigate(`/design-preview/clinic/cases/${newId || newCase.id}`)
+    navigate(`/clinic/cases/${newId || newCase.id}`)
   }
 
   return (

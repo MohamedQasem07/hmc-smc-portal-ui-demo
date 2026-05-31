@@ -196,7 +196,7 @@ export default function PremiumAdminDashboard() {
                     </p>
                   </div>
                 </div>
-                <PremiumButton as={Link} to="/design-preview/admin-control-center" size="lg" rightIcon={<ChevronRight className="w-4 h-4" />}>
+                <PremiumButton as={Link} to="/admin-control-center" size="lg" rightIcon={<ChevronRight className="w-4 h-4" />}>
                   Open Control Center
                 </PremiumButton>
               </div>

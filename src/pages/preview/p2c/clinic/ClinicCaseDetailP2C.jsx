@@ -39,7 +39,7 @@ export default function ClinicCaseDetailP2C() {
           <div className="p-card p-8 space-y-3">
             <AlertTriangle className="w-8 h-8 mx-auto" style={{ color: '#A1672A' }} />
             <div className="text-sm font-semibold">Case not found</div>
-            <Link to="/design-preview/clinic/cases" className="text-xs text-[var(--p-teal)] font-semibold">← My Cases</Link>
+            <Link to="/clinic/cases" className="text-xs text-[var(--p-teal)] font-semibold">← My Cases</Link>
           </div>
         </div>
       </OperationalShell>
@@ -56,7 +56,7 @@ export default function ClinicCaseDetailP2C() {
           <strong>Interactive Demo</strong> — actions are saved in this browser (local preview — not yet on the server).
         </DemoBanner>
 
-        <Link to="/design-preview/clinic/cases" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--p-teal)' }}>
+        <Link to="/clinic/cases" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--p-teal)' }}>
           <ArrowLeft className="w-3.5 h-3.5" /> Back to My Cases
         </Link>
 

@@ -46,7 +46,7 @@ function SupabaseReferenceLists() {
             <h1 className="p-h1 text-2xl sm:text-3xl" style={{ color: 'var(--p-ink-900)' }}>Operational Configuration</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>Rooms, payment methods, and nationalities — saved to Supabase (admin-only).</p>
           </div>
-          <Link to="/design-preview/admin-dashboard" className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">← Admin Dashboard</Link>
+          <Link to="/admin-dashboard" className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">← Admin Dashboard</Link>
         </div>
         <LiveReferenceConfig />
       </div>
@@ -71,7 +71,7 @@ function MockReferenceLists() {
               The lists below are used across all P2C workflows. They are read-only here — admin editing is a future feature.
             </p>
           </div>
-          <Link to="/design-preview/admin-dashboard"
+          <Link to="/admin-dashboard"
             className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">
             ← Admin Dashboard
           </Link>

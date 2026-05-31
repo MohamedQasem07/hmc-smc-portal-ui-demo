@@ -54,7 +54,7 @@ export default function PremiumAddNewCase() {
 
         <div className="relative z-10 px-5 pt-4">
           <div className="flex items-center justify-between">
-            <Link to="/design-preview/clinic-dashboard" aria-label="Back" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <Link to="/clinic-dashboard" aria-label="Back" className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.12)' }}>
               <ChevronLeft className="w-4 h-4 text-white" />
             </Link>
             <BrandMark size={32} variant="dark" />

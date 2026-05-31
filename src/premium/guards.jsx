@@ -15,14 +15,14 @@ import { useUserMode } from '../context/UserModeContext'
  * Roles: admin | clinic_nurse | reception_kawther | reception_sheraton
  * ========================================================================= */
 
-const LOGIN = '/design-preview/login'
+const LOGIN = '/login'
 
 export function homeForRole(role) {
   switch (role) {
-    case 'admin':              return '/design-preview/admin-dashboard'
-    case 'clinic_nurse':       return '/design-preview/clinic/dashboard'
-    case 'reception_kawther':  return '/design-preview/reception/al-kawther/dashboard'
-    case 'reception_sheraton': return '/design-preview/reception/sheraton/dashboard'
+    case 'admin':              return '/admin-dashboard'
+    case 'clinic_nurse':       return '/clinic/dashboard'
+    case 'reception_kawther':  return '/reception/al-kawther/dashboard'
+    case 'reception_sheraton': return '/reception/sheraton/dashboard'
     default:                   return LOGIN
   }
 }

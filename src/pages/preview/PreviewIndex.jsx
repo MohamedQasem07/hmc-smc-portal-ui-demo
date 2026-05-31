@@ -4,11 +4,11 @@ import { BrandWordmark } from '../../premium/BrandMark'
 import { PremiumButton, MeshCorner, StatusPill } from '../../premium/primitives'
 
 const PREVIEWS = [
-  { to: '/design-preview/login',                 icon: LogIn,           title: 'Premium Login',              kind: 'Desktop · P2A',        description: 'Branded entrance with coastal mesh backdrop, elegant glass card, demo entry chips, and refined trust messaging.' },
-  { to: '/design-preview/clinic-dashboard',      icon: Smartphone,      title: 'Premium Clinic Dashboard',   kind: 'Mobile · P2A',         description: 'Phone-first command surface — hero greeting band, prominent primary action, refined KPIs with trends, activity feed.' },
-  { to: '/design-preview/new-case',              icon: FilePlus2,       title: 'Premium Add New Case',       kind: 'Mobile · P2A',         description: 'Multi-step intake with floating stepper, premium inputs, sticky bottom CTA, and gentle helper messaging.' },
-  { to: '/design-preview/admin-dashboard',       icon: LayoutDashboard, title: 'Premium Admin Dashboard',    kind: 'Desktop · P2A',        description: 'Executive operations cockpit — dark sidebar, mesh hero, trend KPIs with sparklines, branch leaderboard, refined panels.' },
-  { to: '/design-preview/admin-control-center',  icon: Settings,        title: 'Admin Control Center',       kind: 'Desktop · P2B.1 · NEW', description: 'Master data governance workspace — 8 configuration modules, premium edit drawer, change history, protected system values panel.', accent: true },
+  { to: '/login',                 icon: LogIn,           title: 'Premium Login',              kind: 'Desktop · P2A',        description: 'Branded entrance with coastal mesh backdrop, elegant glass card, demo entry chips, and refined trust messaging.' },
+  { to: '/clinic-dashboard',      icon: Smartphone,      title: 'Premium Clinic Dashboard',   kind: 'Mobile · P2A',         description: 'Phone-first command surface — hero greeting band, prominent primary action, refined KPIs with trends, activity feed.' },
+  { to: '/new-case',              icon: FilePlus2,       title: 'Premium Add New Case',       kind: 'Mobile · P2A',         description: 'Multi-step intake with floating stepper, premium inputs, sticky bottom CTA, and gentle helper messaging.' },
+  { to: '/admin-dashboard',       icon: LayoutDashboard, title: 'Premium Admin Dashboard',    kind: 'Desktop · P2A',        description: 'Executive operations cockpit — dark sidebar, mesh hero, trend KPIs with sparklines, branch leaderboard, refined panels.' },
+  { to: '/admin-control-center',  icon: Settings,        title: 'Admin Control Center',       kind: 'Desktop · P2B.1 · NEW', description: 'Master data governance workspace — 8 configuration modules, premium edit drawer, change history, protected system values panel.', accent: true },
 ]
 
 export default function PreviewIndex() {
@@ -39,7 +39,7 @@ export default function PreviewIndex() {
             <p className="mt-5 text-base lg:text-lg max-w-2xl" style={{ color: 'rgba(255,255,255,0.72)' }}>
               Four flagship screens established the visual identity (P2A).
               The new Admin Control Center expands it (P2B.1) — master data governance for facilities, users, workflow lists, and reference data.
-              All previews live under <code className="text-white/90 bg-white/10 px-1.5 py-0.5 rounded">/design-preview/*</code>; P1 functional routes remain untouched.
+              All previews live under <code className="text-white/90 bg-white/10 px-1.5 py-0.5 rounded">/*</code>; P1 functional routes remain untouched.
             </p>
           </div>
         </div>

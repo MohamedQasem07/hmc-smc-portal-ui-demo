@@ -160,7 +160,7 @@ export default function ClinicTransfersP2C() {
                     </td>
                     <td className="px-3 py-3 whitespace-nowrap"><TransferStatusCell c={c} /></td>
                     <td className="px-3 py-3 whitespace-nowrap text-right">
-                      <Link to={`/design-preview/clinic/cases/${c.id}`}
+                      <Link to={`/clinic/cases/${c.id}`}
                         className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-semibold p-btn-ghost">
                         <Eye className="w-3.5 h-3.5" /> View
                       </Link>
@@ -177,7 +177,7 @@ export default function ClinicTransfersP2C() {
           {shown.length === 0 ? (
             <div className="p-card p-6 text-center text-sm" style={{ color: 'var(--p-ink-400)' }}>No transfers match these filters.</div>
           ) : shown.map((c) => (
-            <Link key={c.id} to={`/design-preview/clinic/cases/${c.id}`} className="block p-card px-3 py-3">
+            <Link key={c.id} to={`/clinic/cases/${c.id}`} className="block p-card px-3 py-3">
               <div className="flex items-center justify-between gap-2">
                 <div className="min-w-0 flex-1">
                   <div className="text-[11px] inline-flex items-center gap-1.5" style={{ color: 'var(--p-ink-500)' }}>

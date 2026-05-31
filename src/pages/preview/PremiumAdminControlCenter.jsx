@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import {
   Settings, FlaskConical, Sparkles, Building2, Users, ArrowLeftRight,
   Wallet, Heart, ListChecks, Tag, BookOpen, ChevronRight, History,
@@ -24,6 +24,7 @@ import {
 import { FACILITIES, getBranchName } from '../../data/mock'
 import { useToast } from '../../components/ui/Toast'
 import { cn } from '../../lib/cn'
+import { IS_SUPABASE } from '../../lib/api/config'
 
 const CATEGORIES = [
   { id: 'billing',     icon: Landmark,       name: 'Billing Facilities',       description: 'Medical entity under whose name an invoice is opened — HMC, SMC.' },
@@ -39,6 +40,10 @@ const CATEGORIES = [
 ]
 
 export default function PremiumAdminControlCenter() {
+  // Control Center is a mock configuration surface (demo cards). In the live
+  // pilot the REAL configuration is Reference Lists + Users & Staff, both
+  // Supabase-backed — redirect admins there so they never see mock data.
+  if (IS_SUPABASE) return <Navigate to="/admin/reference-lists" replace />
   const { toast } = useToast()
   const summary = useMemo(() => governanceSummary(), [])
   const [category, setCategory] = useState('billing')

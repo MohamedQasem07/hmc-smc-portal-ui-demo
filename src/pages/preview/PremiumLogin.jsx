@@ -18,10 +18,10 @@ import { IS_SUPABASE } from '../../lib/api/config'
  * against the runtime Portal Users collection (DemoStateContext.users) and
  * routes by role:
  *
- *   admin               → /design-preview/admin-dashboard
- *   clinic_nurse        → /design-preview/clinic/dashboard
- *   reception_kawther   → /design-preview/reception/al-kawther/dashboard
- *   reception_sheraton  → /design-preview/reception/sheraton/dashboard
+ *   admin               → /admin-dashboard
+ *   clinic_nurse        → /clinic/dashboard
+ *   reception_kawther   → /reception/al-kawther/dashboard
+ *   reception_sheraton  → /reception/sheraton/dashboard
  *
  * Inactive users are blocked with a clean error. No fake "securely
  * authenticated" claim is shown — real authentication is wired in the
@@ -205,15 +205,19 @@ export default function PremiumLogin() {
             </div>
 
             <p className="text-center text-[11px] mt-6" style={{ color: 'var(--p-ink-400)' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/design-preview/review-tools')}
-                className="font-semibold hover:underline"
-                style={{ color: 'var(--p-ink-500)' }}
-              >
-                Local Review Tools
-              </button>
-              <span className="mx-2">·</span>
+              {!IS_SUPABASE && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => navigate('/review-tools')}
+                    className="font-semibold hover:underline"
+                    style={{ color: 'var(--p-ink-500)' }}
+                  >
+                    Local Review Tools
+                  </button>
+                  <span className="mx-2">·</span>
+                </>
+              )}
               Need an account? Contact your HMC / SMC administrator.
             </p>
           </div>
@@ -225,13 +229,13 @@ export default function PremiumLogin() {
 
 // ---------------------------------------------------------------------------
 function routeForUser(u) {
-  if (!u) return '/design-preview/login'
+  if (!u) return '/login'
   switch (u.role) {
-    case 'admin':              return '/design-preview/admin-dashboard'
-    case 'clinic_nurse':       return '/design-preview/clinic/dashboard'
-    case 'reception_kawther':  return '/design-preview/reception/al-kawther/dashboard'
-    case 'reception_sheraton': return '/design-preview/reception/sheraton/dashboard'
-    default:                   return '/design-preview/login'
+    case 'admin':              return '/admin-dashboard'
+    case 'clinic_nurse':       return '/clinic/dashboard'
+    case 'reception_kawther':  return '/reception/al-kawther/dashboard'
+    case 'reception_sheraton': return '/reception/sheraton/dashboard'
+    default:                   return '/login'
   }
 }
 

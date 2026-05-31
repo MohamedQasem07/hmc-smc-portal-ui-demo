@@ -36,7 +36,7 @@ import LiveUsersStaffConfig from './p2c/live/LiveUsersStaffConfig'
 
 export default function PremiumAdminUsersStaff() {
   const { currentUser, isSignedIn } = useUserMode()
-  if (!isSignedIn) return <Navigate to="/design-preview/login" replace />
+  if (!isSignedIn) return <Navigate to="/login" replace />
   if (currentUser?.role !== 'admin') return <Navigate to={defaultPathFor(currentUser)} replace />
 
   return (
@@ -59,12 +59,12 @@ function LiveUsersStaffConfigWrap() {
 }
 
 function defaultPathFor(u) {
-  if (!u) return '/design-preview/login'
+  if (!u) return '/login'
   switch (u.role) {
-    case 'clinic_nurse':       return '/design-preview/clinic/dashboard'
-    case 'reception_kawther':  return '/design-preview/reception/al-kawther/dashboard'
-    case 'reception_sheraton': return '/design-preview/reception/sheraton/dashboard'
-    default:                   return '/design-preview/admin-dashboard'
+    case 'clinic_nurse':       return '/clinic/dashboard'
+    case 'reception_kawther':  return '/reception/al-kawther/dashboard'
+    case 'reception_sheraton': return '/reception/sheraton/dashboard'
+    default:                   return '/admin-dashboard'
   }
 }
 

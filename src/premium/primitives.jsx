@@ -1,5 +1,5 @@
 /* =========================================================================
- * Premium primitives — used by /design-preview/* routes only.
+ * Premium primitives — used by /* routes only.
  * Visual layer that consumes the same mock data the P1 routes use.
  * ========================================================================= */
 

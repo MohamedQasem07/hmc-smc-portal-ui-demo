@@ -14,7 +14,7 @@ import { cn } from '../../../lib/cn'
  * DemoRolePreview — the polished landing page for switching between the
  * four demonstration workspaces. Replaces the previous ad-hoc role chip.
  *
- * Visible at /design-preview/demo-roles
+ * Visible at /demo-roles
  *
  * Each card lists what the role can and cannot see, so Mohamed can preview
  * the permission boundaries without backend.
@@ -43,7 +43,7 @@ export default function DemoRolePreview() {
         <header className="flex items-center justify-between mb-12 md:mb-16">
           <BrandWordmark variant="light" />
           <div className="flex items-center gap-2">
-            <Link to="/design-preview/review-tools" className="text-xs font-semibold hidden md:inline-flex items-center gap-1"
+            <Link to="/review-tools" className="text-xs font-semibold hidden md:inline-flex items-center gap-1"
                   style={{ color: 'rgba(255,255,255,0.78)' }}>
               ← Local Review Tools
             </Link>
@@ -81,7 +81,7 @@ export default function DemoRolePreview() {
             ]}
             cta="Enter Admin Workspace"
             icon={ShieldCheck}
-            onEnter={() => enter('admin', { path: '/design-preview/admin-dashboard' })}
+            onEnter={() => enter('admin', { path: '/admin-dashboard' })}
           />
 
           {/* External clinic nurse */}
@@ -126,7 +126,7 @@ export default function DemoRolePreview() {
             ]}
             cta="Enter Al-Kawther Reception"
             icon={Building2}
-            onEnter={() => enter('reception_kawther', { path: '/design-preview/reception/al-kawther/dashboard' })}
+            onEnter={() => enter('reception_kawther', { path: '/reception/al-kawther/dashboard' })}
           />
 
           {/* Reception — Sheraton */}
@@ -147,7 +147,7 @@ export default function DemoRolePreview() {
             ]}
             cta="Enter Sheraton Reception"
             icon={Building2}
-            onEnter={() => enter('reception_sheraton', { path: '/design-preview/reception/sheraton/dashboard' })}
+            onEnter={() => enter('reception_sheraton', { path: '/reception/sheraton/dashboard' })}
           />
         </div>
 
@@ -229,10 +229,10 @@ function ClinicPicker({ value, onChange }) {
 
 function defaultPathFor(role, clinicId) {
   switch (role) {
-    case 'admin':              return '/design-preview/admin-dashboard'
-    case 'clinic_nurse':       return '/design-preview/clinic/dashboard'
-    case 'reception_kawther':  return '/design-preview/reception/al-kawther/dashboard'
-    case 'reception_sheraton': return '/design-preview/reception/sheraton/dashboard'
-    default:                   return '/design-preview/admin-dashboard'
+    case 'admin':              return '/admin-dashboard'
+    case 'clinic_nurse':       return '/clinic/dashboard'
+    case 'reception_kawther':  return '/reception/al-kawther/dashboard'
+    case 'reception_sheraton': return '/reception/sheraton/dashboard'
+    default:                   return '/admin-dashboard'
   }
 }

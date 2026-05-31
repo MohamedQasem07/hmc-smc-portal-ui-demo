@@ -79,16 +79,16 @@ export default function PremiumClinicDashboard() {
             <p className="text-xs mt-1" style={{ color: 'var(--p-ink-500)' }}>
               Capture in under a minute — patient, route, financial classification, documents.
             </p>
-            <Link to="/design-preview/new-case" className="block mt-4">
+            <Link to="/new-case" className="block mt-4">
               <PremiumButton fullWidth size="xl" leftIcon={<Plus className="w-5 h-5" />} rightIcon={<ArrowRight />}>
                 Register New Case
               </PremiumButton>
             </Link>
             <div className="mt-3 grid grid-cols-2 gap-2">
-              <Link to="/design-preview/clinic-dashboard" className="block">
+              <Link to="/clinic-dashboard" className="block">
                 <SecondaryChip icon={Inbox} label="Receive Transfer" count={transfersIn.length} tone="teal" />
               </Link>
-              <Link to="/design-preview/clinic-dashboard" className="block">
+              <Link to="/clinic-dashboard" className="block">
                 <SecondaryChip icon={FileBarChart2} label="Daily Report" tone="navy" />
               </Link>
             </div>
@@ -116,7 +116,7 @@ export default function PremiumClinicDashboard() {
             />
             <div className="space-y-2.5">
               {transfersIn.map((t) => (
-                <Link key={t.id} to="/design-preview/clinic-dashboard" className="block">
+                <Link key={t.id} to="/clinic-dashboard" className="block">
                   <div className="p-card p-4 relative overflow-hidden">
                     <div className="flex items-start gap-3">
                       <Avatar name={t.patient.name} size={42} tone="teal" />
@@ -232,11 +232,11 @@ function SecondaryChip({ icon: Icon, label, count, tone }) {
 function PremiumBottomNav({ pendingTransfers }) {
   // Same items as the P1 mobile nav but with premium styling
   const items = [
-    { to: '/design-preview/clinic-dashboard', icon: LayoutDashboard, label: 'Home',    active: true  },
-    { to: '/design-preview/clinic-dashboard', icon: ArrowLeftRight,  label: 'Transfers', badge: pendingTransfers },
-    { to: '/design-preview/new-case',         icon: FilePlus2,       label: 'New Case', emphasis: true },
-    { to: '/design-preview/clinic-dashboard', icon: FolderOpen,      label: 'My Cases' },
-    { to: '/design-preview/clinic-dashboard', icon: FileBarChart2,   label: 'Report' },
+    { to: '/clinic-dashboard', icon: LayoutDashboard, label: 'Home',    active: true  },
+    { to: '/clinic-dashboard', icon: ArrowLeftRight,  label: 'Transfers', badge: pendingTransfers },
+    { to: '/new-case',         icon: FilePlus2,       label: 'New Case', emphasis: true },
+    { to: '/clinic-dashboard', icon: FolderOpen,      label: 'My Cases' },
+    { to: '/clinic-dashboard', icon: FileBarChart2,   label: 'Report' },
   ]
   return (
     <nav className="fixed bottom-0 inset-x-0 z-30 px-3 pb-3 pt-2 safe-bottom">

@@ -188,7 +188,7 @@ function formatNumber(n) {
  * have been removed from operational pages so the UI feels closer to the
  * final product. Existing call sites continue to compile (they pass children
  * that get discarded). Demo-mode messaging now lives only on the dedicated
- * Local Review Tools page (`/design-preview/review-tools`).
+ * Local Review Tools page (`/review-tools`).
  */
 export function DemoBanner() {
   return null
