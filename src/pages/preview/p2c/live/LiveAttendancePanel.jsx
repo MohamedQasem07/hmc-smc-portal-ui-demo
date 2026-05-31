@@ -256,7 +256,7 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
 
 // ---------------------------------------------------------------------------
 function ShiftTable({ shifts, loading, dateLabel, onEnd, busy, showAction, showClinic }) {
-  const cols = ['Date', ...(showClinic ? ['Clinic'] : []), 'Nurse', 'Start', 'End', 'Worked', 'Status', ...(showAction ? ['Action'] : [])]
+  const cols = ['Date', ...(showClinic ? ['Clinic'] : []), 'Nurse', 'Start', 'End', 'Worked', 'Status', 'Recorded by', ...(showAction ? ['Action'] : [])]
   return (
     <div className="p-card overflow-hidden">
       <div className="overflow-x-auto">
@@ -289,6 +289,7 @@ function ShiftTable({ shifts, loading, dateLabel, onEnd, busy, showAction, showC
                     ? <StatusPill tone="cash">On Shift</StatusPill>
                     : <StatusPill tone="finalized" icon={CheckCircle2}>Closed</StatusPill>}
                 </td>
+                <td className="px-3 py-2.5 text-[11px]" style={{ color: 'var(--p-ink-600)' }}>{s.recordedByName || (s.recordedBy ? s.recordedBy.slice(0, 8) + '…' : '—')}</td>
                 {showAction && (
                   <td className="px-3 py-2.5 text-right no-print">
                     {s.status === 'active' ? (
@@ -309,7 +310,7 @@ function ShiftTable({ shifts, loading, dateLabel, onEnd, busy, showAction, showC
 }
 
 function DutyTable({ duties, loading, dateLabel, showClinic }) {
-  const cols = ['Date', ...(showClinic ? ['Clinic'] : []), 'Doctor on Duty', 'Note']
+  const cols = ['Date', ...(showClinic ? ['Clinic'] : []), 'Doctor on Duty', 'Recorded by', 'Note']
   return (
     <div className="p-card overflow-hidden">
       <div className="overflow-x-auto">
@@ -334,6 +335,7 @@ function DutyTable({ duties, loading, dateLabel, showClinic }) {
                     <span className="font-semibold" style={{ color: 'var(--p-ink-900)' }}>{d.staffName || '—'}</span>
                   </div>
                 </td>
+                <td className="px-3 py-2.5 text-[11px]" style={{ color: 'var(--p-ink-600)' }}>{d.recordedByName || (d.recordedBy ? d.recordedBy.slice(0, 8) + '…' : '—')}</td>
                 <td className="px-3 py-2.5" style={{ color: 'var(--p-ink-500)' }}>{d.note || '—'}</td>
               </tr>
             ))}

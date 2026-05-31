@@ -345,6 +345,13 @@ export async function fetchAttendance(workDateYmd = null) {
   if (e1) throw e1
   if (e2) throw e2
   const loc = (id) => maps.locById[id] || {}
+  // Resolve the recording user's display name (attribution). Best-effort: an
+  // admin can read every profile; a clinic user resolves at least their own.
+  let nameByUid = {}
+  try {
+    const { data: profs } = await db.from('portal_user_profiles').select('user_id, display_name')
+    nameByUid = Object.fromEntries((profs || []).map((p) => [p.user_id, p.display_name]))
+  } catch { /* recorder names are best-effort only */ }
   return {
     shifts: (sh || []).map((s) => ({
       id: s.id,
@@ -358,6 +365,7 @@ export async function fetchAttendance(workDateYmd = null) {
       workedMinutes: s.worked_minutes,
       status: s.status,
       recordedBy: s.recorded_by,
+      recordedByName: nameByUid[s.recorded_by] || null,
     })),
     duties: (du || []).map((d) => ({
       id: d.id,
@@ -368,6 +376,7 @@ export async function fetchAttendance(workDateYmd = null) {
       workDate: d.work_date,
       note: d.note,
       recordedBy: d.recorded_by,
+      recordedByName: nameByUid[d.recorded_by] || null,
     })),
   }
 }

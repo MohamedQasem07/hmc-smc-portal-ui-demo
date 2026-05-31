@@ -35,6 +35,7 @@ import PremiumAdminP2CCases from './pages/preview/PremiumAdminP2CCases'
 import PremiumAdminReferenceLists from './pages/preview/PremiumAdminReferenceLists'
 import PremiumAdminInsuranceCompletion from './pages/preview/PremiumAdminInsuranceCompletion'
 import PremiumAdminUsersStaff from './pages/preview/PremiumAdminUsersStaff'
+import PremiumAdminAttendance from './pages/preview/PremiumAdminAttendance'
 import PremiumReviewTools from './pages/preview/PremiumReviewTools'
 
 // PORTAL-UX-P2C — Clinic & Reception workflows
@@ -141,6 +142,7 @@ export default function App() {
               <Route path="/admin/reference-lists"      element={<PremiumAdminReferenceLists />} />
               <Route path="/admin/insurance-completion" element={<PremiumAdminInsuranceCompletion />} />
               <Route path="/admin/users-staff"          element={<PremiumAdminUsersStaff />} />
+              <Route path="/admin/attendance"           element={<PremiumAdminAttendance />} />
             </Route>
 
             {/* ---- Clinic workspaces (external clinic nurse; admin may view) ---- */}

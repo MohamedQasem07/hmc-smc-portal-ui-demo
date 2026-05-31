@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileBarChart2, FileLock2, Settings,
   Bell, Search, ChevronDown, Sparkles, BookOpen, Plus, Banknote,
-  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users, Archive,
+  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users, Archive, UserCheck,
 } from 'lucide-react'
 import { BrandWordmark } from './BrandMark'
 import { Avatar, StatusPill } from './primitives'
@@ -40,6 +40,7 @@ const NAV_ITEMS = [
   { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/admin/repatriation' },
   { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/admin/p2c-cases', section: 'Clinic & Reception' },
   { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/admin/insurance-completion', section: 'Clinic & Reception' },
+  { id: 'attendance',   label: 'Attendance',          icon: UserCheck,       to: '/admin/attendance', section: 'Administration' },
   { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/admin/users-staff', section: 'Administration' },
   { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/admin-control-center', section: 'Configuration' },
   { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/admin-dashboard', restricted: true, section: 'Protected' },
