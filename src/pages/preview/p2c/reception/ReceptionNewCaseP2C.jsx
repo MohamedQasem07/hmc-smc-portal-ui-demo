@@ -19,6 +19,7 @@ import {
 import { fmtDMY, ageFromDob, ageLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R2 — Reception New Direct Case (Al-Kawther / Sheraton)
@@ -34,7 +35,7 @@ import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
  *     selected Room (occupies it on the Room Board).
  * ========================================================================= */
 
-const TODAY_DATE = '2026-05-27'
+const TODAY_DATE = IS_SUPABASE ? new Date().toLocaleDateString('en-CA') : '2026-05-27'
 
 function branchConfig(slug) {
   if (slug === 'al-kawther') return { id: 'al_kawther', name: 'Al-Kawther Branch', role: 'reception_kawther' }

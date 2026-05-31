@@ -15,8 +15,26 @@ import {
 } from '../../data/controlCenter'
 import { CASES, aggregateForAdmin, getBranchName } from '../../data/mock'
 import { fmtMoney, fmtDate } from '../../lib/format'
+import { IS_SUPABASE } from '../../lib/api/config'
+import LiveDailyReport from './p2c/live/LiveDailyReport'
+
+function AdminDailyReportLive() {
+  return (
+    <AdminShell active="reports-daily" searchPlaceholder="Search…">
+      <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 space-y-6 max-w-[1500px] w-full mx-auto pb-32">
+        <div>
+          <div className="p-eyebrow" style={{ color: 'var(--p-brand-mid)' }}><FileBarChart2 className="w-3.5 h-3.5" /> Admin Report · Daily</div>
+          <h1 className="p-h1 text-2xl sm:text-3xl" style={{ color: 'var(--p-ink-900)' }}>Daily Report</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>All clinics &amp; branches · per-currency operational summary · no exchange conversion.</p>
+        </div>
+        <LiveDailyReport scopeNote="All clinics & branches (admin — full visibility)." />
+      </div>
+    </AdminShell>
+  )
+}
 
 export default function PremiumAdminDailyReport() {
+  if (IS_SUPABASE) return <AdminDailyReportLive />
   const preview = usePrintPreview()
   const [date, setDate] = useState('2026-05-26')
   const [bf, setBF] = useState('all')

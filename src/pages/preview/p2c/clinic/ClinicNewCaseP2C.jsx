@@ -22,6 +22,7 @@ import {
 import { fmtDMY, ageFromDob, ageLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -36,7 +37,9 @@ import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
  *   - Treatment Mode (conservative / surgical — branch-side classification)
  * ========================================================================= */
 
-const TODAY_DATE = '2026-05-27'
+// Pilot (supabase): default to the real local date. Mock keeps the fixed demo date
+// so the 5173 seed/UAT data stays consistent.
+const TODAY_DATE = IS_SUPABASE ? new Date().toLocaleDateString('en-CA') : '2026-05-27'
 const TODAY_TIME_DEFAULT = '10:00'
 
 export default function ClinicNewCaseP2C() {

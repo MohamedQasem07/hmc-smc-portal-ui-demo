@@ -19,6 +19,8 @@ import {
 } from '../../../../data/p2cR1'
 import { fmtDate, fmtRelative } from '../../../../lib/format'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import LiveReceptionIncomingDetail from './LiveReceptionIncomingDetail'
 
 /* =========================================================================
  * P2C.R1 — Reception Received Transfer Detail / Assignment
@@ -43,6 +45,9 @@ function branchConfig(slug) {
 }
 
 export default function ReceptionIncomingDetailP2C() {
+  // Pilot (supabase mode): use the live receive flow (RPC + real collections).
+  // Mock mode (5173) keeps the original demo body below, byte-identical.
+  if (IS_SUPABASE) return <LiveReceptionIncomingDetail />
   const { branchSlug, caseId } = useParams()
   const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   const original = useFindCase(caseId)

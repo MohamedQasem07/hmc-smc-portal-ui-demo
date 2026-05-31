@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import {
   ClipboardList, Search, Filter, Eye, ChevronRight, ChevronDown,
   Calendar, Building2, Landmark, Wallet, ArrowLeftRight, ListChecks,
@@ -20,6 +20,7 @@ import {
 import { CASES, getBranchName } from '../../data/mock'
 import { fmtDate, fmtMoney, fmtRelative } from '../../lib/format'
 import { cn } from '../../lib/cn'
+import { IS_SUPABASE } from '../../lib/api/config'
 
 const PAYMENT_STATUSES = ['Not Paid', 'Partially Paid', 'Paid', 'Mixed Currency']
 
@@ -85,6 +86,10 @@ function buildUnifiedCases() {
 }
 
 export default function PremiumAdminCasesMaster() {
+  // Pilot (supabase mode): the live, RLS-scoped all-cases master is /admin/p2c-cases.
+  // This legacy unified view reads mock CASES, so redirect to the live view in pilot.
+  // Mock mode (5173) keeps the original demo body below, byte-identical.
+  if (IS_SUPABASE) return <Navigate to="/admin/p2c-cases" replace />
   const { toast } = useToast()
   const preview = usePrintPreview()
   const [historyOpen, setHistoryOpen] = useState(false)

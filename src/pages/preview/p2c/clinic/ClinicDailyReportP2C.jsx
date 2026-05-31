@@ -17,6 +17,8 @@ import {
   R1_TODAY, R1_TODAY_LABEL, R1_CURRENCIES, r1NurseName, r1DoctorName,
   shiftHours, encounterMeta,
 } from '../../../../data/p2cR1'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import LiveDailyReport from '../live/LiveDailyReport'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Daily Report
@@ -26,7 +28,21 @@ import {
  * Print / Export buttons are UI-only concepts.
  * ========================================================================= */
 
+function ClinicDailyReportLive() {
+  const { clinicId } = useUserMode()
+  const clinicName = getClinicName(clinicId)
+  return (
+    <OperationalShell role="clinic_nurse" active="report" identityName={clinicName} identitySub="External Clinic Workspace">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1400px] mx-auto space-y-6">
+        <IdentityHeader icon={FileBarChart2} tone="navy" label="Daily Report" subtitle={`${clinicName} · Live Supabase`} />
+        <LiveDailyReport scopeNote={`${clinicName} — your clinic's cases & collections only (RLS-scoped).`} />
+      </div>
+    </OperationalShell>
+  )
+}
+
 export default function ClinicDailyReportP2C() {
+  if (IS_SUPABASE) return <ClinicDailyReportLive />
   const { clinicId } = useUserMode()
   const clinicName = getClinicName(clinicId)
   const all = useCasesForClinic(clinicId)

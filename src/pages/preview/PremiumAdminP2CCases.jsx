@@ -66,9 +66,11 @@ export default function PremiumAdminP2CCases() {
     <AdminShell active="p2c-cases">
       <div className="px-5 md:px-8 lg:px-10 pt-6 pb-16 max-w-[1200px] mx-auto space-y-6">
 
-        <DemoBanner>
-          Admin read-only view of Clinic &amp; Reception P2C demo cases. No backend — all data is mock.
-        </DemoBanner>
+        {!IS_SUPABASE && (
+          <DemoBanner>
+            Admin read-only view of Clinic &amp; Reception P2C demo cases. No backend — all data is mock.
+          </DemoBanner>
+        )}
 
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -304,9 +306,11 @@ export default function PremiumAdminP2CCases() {
           </section>
         )}
 
-        <div className="text-center text-[11px]" style={{ color: 'var(--p-ink-400)' }}>
-          Demo data only — no real patients, no real financial data. P2C prototype view.
-        </div>
+        {!IS_SUPABASE && (
+          <div className="text-center text-[11px]" style={{ color: 'var(--p-ink-400)' }}>
+            Demo data only — no real patients, no real financial data. P2C prototype view.
+          </div>
+        )}
       </div>
     </AdminShell>
   )

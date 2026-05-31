@@ -15,6 +15,8 @@ import { useDemoState, useFindCase } from '../../../../context/DemoStateContext'
 import { getClinicName } from '../../../../data/p2c'
 import { encounterMeta, R1_ENCOUNTER_PATTERNS } from '../../../../data/p2cR1'
 import { fmtDate } from '../../../../lib/format'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import LiveSpecialistVisits from '../live/LiveSpecialistVisits'
 
 /* =========================================================================
  * P2C.R2 — Clinic Case Detail
@@ -92,7 +94,7 @@ export default function ClinicCaseDetailP2C() {
             {c.encounterPattern === 'outpatient_single' && (
               <SingleVisitPanel c={c} onCloseVisit={() => actions.closeVisit(c.id)} />
             )}
-            {c.encounterPattern === 'outpatient_multi' && (
+            {!IS_SUPABASE && c.encounterPattern === 'outpatient_multi' && (
               <MultiSessionPanel c={c}
                 onCloseSession={(sid) => actions.closeSession(c.id, sid)}
                 onAddSession={() => { actions.addSession(c.id, newSessionNote || `Session ${(c.sessions?.length || 0) + 1}`); setNewSessionNote('') }}
@@ -102,6 +104,10 @@ export default function ClinicCaseDetailP2C() {
             )}
             {c.encounterPattern === 'inpatient_admission' && (
               <InpatientPanel c={c} onDischarge={() => actions.discharge(c.id)} />
+            )}
+            {/* Phase 6 — live specialist visits (any case) in supabase mode */}
+            {IS_SUPABASE && (
+              <LiveSpecialistVisits caseId={c.id} sessions={c.sessions} onChanged={actions.refreshCases} />
             )}
 
             {c.transfer && (

@@ -4,7 +4,7 @@ import {
 } from 'lucide-react'
 import { SectionHead } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
-import { fetchCollections } from '../../../../lib/api/portalData'
+import { fetchCollections, summarizeCollections } from '../../../../lib/api/portalData'
 import { fmtDMYHM } from '../../../../lib/displayDate'
 
 /* =========================================================================
@@ -68,6 +68,7 @@ export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · port
   const list = rows || []
   const cashCount = list.filter((c) => c.method === 'cash').length
   const visaCount = list.filter((c) => c.method === 'visa_card').length
+  const summary = summarizeCollections(list)
 
   return (
     <section className="space-y-4">
@@ -117,6 +118,35 @@ export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · port
           <CreditCard className="w-3.5 h-3.5" /> {visaCount} visa / bank
         </span>
       </div>
+
+      {/* Treasury by channel + currency — NO cross-currency conversion (Phase 5) */}
+      {summary.length > 0 && (
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.12em] font-bold mb-2" style={{ color: 'var(--p-ink-500)' }}>
+            Treasury by Channel &amp; Currency
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            {summary.map((b) => {
+              const isVisa = b.channel === 'visa_bank'
+              return (
+                <div key={b.channel + b.currency} className="rounded-xl px-3 py-3"
+                  style={{ background: isVisa ? 'var(--p-brand-pale)' : 'var(--p-cash-soft)',
+                           border: '1px solid ' + (isVisa ? '#BCCDE8' : '#A8E6C7') }}>
+                  <div className="text-[10px] uppercase tracking-[0.12em] font-bold inline-flex items-center gap-1.5"
+                       style={{ color: isVisa ? '#1E4180' : '#0A8F62' }}>
+                    {isVisa ? <CreditCard className="w-3 h-3" /> : <Banknote className="w-3 h-3" />}
+                    {isVisa ? 'Visa / Bank' : 'Physical Cash'} · {b.currency}
+                  </div>
+                  <div className="mt-1 text-lg font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
+                    {fmtAmt(b.total)} <span className="text-xs" style={{ color: 'var(--p-ink-500)' }}>{b.currency}</span>
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: 'var(--p-ink-500)' }}>{b.count} collection{b.count !== 1 ? 's' : ''}</div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       <div className="p-card overflow-hidden">
         <div className="overflow-x-auto">

@@ -95,8 +95,21 @@ export function portalRowToCase(row, maps) {
       adminNotes: prep.admin_notes,
       completedAt: prep.completed_at,
     } : null,
-    // runtime fields some pages read — safe empty defaults
-    sessions: [], paymentLines: [], excessLines: [], visit: null, admission: null,
+    // Specialist visits / sessions (Phase 6) — mapped from portal_encounters.
+    sessions: (row.encounters || [])
+      .filter((e) => e.encounter_type === 'session')
+      .sort((a, b) => (a.sequence_no || 0) - (b.sequence_no || 0))
+      .map((e) => ({
+        id: e.id,
+        sequenceNo: e.sequence_no,
+        date: e.check_in_at,
+        checkInAt: e.check_in_at,
+        checkOutAt: e.check_out_at,
+        status: e.status === 'active' ? 'active' : 'closed',
+        note: e.notes || '',
+      })),
+    // other runtime fields some pages read — safe empty defaults
+    paymentLines: [], excessLines: [], visit: null, admission: null,
     cashPayment: null, mixedCurrency: false, history: [], notes: '',
     source: 'supabase',
   }
@@ -109,14 +122,20 @@ const CASE_SELECT = `
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
   intake:portal_insurance_intakes ( insurance_reference_number, company:insurance_company_id ( name ) ),
   prep:portal_insurance_billing_preparations ( invoice_currency, service_charge_pct, billing_preparation_status,
-    onedrive_folder_path, missing_data_note, transportation_fee, patient_excess_amount, admin_notes, completed_at )
+    onedrive_folder_path, missing_data_note, transportation_fee, patient_excess_amount, admin_notes, completed_at ),
+  encounters:portal_encounters ( id, sequence_no, encounter_type, check_in_at, check_out_at, status, notes )
 `
 
-/** RLS-scoped: returns only the cases the current user may see. */
-export async function fetchCases() {
+/** RLS-scoped: returns only the cases the current user may see.
+ *  Optional { from, to } (YYYY-MM-DD) filters by visit_date for date-scoped reports. */
+export async function fetchCases(opts = {}) {
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
-  const { data, error } = await db.from('portal_cases').select(CASE_SELECT).order('visit_date', { ascending: false })
+  let q = db.from('portal_cases').select(CASE_SELECT)
+  if (opts.from) q = q.gte('visit_date', opts.from)
+  if (opts.to) q = q.lte('visit_date', opts.to)
+  q = q.order('visit_date', { ascending: false })
+  const { data, error } = await q
   if (error) throw error
   return (data || []).map((r) => portalRowToCase(r, maps))
 }
@@ -249,20 +268,168 @@ export async function recordCollection(db, caseId, line, purpose, locId) {
   return data
 }
 
+/* =========================================================================
+ * Transfers — receive & classify at the destination branch (Phase 4).
+ * supabase mode only. receiveTransfer() flips the transfer + case atomically
+ * via the SECURITY DEFINER RPC. classifyReceivedCase() applies the branch's
+ * financial/treatment classification and records any REAL collections — it
+ * reuses recordCollection() so "receive as Cash" obeys the exact same
+ * FX / treasury_channel rules as a direct Cash case (Visa -> EGP visa_bank).
+ * ========================================================================= */
+
+const TREATMENT_TO_PORTAL = {
+  pending: 'not_determined', not_determined: 'not_determined',
+  conservative: 'conservative', surgical: 'surgical',
+}
+
+/** Accept an incoming transfer (atomic): transfer -> received; case -> received,
+ *  current_location := destination. RLS-scoped to the destination branch. */
+export async function receiveTransfer(caseId) {
+  const db = await getSupabaseClient()
+  const { data, error } = await db.rpc('portal_receive_transfer', { p_case_id: caseId })
+  if (error) throw error
+  return data
+}
+
+/** Classify a just-received case at the destination + record real money lines.
+ *  patch: { financialType, billingFacility, treatmentMode, insurance:{company,ref,email,phone},
+ *           hasPatientExcess, excessAmount, excessCurrency, excessLines:[], paymentLines:[], roomId }
+ *  No fake cash: only the payment/excess lines actually entered are recorded. */
+export async function classifyReceivedCase(caseId, patch = {}) {
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  const uid = await currentUid(db)
+
+  // After receipt the case lives at the destination — collections/rooms use it.
+  const { data: caseRow, error: cErr } = await db.from('portal_cases')
+    .select('current_location_id').eq('id', caseId).single()
+  if (cErr) throw cErr
+  const locId = caseRow.current_location_id
+  const facId = patch.billingFacility ? (maps.facIdByCode[patch.billingFacility] || null) : null
+
+  // 1) Classification on the same case row (no duplicate case; our_ref unchanged).
+  const { error: uErr } = await db.from('portal_cases').update({
+    financial_type: FINANCIAL_TYPE_TO_PORTAL[patch.financialType] || 'pending',
+    treatment_mode: TREATMENT_TO_PORTAL[patch.treatmentMode] || 'not_determined',
+    billing_facility_id: patch.financialType === 'Insurance' ? facId : null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', caseId)
+  if (uErr) throw uErr
+
+  // 2) Insurance intake (only if classified Insurance with insurer details).
+  if (patch.financialType === 'Insurance' && facId) {
+    const insName = (patch.insurance?.company || '').trim()
+    let companyId = null
+    if (insName) {
+      const { data: existing } = await db.from('portal_insurance_companies').select('id').ilike('name', insName).maybeSingle()
+      if (existing) companyId = existing.id
+      else {
+        const { data: created } = await db.from('portal_insurance_companies')
+          .insert({ name: insName, email: patch.insurance?.email || null, phone: patch.insurance?.phone || null, created_by: uid })
+          .select('id').single()
+        companyId = created?.id || null
+      }
+    }
+    if (companyId) {
+      const { data: existingIntake } = await db.from('portal_insurance_intakes').select('id').eq('case_id', caseId).maybeSingle()
+      if (!existingIntake) {
+        await db.from('portal_insurance_intakes').insert({
+          case_id: caseId, insurance_company_id: companyId,
+          insurance_reference_number: (patch.insurance?.ref || '').trim() || '(pending)',
+          insurance_company_email: patch.insurance?.email || null,
+          insurance_company_phone: patch.insurance?.phone || null,
+          billing_facility_id: facId, has_patient_excess: !!patch.hasPatientExcess, created_by: uid,
+        })
+      }
+    }
+    if (patch.hasPatientExcess && Number(patch.excessAmount) > 0) {
+      await db.from('portal_case_charges').insert({
+        case_id: caseId, charge_type: 'patient_excess',
+        amount: Number(patch.excessAmount), currency: patch.excessCurrency || 'EUR', created_by: uid,
+      })
+    }
+    if (patch.hasPatientExcess) {
+      for (const l of (patch.excessLines || [])) {
+        try { await recordCollection(db, caseId, l, 'patient_excess', locId) }
+        catch (e) { console.warn('[portal] receive excess collection failed', e?.message) }
+      }
+    }
+  }
+
+  // 3) Cash classification -> record each real payment line (same rules as direct intake).
+  if (patch.financialType === 'Cash') {
+    for (const l of (patch.paymentLines || [])) {
+      try { await recordCollection(db, caseId, l, 'cash_case_payment', locId) }
+      catch (e) { console.warn('[portal] receive collection failed', e?.message) }
+    }
+  }
+
+  // 4) Optional Center Room assignment.
+  if (patch.roomId) {
+    const { data: existingRoom } = await db.from('portal_room_assignments')
+      .select('id').eq('case_id', caseId).eq('status', 'occupied').maybeSingle()
+    if (!existingRoom) {
+      await db.from('portal_cases').update({ center_room_id: patch.roomId }).eq('id', caseId)
+      await db.from('portal_room_assignments').insert({ case_id: caseId, room_id: patch.roomId, assigned_by: uid })
+    }
+  }
+  return caseId
+}
+
+/* =========================================================================
+ * Specialist visits / sessions (Phase 6) — supabase mode only.
+ * portal_encounters CUD is RLS-allowed via portal_can_access_case(); inserts go
+ * through portal_insert_encounter for ATOMIC per-case sequence_no. Operational
+ * tracking only — NO billing/invoice integration. Encounters are children of an
+ * existing case, so adding a visit never creates a duplicate patient.
+ * ========================================================================= */
+
+/** Add a specialist visit/session to a case. Specialist name/type is stored in
+ *  notes (no dedicated column for pilot). Returns the new encounter id. */
+export async function insertEncounter(caseId, { specialist, note, checkInAt, checkOutAt, status, encounterType = 'session' } = {}) {
+  const db = await getSupabaseClient()
+  const combinedNote = [specialist && `Specialist: ${specialist}`, note].filter(Boolean).join(' · ') || null
+  const { data, error } = await db.rpc('portal_insert_encounter', {
+    p_case_id: caseId,
+    p_encounter_type: encounterType,
+    p_check_in_at: checkInAt || new Date().toISOString(),
+    p_check_out_at: checkOutAt || null,
+    p_note: combinedNote,
+    p_status: status || 'active',
+  })
+  if (error) throw error
+  return data
+}
+
+/** Update an encounter (e.g. close: set check_out_at + status). Direct update is
+ *  RLS-scoped via portal_can_access_case(case_id). */
+export async function updateEncounter(encounterId, { checkOutAt, status, note } = {}) {
+  const db = await getSupabaseClient()
+  const upd = { updated_at: new Date().toISOString() }
+  if (checkOutAt !== undefined) upd.check_out_at = checkOutAt
+  if (status !== undefined) upd.status = status
+  if (note !== undefined) upd.notes = note
+  const { error } = await db.from('portal_encounters').update(upd).eq('id', encounterId)
+  if (error) throw error
+}
+
 /** RLS-scoped: collections the current user may see (clinic = own location; admin = all).
  *  Enriched for the live Collections list: case OUR Ref + patient name (via the case FK)
  *  and the collector's display name (best-effort — portal_user_profiles is self-readable
  *  for clinic users, all-readable for admin). No FX is invented: cash settles in its own
  *  currency; Visa/Card settles in EGP and carries the stored fx_rate verbatim. */
-export async function fetchCollections() {
+export async function fetchCollections(opts = {}) {
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
-  const { data, error } = await db.from('portal_collections')
+  let cq = db.from('portal_collections')
     .select(`id, case_id, collection_purpose, payment_method, invoice_currency,
       foreign_amount_covered, actual_currency, fx_rate, actual_collected_amount,
       treasury_channel, status, collection_location_id, collected_by, collected_at,
       caseref:case_id ( our_ref, patient:patient_id ( first_name, last_name ) )`)
-    .order('collected_at', { ascending: false })
+  if (opts.from) cq = cq.gte('collected_at', `${opts.from}T00:00:00`)
+  if (opts.to) cq = cq.lte('collected_at', `${opts.to}T23:59:59.999`)
+  cq = cq.order('collected_at', { ascending: false })
+  const { data, error } = await cq
   if (error) throw error
   const rows = data || []
 
@@ -303,6 +470,23 @@ export async function fetchCollections() {
       collectedAt: c.collected_at,
     }
   })
+}
+
+/** Group collection rows (from fetchCollections) by treasury channel + currency.
+ *  No cross-currency conversion — each (channel, currency) is its own bucket, so
+ *  physical cash by currency and Visa/bank EGP stay separate (Phase 5 rule). */
+export function summarizeCollections(rows = []) {
+  const buckets = {}
+  for (const c of rows) {
+    const channel = c.treasuryChannel || (c.method === 'visa_card' ? 'visa_bank' : 'physical_cash')
+    const currency = c.actualCurrency || 'EGP'
+    const key = `${channel}|${currency}`
+    if (!buckets[key]) buckets[key] = { channel, currency, total: 0, count: 0 }
+    buckets[key].total += Number(c.actualAmount) || 0
+    buckets[key].count += 1
+  }
+  return Object.values(buckets).sort((a, b) =>
+    a.channel.localeCompare(b.channel) || a.currency.localeCompare(b.currency))
 }
 
 /** Admin-only (RLS). Upsert billing preparation for a case. */

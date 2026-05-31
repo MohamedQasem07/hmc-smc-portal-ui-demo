@@ -8,7 +8,7 @@ import { SEED_STAFF, SEED_USERS, nextStaffCode } from '../data/staffUsers'
 import { generateOurRef } from '../lib/ourRef'
 import { IS_SUPABASE } from '../lib/api/config'
 import { useUserMode } from './UserModeContext'
-import { fetchCases, insertCase, upsertBillingPrep } from '../lib/api/portalData'
+import { fetchCases, insertCase, upsertBillingPrep, receiveTransfer as sbReceiveTransfer, classifyReceivedCase } from '../lib/api/portalData'
 
 /* =========================================================================
  * DemoStateContext (P2C.R2)
@@ -615,7 +615,15 @@ export function DemoStateProvider({ children }) {
     closeSession:         (caseId, sessionId) => dispatch({ type: 'SESSION_CLOSE', caseId, sessionId }),
     admit:                (caseId) => dispatch({ type: 'ADMIT', caseId }),
     discharge:            (caseId) => dispatch({ type: 'DISCHARGE', caseId }),
-    receiveTransfer:      (caseId) => dispatch({ type: 'TRANSFER_RECEIVE', caseId }),
+    receiveTransfer: IS_SUPABASE
+      ? async (caseId) => { await sbReceiveTransfer(caseId); await refetchCases() }
+      : (caseId) => dispatch({ type: 'TRANSFER_RECEIVE', caseId }),
+    // Phase 4: branch classification of a received case (+ real collections). Supabase
+    // only; the mock receive page uses updateCase/assignRoom directly.
+    classifyReceived: IS_SUPABASE
+      ? async (caseId, patch) => { await classifyReceivedCase(caseId, patch); await refetchCases() }
+      : (caseId, patch) => dispatch({ type: 'CASE_UPDATE', caseId, patch }),
+    refreshCases:         refetchCases,
     assignRoom:           (caseId, roomNumber, branchId) => dispatch({ type: 'ROOM_ASSIGN', caseId, roomNumber, branchId }),
     updateCase:           (caseId, patch) => dispatch({ type: 'CASE_UPDATE', caseId, patch }),
     addExpense:           (payload) => dispatch({ type: 'EXPENSE_ADD', payload }),
