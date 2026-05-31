@@ -48,5 +48,20 @@ admin sees all · each clinic sees only its own cases/collections/attendance · 
 ## TEST data currently in hmc-medical (do NOT clean yet — owner's instruction)
 Cases: `TEST-RLS-*` (4), `TESTUI CreatedTropitel`, `TESTINS SahlInsurance`, `TESTXFER ToKawther` (+ migration-010 seed). 1 transfer (sahl→al_kawther), 2 collections (tropitel), **2 nurse shifts (tropitel: 1 closed + 1 active — the closed one is from the Task #9 UI end/start test)** + 1 doctor duty (tropitel), 2 billing-prep rows, insurer `TEST Insurer Co`. Per-clinic staff assignments seed: each of tropitel/romance/al_kawther/sheraton has 1 TEST nurse + 1 TEST doctor (mamsha/pharaoh/menamark/sahl_hasheesh have none yet → their attendance pickers are empty).
 
+## Config-first admin + Staging pilot (2026-05-31)
+Owner authorized a real **staging deploy** (GitHub Pages, Supabase-connected) — supersedes the earlier "no public deploy" line FOR STAGING ONLY (still not final go-live; no PHI/Master-Sheet/Old-Cases bulk import).
+
+**Migrations:** `019_config_reference_tables` (new `portal_payment_methods` + `portal_nationalities`, admin RLS) + a 245-row nationalities seed read-only-sourced from hmc-v2 `public.nationalities`. New tables only — zero impact on existing data. `portal_rooms` already existed (30 rows).
+
+**Live admin config (supabase mode; mock preserved via `IS_SUPABASE` early-return):**
+- `PremiumAdminReferenceLists` → `LiveReferenceConfig`: Rooms (add/rename/activate per main branch → `portal_rooms`), Payment Methods (toggle → `portal_payment_methods`), Nationalities (search/toggle → `portal_nationalities`).
+- `PremiumAdminUsersStaff` → `LiveUsersStaffConfig`: Users + grant/revoke clinic scope (`portal_user_location_scopes`); Staff add + assign nurse/doctor to clinic (`portal_staff` + `portal_staff_location_assignments`). Admin-only guard kept. **No passwords / auth-user creation in client** — needs a server-side Edge Function (owner-gated).
+- New Case nationality picker → live `portal_nationalities` via `src/lib/useNationalityOptions.js`.
+- New data fns in `portalData.js`: `fetchLocations, fetchRooms, upsertRoom, setRoomActive, fetchPaymentMethods, setPaymentMethodActive, fetchNationalities, setNationalityActive, fetchAdminUsers, grantUserScope, revokeUserScope, fetchAdminStaff, upsertStaff, assignStaffToClinic, unassignStaff`.
+
+**Deploy readiness:** prod build passes (1699 modules) at base `/hmc-smc-portal-ui-demo/`, HashRouter (deep-links OK), **no service-role in bundle**, anon-only, supabase mode. Committed to branch **`staging-supabase`** (`d81521a3`); `main` untouched (`1dc77049`). `pages.yml` updated to build supabase mode from repo secrets.
+**GO-LIVE (owner, ordered):** (1) add repo secrets `VITE_SUPABASE_URL` + `VITE_SUPABASE_ANON_KEY` (anon only, Settings→Secrets→Actions); (2) merge `staging-supabase`→`main` (or push + run the workflow) → publishes `https://mohamedqasem07.github.io/hmc-smc-portal-ui-demo/`. THEN verify from the deployed URL.
+**Rollback:** revert `pages.yml` to `npm run build:pages` (mock) or disable the workflow; `git revert` the staging commit; Pages serves last good artifact; Supabase unchanged. To fully un-publish: Settings→Pages→source None.
+
 ## Constraints (standing)
-TEST-only · no PHI · no Master Sheet import · no Old Cases import · no public deploy · no service-role key · hmc-v2 untouched · 5173 mock fallback intact · 5180 supabase isolated.
+TEST-only · no PHI · no Master Sheet import · no Old Cases import · **staging Pages deploy AUTHORIZED (pilot, not final go-live)** · no service-role key · hmc-v2 untouched (read-only nationality inspect was OK) · 5173 mock fallback intact · 5180 supabase isolated.
