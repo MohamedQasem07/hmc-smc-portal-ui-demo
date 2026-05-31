@@ -21,6 +21,7 @@ import {
 } from '../../../../data/p2cR1'
 import { fmtDMY, ageFromDob, ageLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -53,6 +54,7 @@ export default function ClinicNewCaseP2C() {
     billingFacility: null,
   })
   const nextRef = useNextOurRef(refContext)
+  const nationalityOptions = useNationalityOptions()
 
   const [form, setForm] = useState({
     // Visit & Timing (tourist travel — separate from encounter check-in)
@@ -129,7 +131,7 @@ export default function ClinicNewCaseP2C() {
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!canSubmit) return
 
@@ -220,8 +222,8 @@ export default function ClinicNewCaseP2C() {
       admission: isInpatient ? { admittedAt: checkInIso, dischargedAt: null, status: 'admitted' } : null,
     }
 
-    actions.addCase(newCase)
-    navigate(`/design-preview/clinic/cases/${newCase.id}`)
+    const newId = await actions.addCase(newCase)
+    navigate(`/design-preview/clinic/cases/${newId || newCase.id}`)
   }
 
   return (
@@ -230,7 +232,7 @@ export default function ClinicNewCaseP2C() {
       <div className="w-full px-4 sm:px-6 lg:px-10 pt-5 pb-12 max-w-[1400px] mx-auto space-y-5">
 
         <DemoBanner>
-          <strong>Interactive Demo</strong> — registered cases appear in My Cases, Transfers and Treasury during this session. Entries are temporary and no data is saved.
+          <strong>Interactive Demo</strong> — registered cases appear in My Cases, Transfers and Treasury during this session. Entries are saved in this browser (local preview — not yet on the server).
         </DemoBanner>
 
         <header className="flex items-start justify-between gap-4 flex-wrap">
@@ -339,7 +341,7 @@ export default function ClinicNewCaseP2C() {
                 </Field>
                 <Field label="Nationality">
                   <SelectInput value={form.nationality} onChange={(v) => update('nationality', v)}
-                    options={['', ...R1_NATIONALITIES].map((n) => ({ value: n, label: n || 'Select…' }))} />
+                    options={['', ...nationalityOptions].map((n) => ({ value: n, label: n || 'Select…' }))} />
                 </Field>
               </FieldGrid>
               {(form.firstName || form.lastName) && (

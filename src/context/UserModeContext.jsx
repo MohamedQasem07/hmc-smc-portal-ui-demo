@@ -1,32 +1,23 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { DEMO_USERS } from '../data/mock'
 import { P2C_DEMO_USERS, EXTERNAL_CLINICS } from '../data/p2c'
 import { scopeForUser } from '../data/staffUsers'
+import { IS_SUPABASE } from '../lib/api/config'
+import { sbGetSessionUser, sbSignIn, sbSignOut, sbOnAuthChange } from '../lib/api/auth'
 
 /**
- * UserModeContext — combined role state and (P2C.R4) lightweight session.
+ * UserModeContext — role state + session.
  *
- * Legacy fields (kept):
- *   role: 'clinic' | 'admin'
- *   user: legacy DEMO_USERS.{clinic|admin}
- *   setRole(role)
+ * Two session sources, selected by VITE_DATA_BACKEND:
+ *   - mock (default): username/password validated against DemoStateContext.users,
+ *     session mirrored in sessionStorage. Synchronous; authReady is always true.
+ *   - supabase: session owned by Supabase Auth. signIn(email,password) is async;
+ *     the restored/synthesized user has the SAME shape so guards/pages are
+ *     unchanged. authReady flips true once the initial getSession resolves.
  *
- * P2C extension:
- *   demoRole:   'admin' | 'clinic_nurse' | 'reception_kawther' | 'reception_sheraton'
- *   clinicId:   id of an external clinic, only relevant when demoRole === 'clinic_nurse'
- *   demoUser:   P2C_DEMO_USERS[demoRole]
- *   setDemoRole(role, clinicId?)
- *   setClinicId(clinicId)
- *
- * P2C.R4 session simulation (runtime-only — NOT real auth):
- *   currentUser: portal-user record from DemoStateContext.users (or null when signed out)
- *   currentClinicScope: { kind: 'admin' } | { kind: 'clinic', clinicId } | { kind: 'branch', branchId }
- *   isSignedIn: boolean — derived
- *   signIn(user): writes session + mirrors demoRole/clinicId so existing workspaces resolve
- *   signOut(): clears session
- *
- * The legacy `role` continues to mirror demoRole into the two old buckets so
- * existing P1/P2A pages keep working unchanged.
+ * Session user shape (both modes):
+ *   { userId, role, assignedClinicId, displayName, ... }
+ *   role ∈ 'admin' | 'clinic_nurse' | 'reception_kawther' | 'reception_sheraton'
  */
 const UserModeContext = createContext({
   role: 'admin',
@@ -37,10 +28,10 @@ const UserModeContext = createContext({
   demoUser: P2C_DEMO_USERS.admin,
   setDemoRole: () => {},
   setClinicId: () => {},
-  // P2C.R4
   currentUser: null,
   currentClinicScope: null,
   isSignedIn: false,
+  authReady: !IS_SUPABASE,
   signIn: () => {},
   signOut: () => {},
 })
@@ -82,12 +73,12 @@ function initialSession() {
 }
 
 export function UserModeProvider({ children }) {
-  // P2C.R4 — restore from sessionStorage SYNCHRONOUSLY on first render so
-  // route guards (e.g. <Navigate to="/login" />) see the signed-in state
-  // immediately and don't bounce the user.
   const [demoRole, setDemoRoleState] = useState(initialDemoRole)
   const [clinicId, setClinicIdState] = useState(initialClinicId)
-  const [currentUser, setCurrentUser] = useState(initialSession)
+  // Mock: restore synchronously from sessionStorage. Supabase: start empty,
+  // restore asynchronously below.
+  const [currentUser, setCurrentUser] = useState(IS_SUPABASE ? null : initialSession)
+  const [authReady, setAuthReady] = useState(!IS_SUPABASE)
 
   const setDemoRole = (next, nextClinic) => {
     setDemoRoleState(next)
@@ -106,26 +97,54 @@ export function UserModeProvider({ children }) {
     try { window.sessionStorage.setItem(P2C_CLINIC, id) } catch { /* ignore */ }
   }
 
-  // ------------------------------------------------------------------
-  // P2C.R4 — Session
-  // ------------------------------------------------------------------
-  function signIn(u) {
+  // Mirror a session user's scope into the legacy demoRole/clinicId so older
+  // P2C pages that read demoRole/clinicId resolve the right workspace.
+  function mirrorScope(u) {
     if (!u) return
-    setCurrentUser(u)
-    try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)) } catch { /* ignore */ }
-    // Mirror into legacy demoRole/clinicId so existing pages resolve scope.
-    if (u.role === 'admin') {
-      setDemoRole('admin')
-    } else if (u.role === 'clinic_nurse' && u.assignedClinicId) {
-      setDemoRole('clinic_nurse', u.assignedClinicId)
-    } else if (u.role === 'reception_kawther') {
-      setDemoRole('reception_kawther')
-    } else if (u.role === 'reception_sheraton') {
-      setDemoRole('reception_sheraton')
-    }
+    if (u.role === 'admin') setDemoRole('admin')
+    else if (u.role === 'clinic_nurse' && u.assignedClinicId) setDemoRole('clinic_nurse', u.assignedClinicId)
+    else if (u.role === 'reception_kawther') setDemoRole('reception_kawther')
+    else if (u.role === 'reception_sheraton') setDemoRole('reception_sheraton')
   }
 
-  function signOut() {
+  // ------------------------------------------------------------------
+  // Supabase session restore + live auth changes (supabase mode only).
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (!IS_SUPABASE) return
+    let active = true
+    let sub
+    sbGetSessionUser()
+      .then((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
+      .catch(() => { if (active) setAuthReady(true) })
+    sbOnAuthChange((u) => { if (active) { setCurrentUser(u); if (u) mirrorScope(u) } })
+      .then((s) => { sub = s })
+      .catch(() => {})
+    return () => { active = false; if (sub) sub.unsubscribe() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function signIn(arg, password) {
+    if (IS_SUPABASE) {
+      const res = await sbSignIn(arg, password)   // arg = email
+      if (res.user) { setCurrentUser(res.user); mirrorScope(res.user) }
+      return res
+    }
+    // ---- mock path ----
+    const u = arg
+    if (!u) return { user: null, error: 'No user' }
+    setCurrentUser(u)
+    try { window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)) } catch { /* ignore */ }
+    mirrorScope(u)
+    return { user: u, error: null }
+  }
+
+  async function signOut() {
+    if (IS_SUPABASE) {
+      try { await sbSignOut() } catch { /* ignore */ }
+      setCurrentUser(null)
+      return
+    }
     setCurrentUser(null)
     try { window.sessionStorage.removeItem(SESSION_KEY) } catch { /* ignore */ }
   }
@@ -139,7 +158,6 @@ export function UserModeProvider({ children }) {
     setDemoRole(legacyNext === 'admin' ? 'admin' : 'clinic_nurse', clinicId)
   }
   const user = role === 'admin' ? DEMO_USERS.admin : DEMO_USERS.clinic
-
   const demoUser = P2C_DEMO_USERS[demoRole] || P2C_DEMO_USERS.admin
 
   return (
@@ -147,8 +165,7 @@ export function UserModeProvider({ children }) {
       role, user, setRole,
       demoRole, clinicId, demoUser,
       setDemoRole, setClinicId,
-      // P2C.R4 session
-      currentUser, currentClinicScope, isSignedIn,
+      currentUser, currentClinicScope, isSignedIn, authReady,
       signIn, signOut,
     }}>
       {children}
@@ -160,8 +177,8 @@ export function useUserMode() {
   return useContext(UserModeContext)
 }
 
-/** Convenience hook: only the P2C.R4 session pieces. */
+/** Convenience hook: only the session pieces. */
 export function useSession() {
-  const { currentUser, currentClinicScope, isSignedIn, signIn, signOut } = useUserMode()
-  return { currentUser, currentClinicScope, isSignedIn, signIn, signOut }
+  const { currentUser, currentClinicScope, isSignedIn, authReady, signIn, signOut } = useUserMode()
+  return { currentUser, currentClinicScope, isSignedIn, authReady, signIn, signOut }
 }

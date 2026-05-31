@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileBarChart2, FileLock2, Settings,
   Bell, Search, ChevronDown, Sparkles, BookOpen, Plus, Banknote,
-  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users,
+  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users, Archive,
 } from 'lucide-react'
 import { BrandWordmark } from './BrandMark'
 import { Avatar, StatusPill } from './primitives'
@@ -32,7 +32,7 @@ const NAV_ITEMS = [
   { id: 'dashboard',    label: 'Dashboard',           icon: LayoutDashboard, to: '/design-preview/admin-dashboard' },
   { id: 'new-case',     label: '+ New Case',          icon: Plus,            to: '/design-preview/admin/new-case', emphasis: true },
   { id: 'cases',        label: 'Cases Master',        icon: ClipboardList,   to: '/design-preview/admin/cases-master' },
-  { id: 'legacy',       label: 'Legacy Review',       icon: BookOpen,        to: '/design-preview/admin/legacy-review' },
+  { id: 'legacy',       label: 'Old Cases',           icon: Archive,         to: '/design-preview/admin/legacy-review' },
   { id: 'collections',  label: 'Collections & Treasury', icon: Banknote,     to: '/design-preview/admin/collections' },
   { id: 'reports-daily',  label: 'Daily Report',      icon: FileBarChart2,   to: '/design-preview/admin/reports/daily',   indent: true },
   { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/design-preview/admin/reports/monthly', indent: true },

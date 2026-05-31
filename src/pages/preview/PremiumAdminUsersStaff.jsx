@@ -13,6 +13,8 @@ import {
   STAFF_CLINICS, STAFF_ROLES, USER_ROLE_LABELS, nextStaffCode,
 } from '../../data/staffUsers'
 import { cn } from '../../lib/cn'
+import { IS_SUPABASE } from '../../lib/api/config'
+import LiveUsersStaffConfig from './p2c/live/LiveUsersStaffConfig'
 
 /* =========================================================================
  * P2C.R4 — Admin Users & Staff Workspace
@@ -39,8 +41,20 @@ export default function PremiumAdminUsersStaff() {
 
   return (
     <AdminShell active="users-staff" searchPlaceholder="Search staff or portal user…">
-      <UsersStaffBody />
+      {IS_SUPABASE ? <LiveUsersStaffConfigWrap /> : <UsersStaffBody />}
     </AdminShell>
+  )
+}
+
+function LiveUsersStaffConfigWrap() {
+  return (
+    <div className="px-5 md:px-8 lg:px-10 pt-6 pb-16 max-w-[1200px] mx-auto space-y-5">
+      <div>
+        <div className="p-eyebrow mb-1">Users &amp; Staff · Live</div>
+        <h1 className="p-h1 text-2xl sm:text-3xl" style={{ color: 'var(--p-ink-900)' }}>Users, Scopes &amp; Staff Assignments</h1>
+      </div>
+      <LiveUsersStaffConfig />
+    </div>
   )
 }
 

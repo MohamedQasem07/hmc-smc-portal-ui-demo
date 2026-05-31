@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useReducer, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useState, useCallback } from 'react'
 import {
   R1_CASES, R1_ROOM_BOARD, R1_NURSE_SHIFTS, R1_DOCTOR_ON_DUTY,
   R1_EXPENSE_ENTRIES, R1_HANDOVERS, R1_CASH_TREASURY, R1_VISA_BANK,
@@ -6,6 +6,9 @@ import {
 } from '../data/p2cR1'
 import { SEED_STAFF, SEED_USERS, nextStaffCode } from '../data/staffUsers'
 import { generateOurRef } from '../lib/ourRef'
+import { IS_SUPABASE } from '../lib/api/config'
+import { useUserMode } from './UserModeContext'
+import { fetchCases, insertCase, upsertBillingPrep } from '../lib/api/portalData'
 
 /* =========================================================================
  * DemoStateContext (P2C.R2)
@@ -22,10 +25,12 @@ import { generateOurRef } from '../lib/ourRef'
  *     a real reconciliation (Match / Over / Shortage).
  *   - Start/end nurse shifts and pick Doctor on Duty.
  *
- * RESET BEHAVIOUR: any browser refresh restarts from the R1 seed. Nothing
- * persists — no localStorage, no backend, no server call. The banner
- * `Interactive Demo Only — entries are temporary and no data is saved.`
- * is rendered on every workspace page.
+ * PERSISTENCE (P3-prep): a whitelist of plain-data slices (cases, users,
+ * staff, rooms, expenses, handovers, insurers, ...) is saved to localStorage
+ * and restored on load, so entries survive a browser refresh. Browser-local
+ * ONLY — no backend, no server call, no PHI leaves the machine. Getter-bearing
+ * seeds (seedTreasury/seedVisaBank) are rebuilt fresh from emptyState() on
+ * load. RESET_DEMO / RESET_EMPTY clear back to an empty state.
  * ========================================================================= */
 
 const DemoStateContext = createContext(null)
@@ -140,6 +145,51 @@ function initialState() {
 }
 
 // ----------------------------------------------------------------------
+// P3-prep — local persistence (survives browser refresh; browser-local
+// ONLY — no backend, no PHI leaves the machine). We persist a whitelist of
+// plain-data slices. The getter-bearing seeds (seedTreasury / seedVisaBank)
+// are deliberately NOT persisted — they are always rebuilt fresh from
+// emptyState() so their computed `net` getters are never lost to JSON
+// serialization. Treasury is derived from cases at render time anyway.
+// ----------------------------------------------------------------------
+const PERSIST_KEY = 'aegis_portal_state_v1'
+const PERSIST_KEYS = [
+  'cases', 'roomBoard', 'nurseShifts', 'doctorOnDuty', 'expenses', 'handovers',
+  'pendingExpenses', 'confirmedVisaLineIds', 'insurers', 'localAssistance',
+  'uatMode', 'staff', 'users',
+]
+
+function readPersisted() {
+  try {
+    const raw = window.localStorage.getItem(PERSIST_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : null
+  } catch { return null }
+}
+
+/** Provider init: merge any persisted slices over a fresh emptyState(). */
+function loadInitialState() {
+  if (IS_SUPABASE) return emptyState()   // supabase mode: the server is the source of truth
+  const base = emptyState()
+  const saved = readPersisted()
+  if (!saved) return base
+  const merged = { ...base }
+  for (const k of PERSIST_KEYS) {
+    if (saved[k] !== undefined) merged[k] = saved[k]
+  }
+  return merged
+}
+
+function persistState(state) {
+  try {
+    const out = {}
+    for (const k of PERSIST_KEYS) out[k] = state[k]
+    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(out))
+  } catch { /* ignore quota / serialization errors */ }
+}
+
+// ----------------------------------------------------------------------
 // Reducer
 // ----------------------------------------------------------------------
 function reducer(state, action) {
@@ -148,6 +198,10 @@ function reducer(state, action) {
     // -------- Case lifecycle --------
     case 'CASE_ADD': {
       return { ...state, cases: [action.payload, ...state.cases] }
+    }
+
+    case 'CASES_SET': {
+      return { ...state, cases: action.cases || [] }
     }
 
     case 'VISIT_CLOSE': {
@@ -533,11 +587,29 @@ function reducer(state, action) {
 // Provider
 // ----------------------------------------------------------------------
 export function DemoStateProvider({ children }) {
-  const [state, dispatch] = useReducer(reducer, undefined, initialState)
+  const [state, dispatch] = useReducer(reducer, undefined, loadInitialState)
+  const { currentUser } = useUserMode()
 
-  // Stable action creators
+  // Persist whitelisted slices (mock mode only; supabase mode is server-backed).
+  useEffect(() => { if (!IS_SUPABASE) persistState(state) }, [state])
+
+  // Supabase-backed cases — (re)load (RLS-scoped) whenever the signed-in user changes.
+  const refetchCases = useCallback(async () => {
+    if (!IS_SUPABASE) return
+    try { dispatch({ type: 'CASES_SET', cases: await fetchCases() }) }
+    catch (e) { console.error('[portal] fetchCases failed', e) }
+  }, [])
+  useEffect(() => {
+    if (!IS_SUPABASE) return
+    if (currentUser) refetchCases()
+    else dispatch({ type: 'CASES_SET', cases: [] })
+  }, [currentUser, refetchCases])
+
+  // Action creators (addCase / completeInsurance hit Supabase in supabase mode).
   const actions = useMemo(() => ({
-    addCase:              (caseObj) => dispatch({ type: 'CASE_ADD', payload: caseObj }),
+    addCase: IS_SUPABASE
+      ? async (caseObj) => { const id = await insertCase(caseObj); await refetchCases(); return id }
+      : (caseObj) => { dispatch({ type: 'CASE_ADD', payload: caseObj }); return caseObj.id },
     closeVisit:           (caseId) => dispatch({ type: 'VISIT_CLOSE', caseId }),
     addSession:           (caseId, note = '') => dispatch({ type: 'SESSION_ADD', caseId, note }),
     closeSession:         (caseId, sessionId) => dispatch({ type: 'SESSION_CLOSE', caseId, sessionId }),
@@ -555,7 +627,9 @@ export function DemoStateProvider({ children }) {
     loadUatState:         (payload) => dispatch({ type: 'LOAD_UAT_STATE', payload }),
     resetEmpty:           () => dispatch({ type: 'RESET_EMPTY' }),
     addInsurer:           (payload) => dispatch({ type: 'INSURER_ADD', payload }),
-    completeInsurance:    (payload) => dispatch({ type: 'INSURANCE_COMPLETE', payload }),
+    completeInsurance: IS_SUPABASE
+      ? async (payload) => { await upsertBillingPrep(payload.caseId, payload.fields); await refetchCases() }
+      : (payload) => dispatch({ type: 'INSURANCE_COMPLETE', payload }),
     startNurseShift:      (clinicId, nurseId) => dispatch({ type: 'NURSE_SHIFT_START', clinicId, nurseId }),
     endNurseShift:        (shiftId) => dispatch({ type: 'NURSE_SHIFT_END', shiftId }),
     setDoctorOnDuty:      (clinicId, doctorId) => dispatch({ type: 'DOCTOR_ON_DUTY_SET', clinicId, doctorId }),
@@ -571,7 +645,7 @@ export function DemoStateProvider({ children }) {
     setUserStatus:        (userId, status) => dispatch({ type: 'USER_SET_STATUS', userId, status }),
     resetUserPassword:    (userId, newDemoPassword) => dispatch({ type: 'USER_RESET_PASSWORD', userId, newDemoPassword }),
     touchUserLogin:       (userId) => dispatch({ type: 'USER_TOUCH_LOGIN', userId }),
-  }), [])
+  }), [refetchCases])
 
   const value = useMemo(() => ({ state, actions }), [state, actions])
   return <DemoStateContext.Provider value={value}>{children}</DemoStateContext.Provider>

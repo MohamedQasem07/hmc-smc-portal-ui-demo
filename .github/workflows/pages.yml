@@ -1,5 +1,12 @@
 name: Deploy to GitHub Pages
 
+# STAGING PILOT: builds the Supabase-connected app (VITE_DATA_BACKEND=supabase)
+# using the publishable/anon key supplied via repo secrets. NO service-role key.
+# Requires repo secrets (Settings → Secrets and variables → Actions):
+#   VITE_SUPABASE_URL        = https://zlgxalmaiwatnoydgkxo.supabase.co
+#   VITE_SUPABASE_ANON_KEY   = <publishable anon key>   (NOT the service-role key)
+# Without those secrets the build still runs but logs in mock-broken state, so add them first.
+
 on:
   push:
     branches: [main]
@@ -30,7 +37,12 @@ jobs:
 
       - run: npm ci
 
-      - run: npm run build:pages
+      - name: Build (Supabase-connected, Pages base path)
+        run: npm run build:pages
+        env:
+          VITE_DATA_BACKEND: supabase
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - uses: actions/configure-pages@v5
 

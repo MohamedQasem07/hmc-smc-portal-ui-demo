@@ -53,7 +53,7 @@ export default function ClinicCaseDetailP2C() {
       <div className="w-full px-4 sm:px-6 lg:px-10 pt-5 pb-12 max-w-[1400px] mx-auto space-y-5">
 
         <DemoBanner>
-          <strong>Interactive Demo</strong> — actions update temporary in-session state. Nothing is saved.
+          <strong>Interactive Demo</strong> — actions are saved in this browser (local preview — not yet on the server).
         </DemoBanner>
 
         <Link to="/design-preview/clinic/cases" className="inline-flex items-center gap-1.5 text-xs font-semibold" style={{ color: 'var(--p-teal)' }}>

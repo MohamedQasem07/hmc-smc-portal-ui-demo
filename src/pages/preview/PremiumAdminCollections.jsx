@@ -15,8 +15,28 @@ import {
 } from '../../data/controlCenter'
 import { CASES, getBranchName } from '../../data/mock'
 import { fmtMoney, fmtDate } from '../../lib/format'
+import { IS_SUPABASE } from '../../lib/api/config'
+import LiveCollectionsList from './p2c/live/LiveCollectionsList'
 
 export default function PremiumAdminCollections() {
+  // Supabase mode (5180): admin sees ALL live collections (RLS admin scope).
+  if (IS_SUPABASE) return <SupabaseAdminCollections />
+  return <MockPremiumAdminCollections />
+}
+
+function SupabaseAdminCollections() {
+  return (
+    <AdminShell active="collections" searchPlaceholder="Search collections…">
+      <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-8 space-y-6 max-w-[1500px] w-full mx-auto pb-32">
+        <LiveCollectionsList
+          eyebrow="Admin · Live · portal_collections"
+          scopeNote="All clinics — every collection recorded across the portal (admin scope)." />
+      </div>
+    </AdminShell>
+  )
+}
+
+function MockPremiumAdminCollections() {
   const preview = usePrintPreview()
   const [bf, setBF] = useState('all')
   const [clinic, setClinic] = useState('all')

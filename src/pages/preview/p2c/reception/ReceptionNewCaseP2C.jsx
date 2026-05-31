@@ -18,6 +18,7 @@ import {
 } from '../../../../data/p2cR1'
 import { fmtDMY, ageFromDob, ageLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 
 /* =========================================================================
  * P2C.R2 — Reception New Direct Case (Al-Kawther / Sheraton)
@@ -55,6 +56,7 @@ export default function ReceptionNewCaseP2C() {
     billingFacility: null,
   })
   const nextRef = useNextOurRef(refContext)
+  const nationalityOptions = useNationalityOptions()
 
   const availableRooms = useMemo(() => board.filter((r) => r.status === 'available'), [board])
 
@@ -106,7 +108,7 @@ export default function ReceptionNewCaseP2C() {
   const needsRoom     = isInpatient && !form.centerRoomNumber
   const canSubmit = !needsFacility && !needsName && !needsRoom && !arrivalAfterToday && !departureBeforeToday
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault()
     if (!canSubmit) return
 
@@ -179,11 +181,12 @@ export default function ReceptionNewCaseP2C() {
         ? { admittedAt: checkInIso, dischargedAt: null, status: 'admitted' } : null,
     }
 
-    actions.addCase(newCase)
+    const realId = await actions.addCase(newCase)
+    const goId = realId || newId
     if (form.centerRoomNumber) {
-      actions.assignRoom(newId, Number(form.centerRoomNumber), branchId)
+      actions.assignRoom(goId, Number(form.centerRoomNumber), branchId)
     }
-    navigate(`${receptionRoute(role, 'cases')}/${newId}`)
+    navigate(`${receptionRoute(role, 'cases')}/${goId}`)
   }
 
   return (
@@ -299,7 +302,7 @@ export default function ReceptionNewCaseP2C() {
                 </Field>
                 <Field label="Nationality">
                   <SelectInput value={form.nationality} onChange={(v) => update('nationality', v)}
-                    options={['', ...R1_NATIONALITIES].map((n) => ({ value: n, label: n || 'Select…' }))} />
+                    options={['', ...nationalityOptions].map((n) => ({ value: n, label: n || 'Select…' }))} />
                 </Field>
               </FieldGrid>
             </section>

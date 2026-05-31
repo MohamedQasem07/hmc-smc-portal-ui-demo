@@ -9,6 +9,7 @@ import { PremiumButton, PremiumField, PremiumInput, StatPill } from '../../premi
 import { useUserMode } from '../../context/UserModeContext'
 import { useDemoState } from '../../context/DemoStateContext'
 import { findUserByUsername } from '../../data/staffUsers'
+import { IS_SUPABASE } from '../../lib/api/config'
 
 /**
  * Premium Login (P2C.R4)
@@ -46,9 +47,24 @@ export default function PremiumLogin() {
     }
   }, [isSignedIn, currentUser, navigate])
 
-  function onSubmit(e) {
+  async function onSubmit(e) {
     e.preventDefault()
     setError(null)
+
+    // ---- Supabase mode: real Auth login by email ----
+    if (IS_SUPABASE) {
+      setSubmitting(true)
+      const res = await signIn(username, password)   // `username` field holds the email
+      setSubmitting(false)
+      if (!res || res.error) {
+        setError(res?.error || 'Incorrect email or password.')
+        return
+      }
+      navigate(routeForUser(res.user), { replace: true })
+      return
+    }
+
+    // ---- Mock mode: validate against runtime Portal Users ----
     const u = findUserByUsername(state.users, username)
     if (!u) {
       setError('Incorrect username or password.')
@@ -131,12 +147,12 @@ export default function PremiumLogin() {
               </p>
 
               <form className="mt-7 space-y-4" onSubmit={onSubmit} noValidate>
-                <PremiumField label="Username" required>
+                <PremiumField label={IS_SUPABASE ? 'Email' : 'Username'} required>
                   <PremiumInput
-                    type="text"
+                    type={IS_SUPABASE ? 'email' : 'text'}
                     value={username}
                     onChange={(e) => { setUsername(e.target.value); setError(null) }}
-                    placeholder="e.g. admin · tropitel · kawther"
+                    placeholder={IS_SUPABASE ? 'e.g. admin@portal.test' : 'e.g. admin · tropitel · kawther'}
                     autoComplete="username"
                     autoFocus
                   />

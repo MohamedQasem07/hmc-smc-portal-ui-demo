@@ -15,6 +15,8 @@ import {
 } from '../../../../context/DemoStateContext'
 import { fmtDMY, fmtHM, todayYMD, parseYMD, shiftYMD, fmtLongLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import LiveAttendancePanel from '../live/LiveAttendancePanel'
 
 /* =========================================================================
  * P2C.R3 — External Clinic Attendance (practical compact tables)
@@ -32,6 +34,28 @@ import { cn } from '../../../../lib/cn'
 const TODAY = '2026-05-27'
 
 export default function ClinicAttendanceP2C() {
+  // Supabase mode (5180): clinic users record + see their own day; admins get a
+  // read-only all-clinics overview. Mock mode (5173) is unchanged below.
+  if (IS_SUPABASE) return <SupabaseAttendance />
+  return <MockClinicAttendanceP2C />
+}
+
+function SupabaseAttendance() {
+  const { clinicId, currentUser } = useUserMode()
+  const isAdmin = currentUser?.role === 'admin'
+  const clinicName = getClinicName(clinicId)
+  return (
+    <OperationalShell role="clinic_nurse" active="attendance"
+      identityName={isAdmin ? 'All Clinics' : clinicName}
+      identitySub={isAdmin ? 'Admin Overview' : 'External Clinic Workspace'}>
+      <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto">
+        <LiveAttendancePanel mode={isAdmin ? 'admin' : 'clinic'} clinicCode={clinicId} clinicName={clinicName} />
+      </div>
+    </OperationalShell>
+  )
+}
+
+function MockClinicAttendanceP2C() {
   const { clinicId } = useUserMode()
   const clinicName = getClinicName(clinicId)
   // P2C.R4 — pull nurses/doctors from the runtime Staff Directory, scoped to

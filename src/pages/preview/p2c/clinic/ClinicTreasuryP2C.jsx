@@ -16,6 +16,8 @@ import { getClinicName } from '../../../../data/p2c'
 import { R1_CURRENCIES, R1_TODAY_LABEL } from '../../../../data/p2cR1'
 import { fmtDMY, fmtDMYHM, fmtHM } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import LiveCollectionsList from '../live/LiveCollectionsList'
 
 /* =========================================================================
  * P2C.R3 — External Clinic Treasury, Expenses & Handover
@@ -34,6 +36,28 @@ import { cn } from '../../../../lib/cn'
  * ========================================================================= */
 
 export default function ClinicTreasuryP2C() {
+  // Supabase mode (5180): render the live, RLS-scoped collections list instead
+  // of the mock-derived treasury. Mock mode (5173) is unchanged below.
+  if (IS_SUPABASE) return <SupabaseClinicCollections />
+  return <MockClinicTreasuryP2C />
+}
+
+function SupabaseClinicCollections() {
+  const { clinicId } = useUserMode()
+  const clinicName = getClinicName(clinicId)
+  return (
+    <OperationalShell role="clinic_nurse" active="treasury"
+      identityName={clinicName} identitySub="External Clinic Workspace">
+      <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto space-y-6">
+        <IdentityHeader icon={Wallet} tone="gold" label="Collections"
+          subtitle={`${clinicName} · Live Supabase`} />
+        <LiveCollectionsList scopeNote={`${clinicName} — your clinic's collections only (cash in original currency; Visa settles in EGP).`} />
+      </div>
+    </OperationalShell>
+  )
+}
+
+function MockClinicTreasuryP2C() {
   const { clinicId } = useUserMode()
   const clinicName = getClinicName(clinicId)
   const treasury = useTreasuryFor(clinicId)
@@ -51,7 +75,7 @@ export default function ClinicTreasuryP2C() {
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto space-y-6">
 
         <DemoBanner>
-          <strong>Interactive Demo</strong> — physical cash and Visa/Bank are tracked separately. Cases registered in this session add to balances live. No persistence; refresh resets.
+          <strong>Interactive Demo</strong> — physical cash and Visa/Bank are tracked separately. Cases registered in this session add to balances live. Saved in this browser; survives refresh (local preview — not yet on the server).
         </DemoBanner>
 
         <IdentityHeader

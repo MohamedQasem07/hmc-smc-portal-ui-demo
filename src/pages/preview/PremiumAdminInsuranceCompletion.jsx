@@ -156,6 +156,16 @@ export default function PremiumAdminInsuranceCompletion() {
                         <td className="px-3 py-2.5">
                           <div className="font-semibold" style={{ color: 'var(--p-ink-900)' }}>{c.patient?.name}</div>
                           <div className="text-[10px]" style={{ color: 'var(--p-ink-500)' }}>{c.patient?.nationality} · {c.patient?.dob ? `Age ${ageLabel(ageFromDob(c.patient.dob, c.visitDate))}` : '—'}</div>
+                          {c.insuranceCompletion?.missingDataNote && (
+                            <div className="text-[10px] inline-flex items-center gap-1 mt-0.5 font-semibold" style={{ color: '#B87514' }} title={c.insuranceCompletion.missingDataNote}>
+                              <AlertTriangle className="w-3 h-3" /> Missing data flagged
+                            </div>
+                          )}
+                          {c.insuranceCompletion?.onedriveFolderPath && (
+                            <div className="text-[10px] inline-flex items-center gap-1 mt-0.5" style={{ color: 'var(--p-ink-400)' }} title={c.insuranceCompletion.onedriveFolderPath}>
+                              <FileText className="w-3 h-3" /> Folder linked
+                            </div>
+                          )}
                         </td>
                         <td className="px-3 py-2.5" style={{ color: 'var(--p-ink-700)' }}>{c.registeredAtName}</td>
                         <td className="px-3 py-2.5">{c.billingFacility && <FacilityBadge code={c.billingFacility} size="sm" />}</td>
@@ -208,29 +218,40 @@ function CompletionDrawer({ caseData, onClose }) {
   const [form, setForm] = useState({
     invoiceCurrency:    completion.invoiceCurrency || '',
     serviceChargePct:   completion.serviceChargePct ?? '',
+    transportationFee:  completion.transportationFee ?? '',
+    patientExcess:      completion.patientExcess ?? '',
     localAssistanceId:  completion.localAssistanceId || '',
     localAssistanceRef: completion.localAssistanceRef || '',
+    onedriveFolderPath: completion.onedriveFolderPath || '',
+    missingDataNote:    completion.missingDataNote || '',
     billingPrepStatus:  completion.billingPrepStatus || 'awaiting_admin_completion',
     adminNotes:         completion.adminNotes || '',
   })
 
+  function fieldsFrom(status) {
+    return {
+      invoiceCurrency:    form.invoiceCurrency || null,
+      serviceChargePct:   form.serviceChargePct === '' ? null : Number(form.serviceChargePct),
+      transportationFee:  form.transportationFee === '' ? null : Number(form.transportationFee),
+      patientExcess:      form.patientExcess === '' ? null : Number(form.patientExcess),
+      localAssistanceId:  form.localAssistanceId || null,
+      localAssistanceRef: form.localAssistanceRef || null,
+      onedriveFolderPath: form.onedriveFolderPath.trim() || null,
+      missingDataNote:    form.missingDataNote.trim() || '',
+      billingPrepStatus:  status || form.billingPrepStatus,
+      adminNotes:         form.adminNotes || '',
+    }
+  }
+
   function save() {
-    actions.completeInsurance({
-      caseId: caseData.id,
-      fields: {
-        invoiceCurrency:    form.invoiceCurrency || null,
-        serviceChargePct:   form.serviceChargePct === '' ? null : Number(form.serviceChargePct),
-        localAssistanceId:  form.localAssistanceId || null,
-        localAssistanceRef: form.localAssistanceRef || null,
-        billingPrepStatus:  form.billingPrepStatus,
-        adminNotes:         form.adminNotes || '',
-      },
-    })
+    actions.completeInsurance({ caseId: caseData.id, fields: fieldsFrom() })
     onClose?.()
   }
 
+  // One-click: send straight to the Claude billing queue (saves immediately).
   function markReady() {
-    setForm((p) => ({ ...p, billingPrepStatus: 'ready_for_claude' }))
+    actions.completeInsurance({ caseId: caseData.id, fields: fieldsFrom('ready_for_claude') })
+    onClose?.()
   }
 
   return (
@@ -307,13 +328,39 @@ function CompletionDrawer({ caseData, onClose }) {
                     onChange={(e) => setForm((p) => ({ ...p, localAssistanceRef: e.target.value }))}
                     placeholder="e.g. EGY-AID-12345" className="p-input" />
                 </DrawerField>
+
+                <DrawerField label="Transportation / Transfer Charge" icon={Coins} hint="Only if the report documents ambulance/transfer. In invoice currency.">
+                  <input type="number" min="0" step="0.01" value={form.transportationFee}
+                    onChange={(e) => setForm((p) => ({ ...p, transportationFee: e.target.value }))}
+                    placeholder="0.00" className="p-input" />
+                </DrawerField>
+
+                <DrawerField label="Patient Excess" icon={Coins} hint="Patient-paid excess / deductible. In invoice currency.">
+                  <input type="number" min="0" step="0.01" value={form.patientExcess}
+                    onChange={(e) => setForm((p) => ({ ...p, patientExcess: e.target.value }))}
+                    placeholder="0.00" className="p-input" />
+                </DrawerField>
               </div>
+
+              <DrawerField label="OneDrive Patient Folder / Evidence Path" icon={FileText} hint="Path or link to the case folder (medical report + labs) Claude reads to generate the invoice.">
+                <input value={form.onedriveFolderPath}
+                  onChange={(e) => setForm((p) => ({ ...p, onedriveFolderPath: e.target.value }))}
+                  placeholder="e.g. C:\Users\moham\OneDrive\2026\Sahl Hasheesh Clinics\May\27\Patient Name"
+                  className="p-input font-mono text-[11px]" />
+              </DrawerField>
 
               <DrawerField label="Admin Notes (for billing preparation)">
                 <textarea rows={3} value={form.adminNotes}
                   onChange={(e) => setForm((p) => ({ ...p, adminNotes: e.target.value }))}
                   placeholder="Any operational note for the billing team"
                   className="p-input resize-y w-full" style={{ minHeight: 70 }} />
+              </DrawerField>
+
+              <DrawerField label="Missing-Data Note (does NOT block a draft)" icon={AlertTriangle} hint="Flag anything still missing (e.g. labs not uploaded). Claude can still draft; this is surfaced for follow-up.">
+                <textarea rows={2} value={form.missingDataNote}
+                  onChange={(e) => setForm((p) => ({ ...p, missingDataNote: e.target.value }))}
+                  placeholder="e.g. Labs PDF not yet attached; awaiting discharge summary"
+                  className="p-input resize-y w-full" style={{ minHeight: 56 }} />
               </DrawerField>
 
               <DrawerField label="Billing Prep Status">

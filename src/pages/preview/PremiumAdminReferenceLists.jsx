@@ -10,6 +10,8 @@ import { EXTERNAL_CLINICS, RECEIVING_BRANCHES } from '../../data/p2c'
 import {
   R1_PAYMENT_METHODS, R1_CURRENCIES, R1_OTHER_TRANSFER_DESTINATIONS,
 } from '../../data/p2cR1'
+import { IS_SUPABASE } from '../../lib/api/config'
+import LiveReferenceConfig from './p2c/live/LiveReferenceConfig'
 
 /* =========================================================================
  * P2C.R2 — Admin Control Center · Reference Lists (UI concept)
@@ -29,6 +31,30 @@ const INSURERS = [
 ]
 
 export default function PremiumAdminReferenceLists() {
+  // Supabase mode (staging): live, admin-editable config saved to portal_*.
+  if (IS_SUPABASE) return <SupabaseReferenceLists />
+  return <MockReferenceLists />
+}
+
+function SupabaseReferenceLists() {
+  return (
+    <AdminShell active="reference-lists">
+      <div className="px-5 md:px-8 lg:px-10 pt-6 pb-16 max-w-[1200px] mx-auto space-y-6">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="p-eyebrow mb-1">Control Center · Live</div>
+            <h1 className="p-h1 text-2xl sm:text-3xl" style={{ color: 'var(--p-ink-900)' }}>Operational Configuration</h1>
+            <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>Rooms, payment methods, and nationalities — saved to Supabase (admin-only).</p>
+          </div>
+          <Link to="/design-preview/admin-dashboard" className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">← Admin Dashboard</Link>
+        </div>
+        <LiveReferenceConfig />
+      </div>
+    </AdminShell>
+  )
+}
+
+function MockReferenceLists() {
   return (
     <AdminShell active="reference-lists">
       <div className="px-5 md:px-8 lg:px-10 pt-6 pb-16 max-w-[1200px] mx-auto space-y-6">
