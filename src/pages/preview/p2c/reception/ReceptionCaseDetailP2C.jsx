@@ -15,6 +15,7 @@ import { encounterMeta, R1_ENCOUNTER_PATTERNS } from '../../../../data/p2cR1'
 import { fmtDate } from '../../../../lib/format'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 import LiveSpecialistVisits from '../live/LiveSpecialistVisits'
+import LiveCaseWorkspace from '../live/LiveCaseWorkspace'
 
 /* =========================================================================
  * P2C.R2 — Reception Case Detail
@@ -35,6 +36,16 @@ export default function ReceptionCaseDetailP2C() {
   const c = useFindCase(caseId)
   const { actions } = useDemoState()
   const [newSessionNote, setNewSessionNote] = useState('')
+
+  // Supabase mode: the live active-case workspace replaces the mock body
+  // (mock preserved verbatim below for npm run dev / 5173).
+  if (IS_SUPABASE) {
+    return (
+      <OperationalShell role={role} active="cases" identityName={branchName} identitySub="Reception & Rooms Workspace">
+        <LiveCaseWorkspace caseId={caseId} backTo={receptionRoute(role, 'cases')} backLabel="Back to Branch Cases" />
+      </OperationalShell>
+    )
+  }
 
   if (!c) {
     return (

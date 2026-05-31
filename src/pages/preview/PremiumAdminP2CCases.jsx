@@ -182,8 +182,10 @@ export default function PremiumAdminP2CCases() {
                       <tr key={c.id}
                           style={{ borderBottom: i < filtered.length - 1 ? '1px solid var(--p-border)' : 'none' }}
                           className="hover:bg-[var(--p-surface-tint)] transition-colors">
-                        <td className="px-3 py-2.5 font-mono text-[11px]" style={{ color: 'var(--p-ink-400)' }}>
-                          {c.ourRef}
+                        <td className="px-3 py-2.5 font-mono text-[11px]">
+                          <Link to={`/admin/case-detail/${c.id}`} className="inline-flex items-center gap-1 hover:underline" style={{ color: 'var(--p-teal)' }}>
+                            {c.ourRef} <ChevronRight className="w-3 h-3" />
+                          </Link>
                         </td>
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2">
@@ -255,7 +257,7 @@ export default function PremiumAdminP2CCases() {
               {/* Mobile card list */}
               <div className="md:hidden divide-y" style={{ borderColor: 'var(--p-border)' }}>
                 {filtered.map((c) => (
-                  <div key={c.id} className="p-4 space-y-2">
+                  <Link key={c.id} to={`/admin/case-detail/${c.id}`} className="block p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div>
                         <div className="text-sm font-semibold" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</div>
@@ -278,7 +280,7 @@ export default function PremiumAdminP2CCases() {
                           : <><Clock className="w-3 h-3" /> Awaiting receipt at {c.transfer.toBranchName}</>}
                       </div>
                     )}
-                  </div>
+                  </Link>
                 ))}
               </div>
             </div>

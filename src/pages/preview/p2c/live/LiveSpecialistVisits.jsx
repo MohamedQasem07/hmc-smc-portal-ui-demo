@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Stethoscope, Plus, CheckCircle2, Clock, AlertTriangle, LogOut } from 'lucide-react'
 import { SectionHead } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
-import { insertEncounter, updateEncounter } from '../../../../lib/api/portalData'
+import { insertEncounter, updateEncounter, fetchSpecialistDoctors } from '../../../../lib/api/portalData'
 import { fmtDMYHM } from '../../../../lib/displayDate'
 
 /* =========================================================================
@@ -21,12 +21,21 @@ function nowLocalDatetime() {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged, readOnly = false }) {
+export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged, readOnly = false, locationCode = null }) {
   const [specialist, setSpecialist] = useState('')
   const [note, setNote] = useState('')
   const [when, setWhen] = useState(nowLocalDatetime())
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
+  const [doctors, setDoctors] = useState([])
+
+  // Doctor list comes from the EXISTING staff directory (portal_staff, role=doctor) —
+  // no separate specialists table. Falls back to free text if none are visible.
+  useEffect(() => {
+    let alive = true
+    fetchSpecialistDoctors(locationCode).then((d) => { if (alive) setDoctors(d) }).catch(() => {})
+    return () => { alive = false }
+  }, [locationCode])
 
   async function add() {
     if (!specialist.trim() && !note.trim()) { setError('Enter a specialist/type or a note.'); return }
@@ -107,14 +116,21 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
             <Stethoscope className="w-4 h-4" /> Add Specialist Visit
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Specialist / Type">
-              <input className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)} placeholder="e.g. Dr. Ahmed — Cardiology" />
+            <Field label="Doctor">
+              {doctors.length > 0 ? (
+                <select className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)}>
+                  <option value="">Select doctor…</option>
+                  {doctors.map((d) => <option key={d.staffId} value={d.name}>{d.name}</option>)}
+                </select>
+              ) : (
+                <input className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)} placeholder="e.g. Dr. Ahmed" />
+              )}
             </Field>
             <Field label="Visit Date & Time">
               <input type="datetime-local" className="p-input" value={when} onChange={(e) => setWhen(e.target.value)} />
             </Field>
-            <Field label="Note (optional)">
-              <input className="p-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. follow-up, IV session 2" />
+            <Field label="Specialty / Note (optional)">
+              <input className="p-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Cardiology — follow-up" />
             </Field>
           </div>
           <div className="flex justify-end">

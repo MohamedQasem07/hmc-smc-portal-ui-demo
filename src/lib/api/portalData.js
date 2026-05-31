@@ -53,12 +53,17 @@ export function portalRowToCase(row, maps) {
     registeredAtName: loc.name || '—',
     registeredAtKind: KIND_FROM_TYPE[loc.location_type] || 'external',
     visitDate: row.visit_date,
+    patientId: p.id || null,
     patient: {
+      id: p.id || null,
       firstName: p.first_name, lastName: p.last_name,
       name: [p.first_name, p.last_name].filter(Boolean).join(' ') || '—',
       gender: p.gender ? (p.gender === 'male' ? 'Male' : 'Female') : null,
       dob: p.date_of_birth, nationality: p.nationality,
-      hotel: row.hotel_or_location || null, note: row.short_clinical_note || null,
+      phoneCode: p.phone_country_code || null, phone: p.phone_number || null,
+      email: p.email || null, postal: p.postal_code || null,
+      hotel: row.hotel_or_location || null, hotelRoom: row.hotel_room_number || null,
+      note: row.short_clinical_note || null,
     },
     route: ROUTE_FROM_PORTAL[row.route] || 'direct',
     routeLabel: ROUTE_FROM_PORTAL[row.route] === 'direct' || !row.route ? `Direct at ${loc.name || ''}` : `Transfer`,
@@ -83,7 +88,14 @@ export function portalRowToCase(row, maps) {
         reason: tr.transfer_note || null,
       }
     })(),
-    centerRoomNumber: null,
+    currentLocationId: row.current_location_id || null,
+    currentLocationCode: (maps.locById[row.current_location_id] || {}).code || null,
+    centerRoomId: row.center_room_id || null,
+    centerRoomNumber: one(row.center_room)?.room_code || null,
+    centerRoomName: one(row.center_room)?.room_name || null,
+    closedAt: row.closed_at || null,
+    visitTime: row.visit_time || null,
+    freeReason: row.free_reason || null,
     insuranceCompletion: prep ? {
       invoiceCurrency: prep.invoice_currency,
       serviceChargePct: prep.service_charge_pct,
@@ -116,9 +128,11 @@ export function portalRowToCase(row, maps) {
 }
 
 const CASE_SELECT = `
-  id, our_ref, visit_date, financial_type, operational_status, encounter_pattern, route,
-  treatment_mode, registered_location_id, billing_facility_id, hotel_or_location, short_clinical_note,
-  patient:patient_id ( first_name, last_name, date_of_birth, gender, nationality ),
+  id, our_ref, visit_date, visit_time, financial_type, operational_status, encounter_pattern, route,
+  treatment_mode, registered_location_id, current_location_id, billing_facility_id, center_room_id,
+  hotel_or_location, hotel_room_number, short_clinical_note, free_reason, closed_at,
+  patient:patient_id ( id, first_name, last_name, date_of_birth, gender, nationality, phone_country_code, phone_number, email, postal_code ),
+  center_room:center_room_id ( id, room_code, room_name ),
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
   intake:portal_insurance_intakes ( insurance_reference_number, company:insurance_company_id ( name ) ),
   prep:portal_insurance_billing_preparations ( invoice_currency, service_charge_pct, billing_preparation_status,
@@ -219,6 +233,17 @@ export async function insertCase(newCase) {
         amount: Number(newCase.excessAmount), currency: newCase.excessCurrency || 'EUR', created_by: uid,
       })
     }
+  }
+
+  // Cash invoice amount → cash_case_amount charge (powers the invoice-vs-collected
+  // warning in the workspace). Additive + best-effort; never blocks intake.
+  if (newCase.financialType === 'Cash' && Number(newCase.invoice?.amount) > 0) {
+    try {
+      await db.from('portal_case_charges').insert({
+        case_id: caseId, charge_type: 'cash_case_amount',
+        amount: Number(newCase.invoice.amount), currency: newCase.invoice.currency || 'EUR', created_by: uid,
+      })
+    } catch (e) { console.warn('[portal] cash invoice charge failed', e?.message) }
   }
 
   // Collections (cash + patient-excess lines) via the secure RPC.
@@ -834,4 +859,189 @@ export async function linkUserStaff(userId, linkedStaffId) {
 /** Generate a one-time set-password link/OTP for an existing user (admin only). */
 export async function generateSetPasswordLink({ userId, email, redirectTo }) {
   return sbAdminUsers('generate_set_password_link', { user_id: userId, email, redirectTo })
+}
+
+/* =========================================================================
+ * Active Case Workspace — case lifecycle (Phases 1–5) — supabase mode only.
+ * -----------------------------------------------------------------------
+ * Existing-schema only. All writes are RLS-scoped via portal_can_access_case()
+ * / portal_cases_upd / portal_patients_upd / portal_room_assign_cud /
+ * portal_charges_cud (verified in migrations 009 + 011). No DDL, no new RPC.
+ * Discharge is sequenced (encounters → room → case-close last) so a mid-step
+ * failure never leaves a "closed but still-occupied" room.
+ * ========================================================================= */
+
+/** Edit missing patient contact details on an active case (phone / email / postal). */
+export async function updatePatientContact(patientId, fields = {}) {
+  if (!patientId) throw new Error('No patient id')
+  const db = await getSupabaseClient()
+  const upd = { updated_at: new Date().toISOString() }
+  if (fields.phoneCode !== undefined) upd.phone_country_code = fields.phoneCode || null
+  if (fields.phone !== undefined) upd.phone_number = fields.phone || null
+  if (fields.email !== undefined) upd.email = fields.email || null
+  if (fields.postal !== undefined) upd.postal_code = fields.postal || null
+  const { error } = await db.from('portal_patients').update(upd).eq('id', patientId)
+  if (error) throw error
+}
+
+/** Edit case-level fields on an active case (hotel / hotel room / clinical note). */
+export async function updateCaseFields(caseId, fields = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  const upd = { updated_at: new Date().toISOString() }
+  if (fields.hotel !== undefined) upd.hotel_or_location = fields.hotel || null
+  if (fields.hotelRoom !== undefined) upd.hotel_room_number = fields.hotelRoom || null
+  if (fields.note !== undefined) upd.short_clinical_note = fields.note || null
+  const { error } = await db.from('portal_cases').update(upd).eq('id', caseId)
+  if (error) throw error
+}
+
+/** Active rooms for a branch location CODE (e.g. 'al_kawther'). Empty for
+ *  external clinics (no room board). RLS: portal_rooms readable by active users. */
+export async function fetchRoomsForLocation(locationCode) {
+  if (!locationCode) return []
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  const locId = maps.locIdByCode[locationCode]
+  if (!locId) return []
+  const { data, error } = await db.from('portal_rooms')
+    .select('id, room_code, room_name, sort_order, active')
+    .eq('location_id', locId).eq('active', true)
+    .order('sort_order', { nullsFirst: false }).order('room_code')
+  if (error) throw error
+  return (data || []).map((r) => ({
+    id: r.id, roomCode: r.room_code, roomName: r.room_name, sortOrder: r.sort_order, active: r.active,
+  }))
+}
+
+/** Assign (or CHANGE) the Center Room for a case. If the case already occupies a
+ *  different room, that assignment is released first (old room frees, new occupies).
+ *  RLS: portal_room_assign_cud + portal_cases_upd (both case-access scoped). */
+export async function assignRoom(caseId, roomId) {
+  if (!caseId || !roomId) throw new Error('Case and room are required')
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const now = new Date().toISOString()
+  const { data: existing } = await db.from('portal_room_assignments')
+    .select('id, room_id').eq('case_id', caseId).eq('status', 'occupied').maybeSingle()
+  if (existing) {
+    if (existing.room_id === roomId) return caseId   // already in this room — no-op
+    const { error: relErr } = await db.from('portal_room_assignments')
+      .update({ released_at: now, released_by: uid, status: 'released' }).eq('id', existing.id)
+    if (relErr) throw relErr
+  }
+  const { error: insErr } = await db.from('portal_room_assignments')
+    .insert({ case_id: caseId, room_id: roomId, assigned_by: uid })
+  if (insErr) throw insErr
+  const { error: upErr } = await db.from('portal_cases')
+    .update({ center_room_id: roomId, updated_at: now }).eq('id', caseId)
+  if (upErr) throw upErr
+  return caseId
+}
+
+/** Release the case's active room assignment and clear center_room_id. */
+export async function releaseRoom(caseId) {
+  if (!caseId) return
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const now = new Date().toISOString()
+  const { data: asg } = await db.from('portal_room_assignments')
+    .select('id').eq('case_id', caseId).eq('status', 'occupied').maybeSingle()
+  if (asg) {
+    const { error } = await db.from('portal_room_assignments')
+      .update({ released_at: now, released_by: uid, status: 'released' }).eq('id', asg.id)
+    if (error) throw error
+  }
+  const { error: upErr } = await db.from('portal_cases')
+    .update({ center_room_id: null, updated_at: now }).eq('id', caseId)
+  if (upErr) throw upErr
+}
+
+/** Discharge / End Visit a case. Safe-ordered & NON-atomic (no DDL/RPC allowed):
+ *  (1) close active session encounters, (2) release the room, (3) close the case
+ *  LAST — so a mid-step failure never leaves a "closed but still-occupied" room.
+ *  Saves the discharge date+time as portal_cases.closed_at. */
+export async function dischargeCase(caseId, { checkOutAt, sessionIds = [] } = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  const when = checkOutAt || new Date().toISOString()
+  // (1) close any still-active specialist visits / sessions
+  for (const sid of sessionIds) {
+    try { await updateEncounter(sid, { checkOutAt: when, status: 'completed' }) }
+    catch (e) { console.warn('[portal] close encounter failed', e?.message) }
+  }
+  // (2) release the room (frees the board)
+  await releaseRoom(caseId)
+  // (3) close the case LAST
+  const { error } = await db.from('portal_cases')
+    .update({ operational_status: 'closed', closed_at: when, updated_at: new Date().toISOString() })
+    .eq('id', caseId)
+  if (error) throw error
+  return caseId
+}
+
+/** Case charges + collections (RLS case-scoped) → cash invoice-vs-collected outstanding.
+ *  Outstanding compares the stored cash_case_amount charge against the sum of
+ *  cash_case_payment collections in the SAME invoice currency (foreign_amount_covered
+ *  is the invoice-currency amount for both cash and Visa lines). No cross-currency math. */
+export async function fetchCaseFinancials(caseId) {
+  const db = await getSupabaseClient()
+  const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
+    db.from('portal_case_charges').select('id, charge_type, amount, currency, status').eq('case_id', caseId),
+    db.from('portal_collections')
+      .select('collection_purpose, payment_method, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount')
+      .eq('case_id', caseId),
+  ])
+  if (e1) throw e1
+  if (e2) throw e2
+  const cashCharge = (charges || []).find((c) => c.charge_type === 'cash_case_amount')
+  let cashOutstanding = null
+  if (cashCharge) {
+    const collected = (cols || [])
+      .filter((c) => c.collection_purpose === 'cash_case_payment' && c.invoice_currency === cashCharge.currency)
+      .reduce((s, c) => s + (Number(c.foreign_amount_covered) || 0), 0)
+    const invoice = Number(cashCharge.amount) || 0
+    cashOutstanding = {
+      currency: cashCharge.currency, invoice, collected,
+      remaining: Number((invoice - collected).toFixed(2)),
+    }
+  }
+  return { charges: charges || [], collections: cols || [], cashOutstanding }
+}
+
+/** Set / update the Cash invoice amount as a portal_case_charges row
+ *  (charge_type='cash_case_amount'). Powers the invoice-vs-collected warning. */
+export async function upsertCashInvoiceCharge(caseId, amount, currency = 'EUR') {
+  if (!caseId) throw new Error('No case id')
+  const amt = Number(amount)
+  if (!(amt > 0)) throw new Error('Enter a valid invoice amount')
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const now = new Date().toISOString()
+  const { data: existing } = await db.from('portal_case_charges')
+    .select('id').eq('case_id', caseId).eq('charge_type', 'cash_case_amount').maybeSingle()
+  if (existing) {
+    const { error } = await db.from('portal_case_charges')
+      .update({ amount: amt, currency, updated_at: now }).eq('id', existing.id)
+    if (error) throw error
+    return existing.id
+  }
+  const { data, error } = await db.from('portal_case_charges')
+    .insert({ case_id: caseId, charge_type: 'cash_case_amount', amount: amt, currency, created_by: uid })
+    .select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+/** Active doctors the current user may assign (RLS-scoped), for the specialist-visit
+ *  picker. Reuses fetchAssignableStaff (no separate doctor directory). Optionally
+ *  filtered to one location CODE; deduped by staff id. */
+export async function fetchSpecialistDoctors(locationCode = null) {
+  const all = await fetchAssignableStaff()
+  const seen = new Set()
+  return all
+    .filter((s) => s.role === 'doctor')
+    .filter((s) => !locationCode || s.locationCode === locationCode)
+    .filter((s) => { if (seen.has(s.staffId)) return false; seen.add(s.staffId); return true })
+    .map((s) => ({ staffId: s.staffId, name: s.name, locationCode: s.locationCode }))
 }

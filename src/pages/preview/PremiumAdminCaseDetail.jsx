@@ -20,6 +20,8 @@ import {
 } from '../../data/controlCenter'
 import { CASES, getBranchName } from '../../data/mock'
 import { fmtDate, fmtMoney, fmtRelative, ageFromDob } from '../../lib/format'
+import { IS_SUPABASE } from '../../lib/api/config'
+import LiveCaseWorkspace from './p2c/live/LiveCaseWorkspace'
 
 export default function PremiumAdminCaseDetail() {
   const { id } = useParams()
@@ -34,6 +36,16 @@ export default function PremiumAdminCaseDetail() {
   const [billingFacility, setBillingFacility] = useState(draft.facilityId === 'hmc' ? 'smc' : 'hmc') // example: Tropitel (HMC) opened under SMC
   const [opStatus, setOpStatus] = useState('Open')
   const [iwStatus, setIwStatus] = useState(draft.coverageStatus === 'Confirmed' ? 'GOP Received' : 'Details Pending')
+
+  // Supabase mode: the live active-case workspace replaces this mock detail
+  // (mock preserved verbatim below for npm run dev / 5173).
+  if (IS_SUPABASE) {
+    return (
+      <AdminShell active="cases" searchPlaceholder="Search…">
+        <LiveCaseWorkspace caseId={id} backTo="/admin/p2c-cases" backLabel="All Cases" />
+      </AdminShell>
+    )
+  }
 
   const activeCurrencies = CURRENCIES_LIST.filter((c) => c.isActive)
 

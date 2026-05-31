@@ -17,6 +17,7 @@ import { encounterMeta, R1_ENCOUNTER_PATTERNS } from '../../../../data/p2cR1'
 import { fmtDate } from '../../../../lib/format'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 import LiveSpecialistVisits from '../live/LiveSpecialistVisits'
+import LiveCaseWorkspace from '../live/LiveCaseWorkspace'
 
 /* =========================================================================
  * P2C.R2 — Clinic Case Detail
@@ -33,6 +34,16 @@ export default function ClinicCaseDetailP2C() {
   const c = useFindCase(caseId)
   const { actions } = useDemoState()
   const [newSessionNote, setNewSessionNote] = useState('')
+
+  // Supabase mode: the live active-case workspace replaces the mock body
+  // (mock preserved verbatim below for npm run dev / 5173).
+  if (IS_SUPABASE) {
+    return (
+      <OperationalShell role="clinic_nurse" active="cases" identityName={clinicName} identitySub="External Clinic Workspace">
+        <LiveCaseWorkspace caseId={caseId} backTo="/clinic/cases" backLabel="Back to My Cases" />
+      </OperationalShell>
+    )
+  }
 
   if (!c) {
     return (

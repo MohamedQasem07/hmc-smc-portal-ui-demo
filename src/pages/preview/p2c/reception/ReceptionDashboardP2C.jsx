@@ -1,8 +1,9 @@
+import { useCallback, useEffect, useMemo } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Building2, BedDouble, Inbox, Plus, Stethoscope, Scissors, Heart,
   Banknote, ShieldCheck, Clock, AlertTriangle, Gift, MapPin, ArrowRight,
-  CheckCircle2, Wallet, Users, FileBarChart2, Hotel,
+  CheckCircle2, Wallet, Users, FileBarChart2, Hotel, RefreshCw,
 } from 'lucide-react'
 import { OperationalShell, IdentityHeader, receptionRoute } from '../../../../premium/OperationalShell'
 import {
@@ -11,10 +12,12 @@ import {
 import { StatusPill, Avatar } from '../../../../premium/primitives'
 import {
   useCasesForBranch, useIncomingTransfers, useRoomBoard, useCaseAggregates,
-  useFindCase, useTreasuryFor, useVisaBankFor,
+  useFindCase, useTreasuryFor, useVisaBankFor, useDemoState,
 } from '../../../../context/DemoStateContext'
 import { R1_TREATMENT_MODES, R1_TODAY_LABEL } from '../../../../data/p2cR1'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
+import { useLiveRooms } from '../../../../lib/useLiveRooms'
 
 /* =========================================================================
  * P2C.R1 — Reception & Rooms Workspace Dashboard (Al-Kawther / Sheraton)
@@ -35,11 +38,49 @@ export default function ReceptionDashboardP2C() {
   const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
 
   const all = useCasesForBranch(branchId)
-  const board = useRoomBoard(branchId)
+  const mockBoard = useRoomBoard(branchId)
   const kpis = useCaseAggregates(branchId)
   const incomingUnreceived = useIncomingTransfers(branchId, { includeReceived: false })
   const treasury = useTreasuryFor(branchId)
   const visaBank = useVisaBankFor(branchId)
+  const { actions } = useDemoState()
+
+  // Live room board (supabase): occupancy derived from live cases (center_room_id)
+  // over the branch's real rooms; mock board untouched for 5173.
+  const { rooms: liveRooms, reloadRooms } = useLiveRooms(IS_SUPABASE ? branchId : null)
+  const liveBoard = useMemo(() => {
+    if (!IS_SUPABASE) return null
+    const occByRoom = new Map()
+    for (const x of all) { if (x.operationalStatus === 'Open' && x.centerRoomId) occByRoom.set(x.centerRoomId, x.id) }
+    return liveRooms.map((r) => ({
+      number: r.roomCode,
+      label: r.roomName || `Room ${String(r.roomCode).padStart(2, '0')}`,
+      caseId: occByRoom.get(r.id) || null,
+      status: occByRoom.get(r.id) ? 'occupied' : 'available',
+    }))
+  }, [liveRooms, all])
+  const board = IS_SUPABASE ? (liveBoard || []) : mockBoard
+
+  // Room KPIs reflect the live board in supabase mode (mock aggregates otherwise).
+  const occupiedCount = board.filter((r) => r.status === 'occupied').length
+  const roomTotal = IS_SUPABASE ? board.length : kpis.total
+  const roomOccupied = IS_SUPABASE ? occupiedCount : kpis.occupied
+  const roomAvailable = IS_SUPABASE ? Math.max(0, board.length - occupiedCount) : kpis.available
+  const roomWaiting = IS_SUPABASE
+    ? all.filter((c) => c.operationalStatus === 'Open' && c.encounterPattern === 'inpatient_admission' && !c.centerRoomId).length
+    : kpis.waiting
+
+  // Phase 6 — light refresh + polling so a branch sees incoming transfers /
+  // room changes without a full reload (no realtime subscriptions).
+  const refreshAll = useCallback(async () => {
+    if (!IS_SUPABASE) return
+    try { await actions.refreshCases(); await reloadRooms() } catch { /* best-effort */ }
+  }, [actions, reloadRooms])
+  useEffect(() => {
+    if (!IS_SUPABASE) return undefined
+    const t = setInterval(() => { refreshAll() }, 25000)
+    return () => clearInterval(t)
+  }, [refreshAll])
 
   return (
     <OperationalShell role={role} active="dashboard"
@@ -77,10 +118,10 @@ export default function ReceptionDashboardP2C() {
         <section>
           <SectionHead eyebrow="Today's Activity" title="Branch Operational Snapshot" />
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
-            <Kpi label="Total Rooms"        value={kpis.total}        icon={BedDouble} tone="navy" />
-            <Kpi label="Occupied"           value={kpis.occupied}     icon={Hotel}     tone="teal" />
-            <Kpi label="Available"          value={kpis.available}    icon={CheckCircle2} tone="cash" />
-            <Kpi label="Waiting for Room"   value={kpis.waiting}      icon={Clock}     tone={kpis.waiting > 0 ? 'pending' : 'navy'} />
+            <Kpi label="Total Rooms"        value={roomTotal}        icon={BedDouble} tone="navy" />
+            <Kpi label="Occupied"           value={roomOccupied}     icon={Hotel}     tone="teal" />
+            <Kpi label="Available"          value={roomAvailable}    icon={CheckCircle2} tone="cash" />
+            <Kpi label="Waiting for Room"   value={roomWaiting}      icon={Clock}     tone={roomWaiting > 0 ? 'pending' : 'navy'} />
             <Kpi label="Conservative"       value={kpis.conservative} icon={Heart}     tone="teal" />
             <Kpi label="Surgical"           value={kpis.surgical}     icon={Scissors}  tone="mixed" />
             <Kpi label="Insurance"          value={kpis.insurance}    icon={ShieldCheck} tone="teal"  sub={`${kpis.hmc} HMC · ${kpis.smc} SMC`} />
@@ -91,12 +132,20 @@ export default function ReceptionDashboardP2C() {
         {/* ── Room Board 1..15 ──────────────────────────────────────────── */}
         <section>
           <SectionHead eyebrow="Treatment / Admission Rooms" title="Room Board"
-            description="Rooms 1 – 15. (Admin-configurable concept for the future.)"
+            description="Live occupancy — a room stays lit until the patient is discharged."
             action={
-              <Link to={receptionRoute(role, 'rooms')}
-                className="text-xs font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
-                Open full board view <ArrowRight className="w-3 h-3" />
-              </Link>
+              <div className="flex items-center gap-2">
+                {IS_SUPABASE && (
+                  <button onClick={refreshAll}
+                    className="text-xs font-semibold inline-flex items-center gap-1 p-btn-ghost h-8 px-2.5 rounded-full no-print">
+                    <RefreshCw className="w-3 h-3" /> Refresh
+                  </button>
+                )}
+                <Link to={receptionRoute(role, 'rooms')}
+                  className="text-xs font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-teal)' }}>
+                  Open full board view <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
             } />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             {board.map((room) => (

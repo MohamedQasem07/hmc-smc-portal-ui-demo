@@ -1,16 +1,17 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   Inbox, Clock, MapPin, Hotel, Filter, Search, Eye,
-  Calendar, Repeat, BedDouble,
+  Calendar, Repeat, BedDouble, RefreshCw,
 } from 'lucide-react'
 import { OperationalShell, IdentityHeader, receptionRoute } from '../../../../premium/OperationalShell'
 import { SectionHead, DemoBanner, FacilityBadge, FinTypePill } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
-import { useIncomingTransfers } from '../../../../context/DemoStateContext'
+import { useIncomingTransfers, useDemoState } from '../../../../context/DemoStateContext'
 import { encounterMeta, R1_TODAY_LABEL } from '../../../../data/p2cR1'
 import { fmtRelative } from '../../../../lib/format'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R2 — Reception Incoming Transfers (table)
@@ -33,6 +34,18 @@ export default function ReceptionIncomingTransfersP2C() {
   const { branchSlug } = useParams()
   const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   const incoming = useIncomingTransfers(branchId, { includeReceived: true })
+  const { actions } = useDemoState()
+
+  // Phase 6 — light refresh + polling so newly-sent transfers surface without reload.
+  const refresh = useCallback(async () => {
+    if (!IS_SUPABASE) return
+    try { await actions.refreshCases() } catch { /* best-effort */ }
+  }, [actions])
+  useEffect(() => {
+    if (!IS_SUPABASE) return undefined
+    const t = setInterval(() => { refresh() }, 25000)
+    return () => clearInterval(t)
+  }, [refresh])
 
   const [stat, setStat] = useState('All')
   const [fin,  setFin]  = useState('All')
@@ -103,6 +116,12 @@ export default function ReceptionIncomingTransfersP2C() {
             <input value={query} onChange={(e) => setQuery(e.target.value)}
               placeholder="Search by patient, ref, hotel, origin clinic…" className="p-input pl-9 h-9" />
           </div>
+          {IS_SUPABASE && (
+            <button onClick={refresh}
+              className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold p-btn-ghost no-print">
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          )}
         </div>
 
         <section className="hidden md:block p-card overflow-hidden">
