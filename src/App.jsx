@@ -129,14 +129,14 @@ export default function App() {
             {/* ---- Admin-only workspaces ---- */}
             <Route element={<RequireRole allow={['admin']} />}>
               <Route path="/admin-dashboard"            element={<PremiumAdminDashboard />} />
-              <Route path="/admin-control-center"       element={<PremiumAdminControlCenter />} />
-              <Route path="/admin/new-case"             element={<PremiumAdminNewCase />} />
-              <Route path="/admin/repatriation"         element={<PremiumAdminRepatriation />} />
-              <Route path="/admin/cases-master"         element={<PremiumAdminCasesMaster />} />
+              <Route path="/admin-control-center"       element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminControlCenter />} />
+              <Route path="/admin/new-case"             element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminNewCase />} />
+              <Route path="/admin/repatriation"         element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminRepatriation />} />
+              <Route path="/admin/cases-master"         element={IS_SUPABASE ? <Navigate to="/admin/p2c-cases" replace /> : <PremiumAdminCasesMaster />} />
               <Route path="/admin/case-detail/:id"      element={<PremiumAdminCaseDetail />} />
               <Route path="/admin/collections"          element={<PremiumAdminCollections />} />
               <Route path="/admin/reports/daily"        element={<PremiumAdminDailyReport />} />
-              <Route path="/admin/reports/monthly"      element={<PremiumAdminMonthlyReport />} />
+              <Route path="/admin/reports/monthly"      element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminMonthlyReport />} />
               <Route path="/admin/legacy-review"        element={<PremiumAdminLegacyReview />} />
               <Route path="/admin/p2c-cases"            element={<PremiumAdminP2CCases />} />
               <Route path="/admin/reference-lists"      element={<PremiumAdminReferenceLists />} />
