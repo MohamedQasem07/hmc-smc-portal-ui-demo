@@ -101,6 +101,8 @@ export function portalRowToCase(row, maps) {
     insuranceCompletion: prep ? {
       invoiceCurrency: prep.invoice_currency,
       serviceChargePct: prep.service_charge_pct,
+      localAssistanceId: prep.local_assistance_company_id || '',
+      localAssistanceRef: prep.local_assistance_reference_number || '',
       billingPrepStatus: BILLING_STATUS_FROM_PORTAL[prep.billing_preparation_status] || 'awaiting_admin_completion',
       onedriveFolderPath: prep.onedrive_folder_path,
       missingDataNote: prep.missing_data_note,
@@ -139,6 +141,7 @@ const CASE_SELECT = `
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
   intake:portal_insurance_intakes ( insurance_reference_number, company:insurance_company_id ( name ) ),
   prep:portal_insurance_billing_preparations ( invoice_currency, service_charge_pct, billing_preparation_status,
+    local_assistance_company_id, local_assistance_reference_number,
     onedrive_folder_path, missing_data_note, transportation_fee, patient_excess_amount, admin_notes, completed_at ),
   encounters:portal_encounters ( id, sequence_no, encounter_type, check_in_at, check_out_at, status, notes )
 `
@@ -525,7 +528,11 @@ export function summarizeCollections(rows = []) {
 export async function upsertBillingPrep(caseId, fields) {
   const db = await getSupabaseClient()
   const uid = await currentUid(db)
-  const row = { ...billingPrepToRow(caseId, fields), completed_by: uid, completed_at: new Date().toISOString() }
+  const row = {
+    ...billingPrepToRow(caseId, fields, { localAssistanceCompanyId: fields.localAssistanceId || null }),
+    completed_by: uid,
+    completed_at: new Date().toISOString(),
+  }
   const { error } = await db.from('portal_insurance_billing_preparations').upsert(row, { onConflict: 'case_id' })
   if (error) throw error
   return caseId

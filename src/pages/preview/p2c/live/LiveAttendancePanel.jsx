@@ -133,7 +133,7 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
           <button onClick={() => setDateYmd((d) => shiftYMD(d, -1))} className="inline-flex items-center justify-center h-10 w-10 rounded-full p-btn-ghost"><ChevronLeft className="w-4 h-4" /></button>
           <div className="relative">
             <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--p-ink-400)' }} />
-            <input type="date" value={dateYmd} onChange={(e) => setDateYmd(e.target.value)} className="p-input h-10 pl-9 pr-3 font-semibold" style={{ minWidth: 170 }} />
+            <input type="date" value={dateYmd} onChange={(e) => setDateYmd(e.target.value)} className="p-input h-10 pl-9 pr-3 font-semibold w-[176px] sm:w-[188px]" />
           </div>
           <button onClick={() => setDateYmd((d) => shiftYMD(d, 1))} className="inline-flex items-center justify-center h-10 w-10 rounded-full p-btn-ghost"><ChevronRight className="w-4 h-4" /></button>
           <button onClick={() => setDateYmd(todayYMD())} className={cn('inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold', isToday ? 'p-btn-primary' : 'p-btn-ghost')}>Today</button>

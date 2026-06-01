@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ShieldCheck, ShieldOff, Lock, FileText, CheckCircle2, AlertTriangle,
@@ -9,6 +9,8 @@ import { AdminShell } from '../../premium/AdminShell'
 import { SectionLabel, StatusPill, MeshCorner } from '../../premium/primitives'
 import { FacilityBadge } from '../../premium/p2cPrimitives'
 import { useCases, useLocalAssistance, useDemoState } from '../../context/DemoStateContext'
+import { IS_SUPABASE } from '../../lib/api/config'
+import { fetchLocalAssistanceCompanies } from '../../lib/api/portalData'
 import { fmtDMY, fmtDMYHM, ageFromDob, ageLabel } from '../../lib/displayDate'
 import { cn } from '../../lib/cn'
 
@@ -133,7 +135,11 @@ export default function PremiumAdminInsuranceCompletion() {
         <section className="p-card overflow-hidden">
           {shown.length === 0 ? (
             <div className="p-10 text-center text-sm" style={{ color: 'var(--p-ink-500)' }}>
-              No insurance cases match this filter. Load the UAT dataset from the Demo Roles page to populate this view.
+              {IS_SUPABASE
+                ? (insuranceCases.length === 0
+                    ? 'No insurance cases yet. Cases marked Insurance by clinic or reception appear here for billing preparation.'
+                    : 'No insurance cases match this filter.')
+                : 'No insurance cases match this filter. Load the UAT dataset from the Demo Roles page to populate this view.'}
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -213,7 +219,20 @@ function KpiTile({ label, value, tone = 'navy' }) {
 // =====================================================================
 function CompletionDrawer({ caseData, onClose }) {
   const { actions } = useDemoState()
-  const localAssistance = useLocalAssistance()
+  // Live mode: the assistance picker must offer the real master list so the
+  // selected id is a valid UUID that persists to local_assistance_company_id.
+  // Mock mode keeps the in-memory demo catalogue (hooks rule: both are called).
+  const mockAssistance = useLocalAssistance()
+  const [liveAssistance, setLiveAssistance] = useState(null)
+  useEffect(() => {
+    if (!IS_SUPABASE) return undefined
+    let alive = true
+    fetchLocalAssistanceCompanies({ activeOnly: true })
+      .then((r) => { if (alive) setLiveAssistance(r) })
+      .catch(() => { if (alive) setLiveAssistance([]) })
+    return () => { alive = false }
+  }, [])
+  const localAssistance = IS_SUPABASE ? (liveAssistance || []) : mockAssistance
   const completion = caseData.insuranceCompletion || {}
   const [form, setForm] = useState({
     invoiceCurrency:    completion.invoiceCurrency || '',

@@ -228,7 +228,7 @@ function MobileBottomNav({ role, active, navItems }) {
                 color: isActive ? 'var(--p-teal)' : 'var(--p-ink-500)',
               }}>
                 <n.icon className="w-5 h-5 shrink-0" />
-                <span className={cn('text-[10px] font-semibold tracking-tight', n.emphasis && !isActive && 'text-[var(--p-teal)]')}>{n.label}</span>
+                <span className={cn('text-[10px] font-semibold tracking-tight w-full truncate text-center', n.emphasis && !isActive && 'text-[var(--p-teal)]')}>{n.label}</span>
               </Link>
             </li>
           )

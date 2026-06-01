@@ -122,8 +122,11 @@ export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · port
       {/* Treasury by channel + currency — NO cross-currency conversion (Phase 5) */}
       {summary.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-bold mb-2" style={{ color: 'var(--p-ink-500)' }}>
+          <div className="text-[10px] uppercase tracking-[0.12em] font-bold mb-1" style={{ color: 'var(--p-ink-500)' }}>
             Treasury by Channel &amp; Currency
+          </div>
+          <div className="text-[11px] mb-2" style={{ color: 'var(--p-ink-400)' }}>
+            Each channel total includes cash-case revenue and patient excess together — both are treasury money. See the Purpose column below for the per-collection split.
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
             {summary.map((b) => {

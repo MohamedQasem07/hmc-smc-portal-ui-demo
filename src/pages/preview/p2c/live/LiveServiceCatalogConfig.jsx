@@ -139,17 +139,17 @@ function ItemForm({ initial, busy, onCancel, onSave }) {
   return (
     <div className="p-card p-4 space-y-3" style={{ border: '1px solid var(--p-brand-mid)' }}>
       <div className="text-sm font-bold" style={{ color: 'var(--p-ink-900)' }}>{initial ? 'Edit service item' : 'New service item'}</div>
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-        <L className="sm:col-span-3" label="Category">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+        <L className="lg:col-span-3" label="Category">
           <Select value={form.category} onChange={(v) => set({ category: v })}>{SERVICE_CATEGORIES.map((c) => <option key={c} value={c}>{CAT_LABEL[c]}</option>)}</Select>
         </L>
-        <L className="sm:col-span-5" label="Display name (no price)"><input value={form.displayName} onChange={(e) => set({ displayName: e.target.value })} className="p-input h-9" placeholder="e.g. ER Examination" /></L>
-        <L className="sm:col-span-4" label="Canonical billing name (engine)"><input value={form.canonicalBillingName} onChange={(e) => set({ canonicalBillingName: e.target.value })} className="p-input h-9" placeholder="e.g. Doctor Examination" /></L>
-        <L className="sm:col-span-3" label="Source system"><input value={form.sourceSystem} onChange={(e) => set({ sourceSystem: e.target.value })} className="p-input h-9" placeholder="HMC / SMC / manual" /></L>
-        <L className="sm:col-span-3" label="Source code"><input value={form.sourceCode} onChange={(e) => set({ sourceCode: e.target.value })} className="p-input h-9" placeholder="e.g. Er-Ex / CBC" /></L>
-        <L className="sm:col-span-2" label="Default qty"><input type="number" min="1" step="1" value={form.defaultQuantity} onChange={(e) => set({ defaultQuantity: e.target.value })} className="p-input h-9" /></L>
-        <L className="sm:col-span-4" label="Billing mapping hint (for Claude)"><input value={form.billingMappingHint} onChange={(e) => set({ billingMappingHint: e.target.value })} className="p-input h-9" placeholder="e.g. Electrolytes → Na, K, Cl" /></L>
-        <L className="sm:col-span-12" label="Notes"><input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-5" label="Display name (no price)"><input value={form.displayName} onChange={(e) => set({ displayName: e.target.value })} className="p-input h-9" placeholder="e.g. ER Examination" /></L>
+        <L className="lg:col-span-4" label="Canonical billing name (engine)"><input value={form.canonicalBillingName} onChange={(e) => set({ canonicalBillingName: e.target.value })} className="p-input h-9" placeholder="e.g. Doctor Examination" /></L>
+        <L className="lg:col-span-3" label="Source system"><input value={form.sourceSystem} onChange={(e) => set({ sourceSystem: e.target.value })} className="p-input h-9" placeholder="HMC / SMC / manual" /></L>
+        <L className="lg:col-span-3" label="Source code"><input value={form.sourceCode} onChange={(e) => set({ sourceCode: e.target.value })} className="p-input h-9" placeholder="e.g. Er-Ex / CBC" /></L>
+        <L className="lg:col-span-2" label="Default qty"><input type="number" min="1" step="1" value={form.defaultQuantity} onChange={(e) => set({ defaultQuantity: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-4" label="Billing mapping hint (for Claude)"><input value={form.billingMappingHint} onChange={(e) => set({ billingMappingHint: e.target.value })} className="p-input h-9" placeholder="e.g. Electrolytes → Na, K, Cl" /></L>
+        <L className="lg:col-span-12" label="Notes"><input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className="p-input h-9" /></L>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} disabled={busy} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost"><X className="w-3.5 h-3.5" /> Cancel</button>

@@ -148,29 +148,29 @@ function InsurerForm({ initial, assist, facilities, busy, onCancel, onSave }) {
   return (
     <div className="p-card p-4 space-y-3" style={{ border: '1px solid var(--p-brand-mid)' }}>
       <div className="text-sm font-bold" style={{ color: 'var(--p-ink-900)' }}>{initial ? 'Edit insurer' : 'New insurer'}</div>
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-        <L className="sm:col-span-5" label="Company name"><input value={form.name} onChange={(e) => set({ name: e.target.value })} className="p-input h-9" placeholder="e.g. Allianz Worldwide Care" /></L>
-        <L className="sm:col-span-4" label="Email"><input value={form.email} onChange={(e) => set({ email: e.target.value })} className="p-input h-9" /></L>
-        <L className="sm:col-span-3" label="Phone"><input value={form.phone} onChange={(e) => set({ phone: e.target.value })} className="p-input h-9" /></L>
-        <L className="sm:col-span-3" label="Workflow">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+        <L className="lg:col-span-5" label="Company name"><input value={form.name} onChange={(e) => set({ name: e.target.value })} className="p-input h-9" placeholder="e.g. Allianz Worldwide Care" /></L>
+        <L className="lg:col-span-4" label="Email"><input value={form.email} onChange={(e) => set({ email: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-3" label="Phone"><input value={form.phone} onChange={(e) => set({ phone: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-3" label="Workflow">
           <Select value={form.workflowType} onChange={(v) => set({ workflowType: v })}>
             <option value="">—</option><option value="direct">Direct</option><option value="assistance">Assistance</option>
           </Select>
         </L>
-        <L className="sm:col-span-4" label="Default assistance company">
+        <L className="lg:col-span-4" label="Default assistance company">
           <Select value={form.defaultAssistanceCompanyId} onChange={(v) => set({ defaultAssistanceCompanyId: v })}>
             <option value="">—</option>
             {assist.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
           </Select>
         </L>
-        <L className="sm:col-span-2" label="Default facility">
+        <L className="lg:col-span-2" label="Default facility">
           <Select value={form.defaultBillingFacilityId} onChange={(v) => set({ defaultBillingFacilityId: v })}>
             <option value="">—</option>
             {facilities.map((f) => <option key={f.id} value={f.id}>{f.code}</option>)}
           </Select>
         </L>
-        <L className="sm:col-span-3" label="Default contact person"><input value={form.defaultContactPerson} onChange={(e) => set({ defaultContactPerson: e.target.value })} className="p-input h-9" /></L>
-        <L className="sm:col-span-12" label="Notes"><input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-3" label="Default contact person"><input value={form.defaultContactPerson} onChange={(e) => set({ defaultContactPerson: e.target.value })} className="p-input h-9" /></L>
+        <L className="lg:col-span-12" label="Notes"><input value={form.notes} onChange={(e) => set({ notes: e.target.value })} className="p-input h-9" /></L>
       </div>
       <div className="flex justify-end gap-2">
         <button onClick={onCancel} disabled={busy} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost"><X className="w-3.5 h-3.5" /> Cancel</button>
@@ -208,12 +208,12 @@ function AssistanceList({ onOk, onErr }) {
     <div className="space-y-3">
       <SectionHead eyebrow="portal_local_assistance_companies" title={`Assistance Companies — ${rows.length}`}
         description="Local assistance partners referenced by insurers (default assistance) and admin billing prep." />
-      <div className="p-card p-3 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
-        <L className="sm:col-span-4" label="Name"><input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="p-input h-9" /></L>
-        <L className="sm:col-span-3" label="Email"><input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="p-input h-9" /></L>
-        <L className="sm:col-span-2" label="Phone"><input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="p-input h-9" /></L>
-        <L className="sm:col-span-2" label="Contact"><input value={form.defaultContactPerson} onChange={(e) => setForm((p) => ({ ...p, defaultContactPerson: e.target.value }))} className="p-input h-9" /></L>
-        <div className="sm:col-span-1"><button onClick={add} disabled={busy || !form.name.trim()} className={cn('w-full inline-flex items-center justify-center gap-1 h-9 rounded-full text-xs font-bold p-btn-primary', (busy || !form.name.trim()) && 'opacity-40')}><Plus className="w-3.5 h-3.5" /></button></div>
+      <div className="p-card p-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-2 items-end">
+        <L className="lg:col-span-4" label="Name"><input value={form.name} onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))} className="p-input h-9" /></L>
+        <L className="lg:col-span-3" label="Email"><input value={form.email} onChange={(e) => setForm((p) => ({ ...p, email: e.target.value }))} className="p-input h-9" /></L>
+        <L className="lg:col-span-2" label="Phone"><input value={form.phone} onChange={(e) => setForm((p) => ({ ...p, phone: e.target.value }))} className="p-input h-9" /></L>
+        <L className="lg:col-span-2" label="Contact"><input value={form.defaultContactPerson} onChange={(e) => setForm((p) => ({ ...p, defaultContactPerson: e.target.value }))} className="p-input h-9" /></L>
+        <div className="sm:col-span-2 lg:col-span-1"><button onClick={add} disabled={busy || !form.name.trim()} className={cn('w-full inline-flex items-center justify-center gap-1 h-9 rounded-full text-xs font-bold p-btn-primary', (busy || !form.name.trim()) && 'opacity-40')}><Plus className="w-3.5 h-3.5" /></button></div>
       </div>
       <div className="space-y-1.5">
         {rows.map((a) => (

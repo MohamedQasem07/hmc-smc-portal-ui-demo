@@ -80,19 +80,20 @@ export default function LiveCaseServices({ caseId, readOnly = false }) {
         <div className="text-sm text-center py-4" style={{ color: 'var(--p-ink-400)' }}>Loading…</div>
       ) : rows.length === 0 ? (
         <div className="rounded-xl p-4 text-center text-sm" style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-500)' }}>
-          No services recorded yet.
+          <ClipboardList className="w-5 h-5 mx-auto mb-1" style={{ color: 'var(--p-ink-400)' }} />
+          No services recorded yet. Tick services as they are performed — captured for billing later, no prices here.
         </div>
       ) : (
         <div className="space-y-2">
           {rows.map((s) => (
-            <div key={s.id} className="rounded-xl p-3 flex items-start gap-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+            <div key={s.id} className="rounded-xl p-3 flex flex-wrap items-start gap-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
               <span className="inline-flex items-center px-2 h-6 rounded-md text-[10px] font-bold shrink-0" style={{ background: 'white', border: '1px solid var(--p-border)', color: 'var(--p-brand-mid)' }}>{CAT_LABEL[s.category] || s.category}</span>
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-semibold" style={{ color: 'var(--p-ink-900)' }}>{s.displayName}{s.quantity > 1 ? ` ×${s.quantity}` : ''}</div>
-                <div className="text-[11px] mt-0.5 flex flex-wrap gap-x-3" style={{ color: 'var(--p-ink-500)' }}>
+                <div className="text-[11px] mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5" style={{ color: 'var(--p-ink-500)' }}>
                   <span>{s.performedAt ? fmtDMYHM(s.performedAt) : '—'}</span>
                   {s.canonicalBillingName && <span>Billing: {s.canonicalBillingName}</span>}
-                  {s.notes && <span>{s.notes}</span>}
+                  {s.notes && <span>Note: {s.notes}</span>}
                 </div>
               </div>
               {s.billingStatus === 'needs_review'

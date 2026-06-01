@@ -28,6 +28,7 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [doctors, setDoctors] = useState([])
+  const [manualMode, setManualMode] = useState(false)   // external specialist not on the staff list
 
   // Doctor list comes from the EXISTING staff directory (portal_staff, role=doctor) —
   // no separate specialists table. Falls back to free text if none are visible.
@@ -46,7 +47,7 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
   }
 
   async function add() {
-    if (!specialist.trim() && !note.trim()) { setError('Enter a specialist/type or a note.'); return }
+    if (!specialist.trim() && !note.trim()) { setError('Pick a doctor, or type an external specialist name / specialty.'); return }
     setBusy(true); setError(null)
     try {
       await insertEncounter(caseId, {
@@ -125,13 +126,23 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Doctor">
-              {doctors.length > 0 ? (
-                <select className="p-input" value={specialist} onChange={(e) => onPickDoctor(e.target.value)}>
+              {doctors.length > 0 && !manualMode ? (
+                <select className="p-input" value={specialist} onChange={(e) => {
+                  if (e.target.value === '__manual__') { setManualMode(true); setSpecialist('') }
+                  else onPickDoctor(e.target.value)
+                }}>
                   <option value="">Select doctor…</option>
                   {doctors.map((d) => <option key={d.staffId} value={d.name}>{d.name}{d.specialty ? ` — ${d.specialty}` : ''}</option>)}
+                  <option value="__manual__">Other / external specialist…</option>
                 </select>
               ) : (
-                <input className="p-input" value={specialist} onChange={(e) => setSpecialist(e.target.value)} placeholder="e.g. Dr. Ahmed" />
+                <div className="flex items-center gap-1.5">
+                  <input className="p-input flex-1" value={specialist} onChange={(e) => setSpecialist(e.target.value)} placeholder="e.g. Dr. Ahmed (external)" />
+                  {doctors.length > 0 && (
+                    <button type="button" onClick={() => { setManualMode(false); setSpecialist('') }}
+                      className="shrink-0 h-9 px-2.5 rounded-lg text-[11px] font-semibold p-btn-ghost" title="Back to staff list">List</button>
+                  )}
+                </div>
               )}
             </Field>
             <Field label="Visit Date & Time">

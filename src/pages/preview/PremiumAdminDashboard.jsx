@@ -383,7 +383,7 @@ function LiveAdminDashboard() {
                 </div>
                 <div className="p-4">
                   {cashRows.length === 0 ? (
-                    <p className="text-xs text-ink-400 px-1 py-3">No cash collections yet.</p>
+                    <p className="text-xs text-ink-400 px-1 py-3">Live cash collections appear on the Collections page, grouped by channel &amp; currency.</p>
                   ) : (
                     <ul className="space-y-1.5">
                       {cashRows.map(([cur, amt]) => (
@@ -404,7 +404,7 @@ function LiveAdminDashboard() {
                 </div>
                 <div className="p-4">
                   {excessRows.length === 0 ? (
-                    <p className="text-xs text-ink-400 px-1 py-3">No insurance excess collected yet.</p>
+                    <p className="text-xs text-ink-400 px-1 py-3">Patient excess appears on the Collections page, kept separate from cash-case revenue.</p>
                   ) : (
                     <ul className="space-y-1.5">
                       {excessRows.map(([cur, amt]) => (

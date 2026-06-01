@@ -297,6 +297,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
                       <option key={r.id} value={r.id}>{r.roomName || `Room ${r.roomCode}`}{r.id === c.centerRoomId ? ' (current)' : ''}</option>
                     ))}
                   </select>
+                  {availableRooms.length === 0 && (
+                    <span className="text-[11px]" style={{ color: 'var(--p-ink-400)' }}>No free rooms right now.</span>
+                  )}
                 </div>
                 <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
                   The room stays occupied on the board until this case is discharged.

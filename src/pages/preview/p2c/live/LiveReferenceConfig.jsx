@@ -141,7 +141,7 @@ function RoomsConfig({ onOk, onErr }) {
               {list.map((r) => (
                 <div key={r.id} className={cn('rounded-xl px-3 py-2.5 flex items-center justify-between gap-2', !r.active && 'opacity-55')}
                   style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
-                  <div className="min-w-0">
+                  <div className="min-w-0 w-full">
                     <input defaultValue={r.roomName} onBlur={(e) => rename(r, e.target.value.trim())}
                       className="bg-transparent text-sm font-semibold w-full focus:outline-none" style={{ color: 'var(--p-ink-900)' }} />
                     <div className="text-[10px] font-mono" style={{ color: 'var(--p-ink-500)' }}>code {r.roomCode}</div>
@@ -240,7 +240,7 @@ function NationalitiesConfig({ onOk, onErr }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((n) => (
             <div key={n.id} className={cn('flex items-center justify-between gap-2 px-4 py-2.5', !n.active && 'opacity-50')} style={{ borderTop: '1px solid var(--p-border)' }}>
-              <span className="text-[13px] font-semibold truncate" style={{ color: 'var(--p-ink-900)' }}>{n.flag ? `${n.flag} ` : ''}{n.name_en}</span>
+              <span className="text-[13px] font-semibold truncate min-w-0 flex-1" style={{ color: 'var(--p-ink-900)' }} title={n.name_en}>{n.flag ? `${n.flag} ` : ''}{n.name_en}</span>
               <button onClick={() => toggle(n)} disabled={busy} className="shrink-0">
                 {n.active ? <StatusPill tone="cash">On</StatusPill> : <StatusPill tone="navy">Off</StatusPill>}
               </button>

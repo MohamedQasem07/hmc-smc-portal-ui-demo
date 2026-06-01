@@ -210,7 +210,7 @@ function UsersConfig({ onOk, onErr }) {
                   <div className="text-[11px] truncate" style={{ color: 'var(--p-ink-500)' }}>{u.email || u.userId.slice(0, 8)}{u.active ? '' : ' · disabled'}</div>
                 </div>
               </div>
-              <Select value={u.role} onChange={(v) => changeRole(u, v)} disabled={busy} className="lg:w-48">
+              <Select value={u.role} onChange={(v) => changeRole(u, v)} disabled={busy} className="lg:w-56">
                 {ROLE_OPTIONS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
               </Select>
               <button onClick={() => toggleActive(u)} disabled={busy}
@@ -454,7 +454,7 @@ function SpecialtyInline({ s, busy, onSave }) {
   const [val, setVal] = useState(s.specialty || '')
   const dirty = (val || '') !== (s.specialty || '')
   return (
-    <div className="flex items-center gap-1.5 lg:w-60">
+    <div className="flex items-center gap-1.5 w-full lg:w-72">
       <Stethoscope className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--p-ink-400)' }} />
       <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="Specialty"
         className="p-input h-8 text-[12px] flex-1" />
