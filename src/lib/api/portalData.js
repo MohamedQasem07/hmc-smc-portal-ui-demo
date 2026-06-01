@@ -330,6 +330,21 @@ export async function recordCaseCollection(caseId, line, { locationCode = null, 
   return res
 }
 
+/** P3J — ADMIN-ONLY safe delete of a wrong/test case. Calls the SECURITY DEFINER
+ *  RPC portal_admin_delete_case (strict portal_is_admin() guard) which removes the
+ *  case + ALL operational children in FK-safe order (incl. collections + treasury),
+ *  deletes the patient ONLY if orphaned, and writes an audit row. Returns the
+ *  deleted-row counts. Throws on failure (never silent; non-admins get PORTAL_DENIED). */
+export async function adminDeleteCase(caseId, { deleteOrphanPatient = true } = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  const { data, error } = await db.rpc('portal_admin_delete_case', {
+    p_case_id: caseId, p_delete_orphan_patient: deleteOrphanPatient,
+  })
+  if (error) throw error
+  return data
+}
+
 /* =========================================================================
  * Transfers — receive & classify at the destination branch (Phase 4).
  * supabase mode only. receiveTransfer() flips the transfer + case atomically

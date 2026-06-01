@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, AlertTriangle, Building2, Hotel, Phone, Mail, BedDouble, Clock,
   CheckCircle2, Pencil, Save, X, Send, ShieldCheck, Gift, Banknote, DoorOpen,
-  Activity, History,
+  Activity, History, Trash2,
 } from 'lucide-react'
 import { SectionHead, FacilityBadge, FinTypePill, RoutePill, P2CTimeline } from '../../../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../../../premium/primitives'
@@ -13,7 +13,7 @@ import { useLiveRooms } from '../../../../lib/useLiveRooms'
 import { fmtDate } from '../../../../lib/format'
 import {
   updatePatientContact, updateCaseFields, assignRoom, dischargeCase,
-  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory, recordCaseCollection,
+  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory, recordCaseCollection, adminDeleteCase,
 } from '../../../../lib/api/portalData'
 import { escalateIfAuthError, sbEnsureSession } from '../../../../lib/api/auth'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
@@ -62,6 +62,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const { actions } = useDemoState()
   const { currentUser } = useUserMode()
   const isAdmin = currentUser?.role === 'admin'   // P3J — admin global operation
+  const navigate = useNavigate()
+  const [showDelete, setShowDelete] = useState(false)   // P3J — admin safe delete
+  const [deleteText, setDeleteText] = useState('')
   const refresh = actions.refreshCases
   const isClosed = c?.operationalStatus === 'Closed'
 
@@ -200,6 +203,16 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
       setShowDischarge(false)
       await reloadRooms()
     }, 'Patient discharged. Room released.')
+  }
+
+  // P3J — ADMIN SAFE DELETE: permanently remove a wrong/test case + all children
+  // via the admin-only RPC, then return to the list. run() surfaces any error.
+  async function confirmDelete() {
+    await run(async () => {
+      await adminDeleteCase(c.id)
+      setShowDelete(false)
+      navigate(backTo || '/admin-dashboard')
+    }, 'Case deleted.')
   }
 
   async function saveInvoice() {
@@ -509,10 +522,34 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         </div>
       </div>
 
+      {/* P3J — ADMIN DANGER ZONE: safe delete of a wrong/test case (admin-only). */}
+      {isAdmin && (
+        <section className="p-card p-5 space-y-3" style={{ border: '1px solid #F0B5B5', background: 'var(--p-mixed-soft)' }}>
+          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: '#B14242' }}>
+            <AlertTriangle className="w-3.5 h-3.5" /> Danger Zone — Admin
+          </div>
+          <p className="text-[12px]" style={{ color: 'var(--p-ink-700)' }}>
+            Permanently delete this case and <strong>all</strong> its operational records — collections, treasury movements,
+            charges, encounters, room assignments, transfers, insurance intakes. The patient is removed only if they have
+            no other case. This cannot be undone.
+          </p>
+          <button onClick={() => { setDeleteText(''); setOkMsg(null); setError(null); setShowDelete(true) }}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold" style={{ background: '#B14242', color: 'white' }}>
+            <Trash2 className="w-3.5 h-3.5" /> Delete Case
+          </button>
+        </section>
+      )}
+
       {/* Discharge confirmation modal */}
       {showDischarge && (
         <DischargeModal c={c} fin={fin} roomLabel={roomLabel} checkoutAt={checkoutAt} setCheckoutAt={setCheckoutAt}
           busy={busy} onCancel={() => setShowDischarge(false)} onConfirm={confirmDischarge} />
+      )}
+
+      {/* P3J — admin delete confirmation (type DELETE) */}
+      {showDelete && (
+        <DeleteCaseModal c={c} busy={busy} deleteText={deleteText} setDeleteText={setDeleteText}
+          onCancel={() => setShowDelete(false)} onConfirm={confirmDelete} />
       )}
     </div>
   )
@@ -764,6 +801,43 @@ function DischargeModal({ c, fin, roomLabel, checkoutAt, setCheckoutAt, busy, on
           <button onClick={onConfirm} disabled={busy}
             className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-bold p-btn-primary">
             <CheckCircle2 className="w-4 h-4" /> {busy ? 'Discharging…' : 'Confirm discharge'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeleteCaseModal({ c, busy, deleteText, setDeleteText, onCancel, onConfirm }) {
+  const armed = deleteText === 'DELETE'
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,27,61,0.45)' }}>
+      <div className="p-card p-5 w-full max-w-md space-y-4" style={{ background: 'white' }}>
+        <div className="flex items-center gap-2 text-base font-bold" style={{ color: '#B14242' }}>
+          <AlertTriangle className="w-5 h-5" /> Delete Case — permanent
+        </div>
+        <div className="rounded-xl p-3 space-y-1.5 text-[13px]" style={{ background: 'var(--p-mixed-soft)', border: '1px solid #F0B5B5' }}>
+          <Row label="Patient" value={c.patient.name} />
+          <Row label="Reference" value={c.ourRef} mono />
+          <Row label="Location" value={c.registeredAtName} />
+        </div>
+        <p className="text-[12px]" style={{ color: 'var(--p-ink-700)' }}>
+          This permanently deletes the case and <strong>all</strong> linked records — including any <strong>collections and
+          treasury movements</strong> (cash trail). The patient is deleted only if they have no other case.{' '}
+          <strong>This cannot be undone.</strong>
+        </p>
+        <Field label="Type DELETE to confirm">
+          <input className="p-input" value={deleteText} onChange={(e) => setDeleteText(e.target.value)} placeholder="DELETE" autoFocus />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} disabled={busy}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost">
+            <X className="w-4 h-4" /> Cancel
+          </button>
+          <button onClick={onConfirm} disabled={busy || !armed}
+            className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-bold"
+            style={{ background: armed ? '#B14242' : '#E3A9A9', color: 'white', opacity: (busy || !armed) ? 0.6 : 1, cursor: (busy || !armed) ? 'not-allowed' : 'pointer' }}>
+            <Trash2 className="w-4 h-4" /> {busy ? 'Deleting…' : 'Delete permanently'}
           </button>
         </div>
       </div>
