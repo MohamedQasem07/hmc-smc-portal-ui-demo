@@ -44,6 +44,14 @@ import { updateCaseRegistration } from '../../../../lib/api/portalData'
 const TODAY_DATE = IS_SUPABASE ? new Date().toLocaleDateString('en-CA') : '2026-05-27'
 const TODAY_TIME_DEFAULT = '10:00'
 
+// P3I — guided stepper groups (map to the existing section blocks; no field moves).
+const STEPS = [
+  { id: 'patient',   label: 'Patient',       icon: User },
+  { id: 'visit',     label: 'Visit & Route', icon: Stethoscope },
+  { id: 'financial', label: 'Financial',     icon: Banknote },
+  { id: 'review',    label: 'Review & Save', icon: CheckCircle2 },
+]
+
 export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone } = {}) {
   const navigate = useNavigate()
   const { clinicId } = useUserMode()
@@ -109,6 +117,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
   const [paymentLines, setPaymentLines] = useState([blankLine('Invoice Payment', 'EUR')])
   const [excessLines,  setExcessLines]  = useState([blankLine('Patient Excess',  'EUR')])
+  const [step, setStep] = useState(1)   // P3I — guided stepper (1..4)
 
   const update = (key, val) => setForm((p) => ({ ...p, [key]: val }))
 
@@ -142,11 +151,22 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const needsFreeApproval = showFreeBlock && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
   const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval
 
+  // P3I — per-step completion (non-blocking; only drives the stepper's green check).
+  const stepStatus = {
+    1: !needsName,
+    2: !needsTransferDest && !arrivalAfterToday && !departureBeforeToday,
+    3: !needsFacility && !needsFreeApproval,
+    4: canSubmit,
+  }
+
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
   async function handleSubmit(e) {
     e.preventDefault()
+    // P3I — on any non-final step, "submit" (incl. Enter) just advances the stepper;
+    // the real create/edit save only fires from the Review step.
+    if (step < STEPS.length) { setStep((s) => Math.min(STEPS.length, s + 1)); return }
     if (!canSubmit) return
 
     // P3G — EDIT MODE: update the SAME case + patient in place (no duplicate,
@@ -276,7 +296,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <div className="p-eyebrow mb-1">{isEdit ? 'Edit Full Registration' : 'External Clinic Workspace'}</div>
-            <h1 className="p-h1 text-xl sm:text-2xl lg:text-3xl" style={{ color: 'var(--p-ink-900)' }}>{isEdit ? 'Edit Registration' : 'Register New Case'}</h1>
+            <h1 className="p-h1 text-xl sm:text-2xl lg:text-3xl" style={{ color: 'var(--p-ink-900)' }}>{isEdit ? 'Edit Full Registration' : 'Register New Case'}</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>
               <Stethoscope className="inline w-3.5 h-3.5 mr-1" style={{ color: 'var(--p-teal)' }} />
               {isEdit
@@ -323,6 +343,11 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
         <form onSubmit={handleSubmit} className="space-y-5">
 
+          {/* P3I — guided step navigator */}
+          <FormStepper steps={STEPS} current={step} status={stepStatus} onJump={setStep} />
+
+          {/* ===== STEP 1 — Patient details (travel + identity + contact) ===== */}
+          <div className={cn('space-y-5', step !== 1 && 'hidden')}>
           {/* ── Row 1: Visit + Identity + Location ────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
 
@@ -433,6 +458,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
             </section>
           </div>
 
+          </div>
+
+          {/* ===== STEP 2 — Visit & Route (clinical, route, encounter) ===== */}
+          <div className={cn('space-y-5', step !== 2 && 'hidden')}>
           {/* ── Row 2: Clinical note + Route ─────────────────────────────── */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
             <section className="p-card p-5 lg:col-span-7 space-y-4">
@@ -534,6 +563,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
             </div>
           </section>
 
+          </div>
+
+          {/* ===== STEP 3 — Financial classification (+ conditional details) ===== */}
+          <div className={cn('space-y-5', step !== 3 && 'hidden')}>
           {/* ── Row 4: Financial Type ────────────────────────────────────── */}
           <section className="p-card p-5 space-y-5">
             <SectionHead eyebrow="Section 7" title="Financial Classification"
@@ -733,23 +766,38 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
             )}
           </section>
 
-          {/* Submit bar */}
+          </div>
+
+          {/* ===== STEP 4 — Review & Save ===== */}
+          <div className={cn('space-y-4', step !== 4 && 'hidden')}>
+            <ReviewPanel form={form} clinicName={clinicName} isEdit={isEdit} ourRef={refView.ref} />
+          </div>
+
+          {/* P3I — stepper action bar (Back / Next / Save) */}
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 pt-3 pb-4 bg-gradient-to-t from-[var(--p-canvas)] via-[var(--p-canvas)] to-transparent">
-            <div className="p-card p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs flex items-center gap-2" style={{ color: 'var(--p-ink-500)' }}>
-                <Info className="w-3.5 h-3.5" />
-                <span>{isEdit ? 'Changes update this case in place — OUR Ref, room and visit status are preserved.' : 'The case will appear in My Cases right away. Reset clears this form.'}</span>
+            <div className="p-card p-card-top p-3 flex items-center justify-between gap-3 flex-wrap">
+              <div className="text-xs flex items-center gap-2 min-w-0" style={{ color: 'var(--p-ink-500)' }}>
+                <Info className="w-3.5 h-3.5 shrink-0" />
+                <span className="truncate">Step {step} of {STEPS.length} · <strong style={{ color: 'var(--p-ink-700)' }}>{STEPS[step - 1].label}</strong>{isEdit ? ' · editing existing case' : ''}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => { if (isEdit) { if (onDone) onDone(); else navigate(`/clinic/cases/${editCase.id}`) } else { window.location.reload() } }}
+                <button type="button"
+                  onClick={() => { if (step > 1) setStep(step - 1); else if (isEdit) { if (onDone) onDone(); else navigate(`/clinic/cases/${editCase.id}`) } else { window.location.reload() } }}
                   className="h-11 px-5 rounded-full text-sm font-semibold p-btn-ghost">
-                  {isEdit ? 'Cancel' : 'Reset'}
+                  {step > 1 ? 'Back' : (isEdit ? 'Cancel' : 'Reset')}
                 </button>
-                <button type="submit" disabled={!canSubmit}
-                  className={cn('h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2',
-                    !canSubmit && 'opacity-40 cursor-not-allowed')}>
-                  {isEdit ? 'Save Changes' : 'Register Case'} <ArrowRight className="w-4 h-4" />
-                </button>
+                {step < STEPS.length ? (
+                  <button type="button" onClick={() => setStep(step + 1)}
+                    className="h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2">
+                    Next <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button type="submit" disabled={!canSubmit}
+                    className={cn('h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2',
+                      !canSubmit && 'opacity-40 cursor-not-allowed')}>
+                    {isEdit ? 'Save Changes' : 'Register Case'} <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -805,6 +853,94 @@ function caseToForm(c) {
     encounterPattern: c.encounterPattern || 'outpatient_single',
     visitCheckInDate: visitDate, visitCheckInTime: visitTime,
   }
+}
+
+// P3I — guided step navigator (clickable; mobile-scrollable; green check when a
+// step's required fields are satisfied). Pure presentation — never blocks.
+function FormStepper({ steps, current, status, onJump }) {
+  return (
+    <div className="p-card p-card-top p-2 sm:p-2.5">
+      <ol className="flex items-stretch gap-1.5 overflow-x-auto scrollbar-hide">
+        {steps.map((s, i) => {
+          const n = i + 1
+          const active = current === n
+          const ok = !!status[n]
+          const Icon = s.icon
+          return (
+            <li key={s.id} className="flex-1 min-w-[64px] sm:min-w-[120px]">
+              <button type="button" onClick={() => onJump(n)}
+                className="w-full h-full rounded-xl px-2 sm:px-2.5 py-2 flex items-center gap-2 transition-all border"
+                style={{
+                  background: active ? 'var(--p-teal-soft)' : 'white',
+                  borderColor: active ? 'var(--p-teal)' : 'var(--p-border)',
+                  boxShadow: active ? 'var(--p-shadow-soft)' : 'none',
+                }}>
+                <span className="w-7 h-7 rounded-full inline-flex items-center justify-center shrink-0 text-[12px] font-bold"
+                  style={{
+                    background: active ? 'var(--p-teal)' : ok ? 'var(--p-finalized-soft)' : 'var(--p-surface-tint)',
+                    color: active ? 'white' : ok ? '#076D4A' : 'var(--p-ink-400)',
+                    border: ok && !active ? '1px solid #9FD4BB' : '1px solid transparent',
+                  }}>
+                  {ok && !active ? <CheckCircle2 className="w-4 h-4" /> : (Icon ? <Icon className="w-3.5 h-3.5" /> : n)}
+                </span>
+                <span className="min-w-0 text-left hidden sm:block">
+                  <span className="block text-[9px] uppercase tracking-[0.1em] font-bold" style={{ color: 'var(--p-ink-400)' }}>Step {n}</span>
+                  <span className="block text-[12px] font-bold truncate" style={{ color: active ? 'var(--p-ink-900)' : 'var(--p-ink-600)' }}>{s.label}</span>
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    </div>
+  )
+}
+
+// P3I — final review/summary before save. Read-only display of the form values.
+function ReviewPanel({ form, clinicName, isEdit, ourRef }) {
+  const routeLabel = form.route === 'direct' ? 'Direct' : form.route === 'to_al_kawther' ? 'Transfer → Al-Kawther' : form.route === 'to_sheraton' ? 'Transfer → Sheraton' : `Transfer → ${form.transferDestination || 'Other'}`
+  const rows = [
+    ['Patient', `${form.firstName} ${form.lastName}`.trim() || '—'],
+    ['Registered at', clinicName],
+    ['Route', routeLabel],
+    ['Encounter', String(form.encounterPattern || '').replace(/_/g, ' ')],
+    ['Financial', form.financialType],
+  ]
+  if (form.financialType === 'Insurance') {
+    rows.push(['Insurance', [form.billingFacility, form.insuranceCompany].filter(Boolean).join(' · ') || '—'])
+    if (form.insuranceRef) rows.push(['Ins. Ref', form.insuranceRef])
+    if (form.hasExcess === 'Yes') rows.push(['Excess', `${form.excessAmount || 0} ${form.excessCurrency}`])
+  }
+  if (form.financialType === 'Cash') rows.push(['Cash invoice', `${form.invoiceAmount || 0} ${form.invoiceCurrency}`])
+  if (form.financialType === 'Free / Complimentary') rows.push(['Free reason', form.complimentaryReason || '—'])
+  if (form.hotel) rows.push(['Hotel', [form.hotel, form.hotelRoom && `Rm ${form.hotelRoom}`].filter(Boolean).join(' · ')])
+  return (
+    <section className="p-card p-card-top p-5 space-y-4">
+      <SectionHead icon={CheckCircle2} eyebrow="Final step" title="Review & Save"
+        description="Check the details before saving." />
+      <div className="rounded-2xl p-4" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+        <div className="flex items-center justify-between gap-2 pb-2 mb-2 border-b" style={{ borderColor: 'var(--p-border)' }}>
+          <span className="text-[11px] uppercase tracking-[0.12em] font-bold" style={{ color: 'var(--p-ink-500)' }}>OUR Ref {isEdit ? '(locked)' : ''}</span>
+          <span className="font-mono text-sm font-bold" style={{ color: 'var(--p-ink-900)' }}>{ourRef}</span>
+        </div>
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+          {rows.map(([k, v]) => (
+            <div key={k} className="flex items-center justify-between gap-3">
+              <dt className="text-[11px] uppercase tracking-[0.1em] font-bold shrink-0" style={{ color: 'var(--p-ink-400)' }}>{k}</dt>
+              <dd className="text-[13px] font-semibold text-right truncate" style={{ color: 'var(--p-ink-900)' }}>{v}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+      <div className="rounded-xl px-3 py-2.5 text-[12px] flex items-start gap-2"
+        style={{ background: isEdit ? 'var(--p-brand-pale)' : 'var(--p-cash-soft)', border: `1px solid ${isEdit ? '#BCCDE8' : '#A8E6C7'}`, color: 'var(--p-ink-700)' }}>
+        <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <span>{isEdit
+          ? <>Saving will <strong>update the existing case {ourRef}</strong> and its patient — it will <strong>not</strong> create a duplicate.</>
+          : <>Tap <strong>Register Case</strong> to create this case — it appears in My Cases immediately.</>}</span>
+      </div>
+    </section>
+  )
 }
 
 function settlementOf(invoiceAmt, invoiceCur, totalsByCur) {
