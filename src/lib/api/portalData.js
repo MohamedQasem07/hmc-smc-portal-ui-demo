@@ -1,5 +1,5 @@
 import { getSupabaseClient } from './supabaseClient'
-import { sbAdminUsers } from './auth'
+import { sbAdminUsers, escalateIfAuthError } from './auth'
 import {
   FINANCIAL_TYPE_TO_PORTAL, ROUTE_TO_PORTAL, ENCOUNTER_PATTERN_TO_PORTAL,
   GENDER_TO_PORTAL, billingPrepToRow,
@@ -268,11 +268,13 @@ export async function insertCase(newCase) {
   // Collections (cash + patient-excess lines) via the secure RPC.
   for (const l of (newCase.paymentLines || [])) {
     try { await recordCollection(db, caseId, l, 'cash_case_payment', locId) }
-    catch (e) { console.warn('[portal] collection failed', e?.message) }
+    // P3J — additive/best-effort (case+charge already saved), but a DEAD SESSION
+    // must not silently drop the money: escalate auth errors to a clean re-login.
+    catch (e) { console.warn('[portal] collection failed', e?.message); await escalateIfAuthError(e) }
   }
   for (const l of (newCase.excessLines || [])) {
     try { await recordCollection(db, caseId, l, 'patient_excess', locId) }
-    catch (e) { console.warn('[portal] excess collection failed', e?.message) }
+    catch (e) { console.warn('[portal] excess collection failed', e?.message); await escalateIfAuthError(e) }
   }
 
   // Transfer record when the case is routed to a destination branch.

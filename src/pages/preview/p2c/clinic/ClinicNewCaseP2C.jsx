@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown, CheckCircle2, AlertTriangle, Info, Stethoscope,
@@ -118,6 +118,20 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const [paymentLines, setPaymentLines] = useState([blankLine('Invoice Payment', 'EUR')])
   const [excessLines,  setExcessLines]  = useState([blankLine('Patient Excess',  'EUR')])
   const [step, setStep] = useState(1)   // P3I — guided stepper (1..4)
+  const [submitting, setSubmitting] = useState(false)  // P3J — honest save state (no fake success)
+  const [submitError, setSubmitError] = useState(null)
+
+  // P3J — keep blank/untouched cash payment lines aligned to the invoice currency
+  // so a same-currency payment is the default (the cashier never has to switch the
+  // line currency by hand). Lines that already carry an amount are left untouched.
+  useEffect(() => {
+    setPaymentLines((lines) => lines.map((l) =>
+      (String(l.fxRefAmount ?? '') === '' && String(l.actualAmount ?? '') === '')
+        ? { ...l, fxRefCurrency: form.invoiceCurrency, actualCurrency: form.invoiceCurrency, currency: form.invoiceCurrency }
+        : l,
+    ))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.invoiceCurrency])
 
   const update = (key, val) => setForm((p) => ({ ...p, [key]: val }))
 
@@ -169,6 +183,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
     if (step < STEPS.length) { setStep((s) => Math.min(STEPS.length, s + 1)); return }
     if (!canSubmit) return
 
+    // P3J — honest save: never navigate on failure, never fake success. Any error
+    // (case/patient/charge/auth) surfaces in the banner below.
+    setSubmitting(true); setSubmitError(null)
+    try {
     // P3G — EDIT MODE: update the SAME case + patient in place (no duplicate,
     // OUR Ref / room / status preserved). Money lines keep their own flows.
     if (isEdit) {
@@ -192,8 +210,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
       // idempotent upsert — re-saving the prefilled value is a no-op, so "Save
       // without changing" never wipes it). A blank amount is skipped (never wipes).
       if (form.financialType === 'Cash' && Number(form.invoiceAmount) > 0) {
-        try { await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR') }
-        catch (err) { console.warn('[portal] edit cash invoice save failed', err?.message) }
+        await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR')
       }
       if (onDone) { onDone(); return }
       navigate(`/clinic/cases/${editCase.id}`)
@@ -290,6 +307,11 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
     const newId = await actions.addCase(newCase)
     navigate(`/clinic/cases/${newId || newCase.id}`)
+    } catch (err) {
+      setSubmitError(err?.message || 'Could not save. Please check your session / connection and try again.')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const body = (
@@ -729,16 +751,30 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                   </Field>
                 </FieldGrid>
 
-                <PaymentLinesPanel
-                  lines={paymentLines}
-                  setLines={setPaymentLines}
-                  typeLabel="Invoice Payment"
-                  title="Payment Lines"
-                  helperText="Cash → any currency · Visa / Card → always EGP (Bank Collection). FX rate is editable per line."
-                  invoiceCurrency={form.invoiceCurrency}
-                />
-
-                <TotalsCallout title="Collected" totals={cashTotals} dueAmount={form.invoiceAmount} dueCurrency={form.invoiceCurrency} />
+                {isEdit ? (
+                  /* P3J — Edit Full Registration NEVER persists payment lines
+                     (updateCaseRegistration leaves money lines to their own flow),
+                     so the editor only sets invoice amount/currency. Real money is
+                     recorded from Case Detail → "Record collection" (posts the
+                     collection + treasury movement). No misleading do-nothing UI. */
+                  <div className="rounded-xl px-3 py-2.5 text-[12px] flex items-start gap-2"
+                    style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8', color: 'var(--p-ink-700)' }}>
+                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                    <span>Editing here updates the <strong>invoice amount &amp; currency</strong> only. To record money actually collected, use <strong>Record collection</strong> on the case page — it posts the collection and the treasury movement and updates Collected / Outstanding.</span>
+                  </div>
+                ) : (
+                  <>
+                    <PaymentLinesPanel
+                      lines={paymentLines}
+                      setLines={setPaymentLines}
+                      typeLabel="Invoice Payment"
+                      title="Payment Lines"
+                      helperText="Cash → any currency · Visa / Card → always EGP (Bank Collection). FX rate is editable per line."
+                      invoiceCurrency={form.invoiceCurrency}
+                    />
+                    <TotalsCallout title="Collected" totals={cashTotals} dueAmount={form.invoiceAmount} dueCurrency={form.invoiceCurrency} />
+                  </>
+                )}
               </div>
             )}
 
@@ -778,34 +814,43 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
           {/* ===== STEP 4 — Review & Save ===== */}
           <div className={cn('space-y-4', step !== 4 && 'hidden')}>
-            <ReviewPanel form={form} clinicName={clinicName} isEdit={isEdit} ourRef={refView.ref} />
+            <ReviewPanel form={form} clinicName={clinicName} isEdit={isEdit} ourRef={refView.ref} cashTotals={cashTotals} />
           </div>
 
           {/* P3I — stepper action bar (Back / Next / Save) */}
           <div className="sticky bottom-0 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 pt-3 pb-4 bg-gradient-to-t from-[var(--p-canvas)] via-[var(--p-canvas)] to-transparent">
-            <div className="p-card p-card-top p-3 flex items-center justify-between gap-3 flex-wrap">
-              <div className="text-xs flex items-center gap-2 min-w-0" style={{ color: 'var(--p-ink-500)' }}>
-                <Info className="w-3.5 h-3.5 shrink-0" />
-                <span className="truncate">Step {step} of {STEPS.length} · <strong style={{ color: 'var(--p-ink-700)' }}>{STEPS[step - 1].label}</strong>{isEdit ? ' · editing existing case' : ''}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button type="button"
-                  onClick={() => { if (step > 1) setStep(step - 1); else if (isEdit) { if (onDone) onDone(); else navigate(`/clinic/cases/${editCase.id}`) } else { window.location.reload() } }}
-                  className="h-11 px-5 rounded-full text-sm font-semibold p-btn-ghost">
-                  {step > 1 ? 'Back' : (isEdit ? 'Cancel' : 'Reset')}
-                </button>
-                {step < STEPS.length ? (
-                  <button type="button" onClick={() => setStep(step + 1)}
-                    className="h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2">
-                    Next <ArrowRight className="w-4 h-4" />
+            <div className="p-card p-card-top p-3 space-y-2">
+              {submitError && (
+                <div role="alert" className="rounded-xl px-3 py-2 flex items-start gap-2 text-[12px]"
+                  style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
+                  <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                  <span className="font-semibold">{submitError}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 flex-wrap">
+                <div className="text-xs flex items-center gap-2 min-w-0" style={{ color: 'var(--p-ink-500)' }}>
+                  <Info className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">Step {step} of {STEPS.length} · <strong style={{ color: 'var(--p-ink-700)' }}>{STEPS[step - 1].label}</strong>{isEdit ? ' · editing existing case' : ''}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button type="button"
+                    onClick={() => { if (step > 1) setStep(step - 1); else if (isEdit) { if (onDone) onDone(); else navigate(`/clinic/cases/${editCase.id}`) } else { window.location.reload() } }}
+                    className="h-11 px-5 rounded-full text-sm font-semibold p-btn-ghost">
+                    {step > 1 ? 'Back' : (isEdit ? 'Cancel' : 'Reset')}
                   </button>
-                ) : (
-                  <button type="submit" disabled={!canSubmit}
-                    className={cn('h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2',
-                      !canSubmit && 'opacity-40 cursor-not-allowed')}>
-                    {isEdit ? 'Save Changes' : 'Register Case'} <ArrowRight className="w-4 h-4" />
-                  </button>
-                )}
+                  {step < STEPS.length ? (
+                    <button type="button" onClick={() => setStep(step + 1)}
+                      className="h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2">
+                      Next <ArrowRight className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button type="submit" disabled={!canSubmit || submitting}
+                      className={cn('h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2',
+                        (!canSubmit || submitting) && 'opacity-40 cursor-not-allowed')}>
+                      {submitting ? (isEdit ? 'Saving…' : 'Registering…') : (isEdit ? 'Save Changes' : 'Register Case')} <ArrowRight className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -910,7 +955,7 @@ function FormStepper({ steps, current, status, onJump }) {
 }
 
 // P3I — final review/summary before save. Read-only display of the form values.
-function ReviewPanel({ form, clinicName, isEdit, ourRef }) {
+function ReviewPanel({ form, clinicName, isEdit, ourRef, cashTotals = {} }) {
   const routeLabel = form.route === 'direct' ? 'Direct' : form.route === 'to_al_kawther' ? 'Transfer → Al-Kawther' : form.route === 'to_sheraton' ? 'Transfer → Sheraton' : `Transfer → ${form.transferDestination || 'Other'}`
   const rows = [
     ['Patient', `${form.firstName} ${form.lastName}`.trim() || '—'],
@@ -924,7 +969,17 @@ function ReviewPanel({ form, clinicName, isEdit, ourRef }) {
     if (form.insuranceRef) rows.push(['Ins. Ref', form.insuranceRef])
     if (form.hasExcess === 'Yes') rows.push(['Excess', `${form.excessAmount || 0} ${form.excessCurrency}`])
   }
-  if (form.financialType === 'Cash') rows.push(['Cash invoice', `${form.invoiceAmount || 0} ${form.invoiceCurrency}`])
+  if (form.financialType === 'Cash') {
+    rows.push(['Cash invoice', `${form.invoiceAmount || 0} ${form.invoiceCurrency}`])
+    // P3J — show live collected / outstanding from the payment lines on the Review
+    // step (create mode only; edit mode records money via Case Detail, not here).
+    if (!isEdit) {
+      const collected = Number(cashTotals[form.invoiceCurrency] || 0)
+      const outstanding = Math.max(0, (Number(form.invoiceAmount) || 0) - collected)
+      rows.push(['Collected', `${collected.toFixed(2)} ${form.invoiceCurrency}`])
+      rows.push(['Outstanding', `${outstanding.toFixed(2)} ${form.invoiceCurrency}`])
+    }
+  }
   if (form.financialType === 'Free / Complimentary') rows.push(['Free reason', form.complimentaryReason || '—'])
   if (form.hotel) rows.push(['Hotel', [form.hotel, form.hotelRoom && `Rm ${form.hotelRoom}`].filter(Boolean).join(' · ')])
   return (

@@ -118,7 +118,24 @@ export function PaymentLinesPanel({
   invoiceCurrency = 'EUR',
 }) {
   function update(idx, patch) {
-    setLines((p) => p.map((l, i) => i === idx ? deriveLine({ ...l, ...patch }) : l))
+    setLines((p) => p.map((l, i) => {
+      if (i !== idx) return l
+      const merged = { ...l, ...patch }
+      // P3J — same-currency cash must "just work". When the cashier picks the
+      // Foreign Currency (or switches the method to Cash), mirror it into the
+      // Actual Currency so the line is treated as SAME-currency: no phantom FX,
+      // and the Actual Amount mirrors the Foreign Amount. (Before this, the line
+      // kept its EUR default actual currency while Foreign became EGP, so it was
+      // wrongly treated as cross-currency, demanded an FX rate, never computed an
+      // amount, and was dropped from the totals — "No lines yet".) A genuine
+      // cross-currency cash line is still possible: set the Foreign Currency,
+      // then change the Actual Currency to a DIFFERENT value and the FX rate
+      // becomes required again.
+      if (merged.method === 'Cash' && ('fxRefCurrency' in patch || patch.method === 'Cash')) {
+        merged.actualCurrency = merged.fxRefCurrency
+      }
+      return deriveLine(merged)
+    }))
   }
   function add()        { setLines((p) => [...p, blankLine(typeLabel, invoiceCurrency)]) }
   function remove(idx)  { setLines((p) => p.length === 1 ? [blankLine(typeLabel, invoiceCurrency)] : p.filter((_, i) => i !== idx)) }
