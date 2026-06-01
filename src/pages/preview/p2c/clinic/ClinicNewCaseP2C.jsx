@@ -24,6 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
+import { updateCaseRegistration } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -43,25 +44,31 @@ import { IS_SUPABASE } from '../../../../lib/api/config'
 const TODAY_DATE = IS_SUPABASE ? new Date().toLocaleDateString('en-CA') : '2026-05-27'
 const TODAY_TIME_DEFAULT = '10:00'
 
-export default function ClinicNewCaseP2C() {
+export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone } = {}) {
   const navigate = useNavigate()
   const { clinicId } = useUserMode()
-  const clinicName = getClinicName(clinicId)
+  const isEdit = !!editCase
+  // P3G — in edit mode the registering location/identity comes from the existing
+  // case (it never changes on edit), not the logged-in clinic context.
+  const regAtId = isEdit ? (editCase.registeredAtId || clinicId) : clinicId
+  const clinicName = isEdit ? (editCase.registeredAtName || getClinicName(regAtId)) : getClinicName(clinicId)
   const { actions } = useDemoState()
 
   // P2C.R3 — live preview of the OUR Ref that will be assigned on submit.
   // Family follows the billingFacility once Insurance is selected; otherwise
   // external clinics default to SMC family.
   const [refContext, setRefContext] = useState({
-    registeredAtKind: 'external',
-    registeredAtId: clinicId,
-    billingFacility: null,
+    registeredAtKind: isEdit ? (editCase.registeredAtKind || 'external') : 'external',
+    registeredAtId: regAtId,
+    billingFacility: isEdit ? (editCase.billingFacility || null) : null,
   })
   const nextRef = useNextOurRef(refContext)
+  // P3G — in edit mode the OUR Ref is the case's existing locked value (never recomputed).
+  const refView = isEdit ? { ref: editCase.ourRef || '—', family: editCase.billingFacility || nextRef.family } : nextRef
   const nationalityOptions = useNationalityOptions()
   const liveInsurers = useLiveInsurers()   // live insurer master in supabase mode (mock list otherwise)
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState(() => editCase ? caseToForm(editCase) : {
     // Visit & Timing (tourist travel — separate from encounter check-in)
     visitDate: TODAY_DATE,
     visitTime: TODAY_TIME_DEFAULT,
@@ -141,6 +148,29 @@ export default function ClinicNewCaseP2C() {
   async function handleSubmit(e) {
     e.preventDefault()
     if (!canSubmit) return
+
+    // P3G — EDIT MODE: update the SAME case + patient in place (no duplicate,
+    // OUR Ref / room / status preserved). Money lines keep their own flows.
+    if (isEdit) {
+      const patch = {
+        patient: {
+          firstName: form.firstName, lastName: form.lastName, dob: form.dob, gender: form.gender,
+          nationality: form.nationality, phoneCode: form.phoneCode, phone: form.phone, email: form.email,
+          postal: form.postal, hotel: form.hotel, hotelRoom: form.hotelRoom, note: form.clinicalNote,
+        },
+        route: form.route === 'other' ? 'transfer_other' : form.route,
+        financialType: form.financialType,
+        billingFacility: form.financialType === 'Insurance' ? form.billingFacility : null,
+        encounterPattern: form.encounterPattern,
+        visitDate: form.visitDate, visitTime: form.visitTime,
+        insurance: { company: form.insuranceCompany, ref: form.insuranceRef, email: form.insuranceEmail, phone: form.insurancePhone },
+        hasPatientExcess: form.financialType === 'Insurance' && form.hasExcess === 'Yes',
+      }
+      await updateCaseRegistration(editCase.id, editCase.patientId, patch)
+      if (onDone) { onDone(); return }
+      navigate(`/clinic/cases/${editCase.id}`)
+      return
+    }
 
     const nowIso = new Date().toISOString()
     const visitDateIso = new Date(`${form.visitDate}T${form.visitTime || '10:00'}:00`).toISOString()
@@ -234,22 +264,24 @@ export default function ClinicNewCaseP2C() {
     navigate(`/clinic/cases/${newId || newCase.id}`)
   }
 
-  return (
-    <OperationalShell role="clinic_nurse" active="new-case"
-      identityName={clinicName} identitySub="External Clinic Workspace">
+  const body = (
       <div className="w-full px-4 sm:px-6 lg:px-10 pt-5 pb-12 max-w-[1400px] mx-auto space-y-5">
 
-        <DemoBanner>
-          <strong>Interactive Demo</strong> — registered cases appear in My Cases, Transfers and Treasury during this session. Entries are saved in this browser (local preview — not yet on the server).
-        </DemoBanner>
+        {!isEdit && (
+          <DemoBanner>
+            <strong>Interactive Demo</strong> — registered cases appear in My Cases, Transfers and Treasury during this session. Entries are saved in this browser (local preview — not yet on the server).
+          </DemoBanner>
+        )}
 
         <header className="flex items-start justify-between gap-4 flex-wrap">
           <div>
-            <div className="p-eyebrow mb-1">External Clinic Workspace</div>
-            <h1 className="p-h1 text-xl sm:text-2xl lg:text-3xl" style={{ color: 'var(--p-ink-900)' }}>Register New Case</h1>
+            <div className="p-eyebrow mb-1">{isEdit ? 'Edit Full Registration' : 'External Clinic Workspace'}</div>
+            <h1 className="p-h1 text-xl sm:text-2xl lg:text-3xl" style={{ color: 'var(--p-ink-900)' }}>{isEdit ? 'Edit Registration' : 'Register New Case'}</h1>
             <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>
               <Stethoscope className="inline w-3.5 h-3.5 mr-1" style={{ color: 'var(--p-teal)' }} />
-              Registered at <strong>{clinicName}</strong> · {fmtDMY(TODAY_DATE)}
+              {isEdit
+                ? <>Editing <strong>{editCase.ourRef}</strong> · Registered at <strong>{clinicName}</strong> · open case</>
+                : <>Registered at <strong>{clinicName}</strong> · {fmtDMY(TODAY_DATE)}</>}
             </p>
           </div>
         </header>
@@ -260,7 +292,7 @@ export default function ClinicNewCaseP2C() {
             description="Every case gets a unique non-editable OUR Ref at registration. This identity is later used by Claude Code to build the invoice." />
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
             <div className="lg:col-span-5">
-              <LockedRefField value={nextRef.ref} family={nextRef.family}
+              <LockedRefField value={refView.ref} family={refView.family}
                 hint="The Insurance choice (HMC/SMC) below adjusts the prefix automatically." />
             </div>
             <div className="lg:col-span-7 rounded-xl p-3 text-[11px] flex items-start gap-2"
@@ -629,7 +661,7 @@ export default function ClinicNewCaseP2C() {
                 <FieldGrid cols={3}>
                   <div className="sm:col-span-3">
                     <LockedRefField size="md" label="Case / Invoice Reference"
-                      value={nextRef.ref} family={nextRef.family}
+                      value={refView.ref} family={refView.family}
                       hint="Generated from the case identity. Reception/nurse cannot type a separate invoice number — a formal invoice sequence is a future admin/billing decision." />
                   </div>
                   <Field label="Invoice Amount *">
@@ -691,17 +723,17 @@ export default function ClinicNewCaseP2C() {
             <div className="p-card p-3 flex items-center justify-between gap-3 flex-wrap">
               <div className="text-xs flex items-center gap-2" style={{ color: 'var(--p-ink-500)' }}>
                 <Info className="w-3.5 h-3.5" />
-                <span>The case will appear in My Cases right away. Reset clears this form.</span>
+                <span>{isEdit ? 'Changes update this case in place — OUR Ref, room and visit status are preserved.' : 'The case will appear in My Cases right away. Reset clears this form.'}</span>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={() => window.location.reload()}
+                <button type="button" onClick={() => { if (isEdit) { if (onDone) onDone(); else navigate(`/clinic/cases/${editCase.id}`) } else { window.location.reload() } }}
                   className="h-11 px-5 rounded-full text-sm font-semibold p-btn-ghost">
-                  Reset
+                  {isEdit ? 'Cancel' : 'Reset'}
                 </button>
                 <button type="submit" disabled={!canSubmit}
                   className={cn('h-11 px-7 rounded-full text-sm font-bold p-btn-primary inline-flex items-center gap-2',
                     !canSubmit && 'opacity-40 cursor-not-allowed')}>
-                  Register Case <ArrowRight className="w-4 h-4" />
+                  {isEdit ? 'Save Changes' : 'Register Case'} <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
@@ -709,6 +741,15 @@ export default function ClinicNewCaseP2C() {
 
         </form>
       </div>
+  )
+
+  // P3G — embedded edit mode renders only the form body; the parent Case Detail
+  // already supplies the role-correct shell (Admin / Operational). Create mode
+  // keeps its own OperationalShell wrapper (unchanged).
+  return embedded ? body : (
+    <OperationalShell role="clinic_nurse" active="new-case"
+      identityName={clinicName} identitySub="External Clinic Workspace">
+      {body}
     </OperationalShell>
   )
 }
@@ -716,6 +757,40 @@ export default function ClinicNewCaseP2C() {
 // =====================================================================
 // Local helpers + sub-components
 // =====================================================================
+
+// P3G — map an existing (mock-shaped) case object to the registration form state
+// for EDIT mode. Mirrors the create defaults so every section pre-loads.
+function caseToForm(c) {
+  const p = c.patient || {}
+  const visitDate = (c.visitDate || '').slice(0, 10) || TODAY_DATE
+  const visitTime = c.visitTime ? String(c.visitTime).slice(0, 5) : TODAY_TIME_DEFAULT
+  const route = c.route === 'transfer_other' ? 'other' : (c.route || 'direct')
+  return {
+    visitDate, visitTime,
+    arrivalDate: '', departureDate: '',
+    firstName: p.firstName || (p.name || '').trim().split(/\s+/)[0] || '',
+    lastName: p.lastName || (p.name || '').trim().split(/\s+/).slice(1).join(' ') || '',
+    dob: p.dob || '', age: '', gender: p.gender === 'Female' ? 'Female' : 'Male',
+    nationality: p.nationality || '',
+    hotel: p.hotel || '', hotelRoom: p.hotelRoom || '', postal: p.postal || '',
+    phoneCode: p.phoneCode || '+20', phone: p.phone || '', email: p.email || '',
+    clinicalNote: p.note || '',
+    route,
+    transferDestination: route === 'other' ? (c.transfer?.toBranchName || '') : '',
+    transferReason: c.transfer?.reason || '', transferNote: '', transferTransport: 'Ambulance', referralNote: '',
+    financialType: c.financialType || 'Pending',
+    billingFacility: c.billingFacility || '',
+    insuranceCompany: c.insurance?.company || '', insuranceRef: c.insurance?.ref || '',
+    insuranceEmail: c.insurance?.email || '', insurancePhone: c.insurance?.phone || '',
+    hasExcess: c.hasPatientExcess ? 'Yes' : 'No',
+    excessAmount: c.excessAmount != null ? String(c.excessAmount) : '',
+    excessCurrency: c.excessCurrency || 'EUR',
+    invoiceNumber: '', invoiceAmount: '', invoiceCurrency: 'EUR',
+    complimentaryReason: c.freeReason || '', complimentaryApprovedBy: c.freeApprovedBy || '',
+    encounterPattern: c.encounterPattern || 'outpatient_single',
+    visitCheckInDate: visitDate, visitCheckInTime: visitTime,
+  }
+}
 
 function settlementOf(invoiceAmt, invoiceCur, totalsByCur) {
   const due = Number(invoiceAmt) || 0

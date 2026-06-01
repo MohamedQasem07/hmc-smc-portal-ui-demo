@@ -977,6 +977,103 @@ export async function updateCaseFields(caseId, fields = {}) {
   if (error) throw error
 }
 
+/** P3G — Full registration edit for an OPEN case. Reuses the original registration
+ *  form (edit mode). Updates the SAME patient + case rows in place — it NEVER
+ *  creates a new patient/case, NEVER changes our_ref, NEVER touches center_room_id /
+ *  operational_status / closed_at / registered_location_id (so room assignment,
+ *  discharge state and case identity are preserved). Money lines (collections /
+ *  treasury / charges) are NOT mutated here — those keep their own flows. Runs on
+ *  the caller's session, so the existing portal_patients_upd / portal_cases_upd RLS
+ *  (case-access scoped) authorizes it; no RLS/auth change.
+ *
+ *  patch: { patient:{firstName,lastName,dob,gender,nationality,phoneCode,phone,email,postal,hotel,hotelRoom,note},
+ *           route, financialType, billingFacility, encounterPattern, visitDate, visitTime,
+ *           insurance:{company,ref,email,phone}, hasPatientExcess } */
+export async function updateCaseRegistration(caseId, patientId, patch = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  const uid = await currentUid(db)
+  const now = new Date().toISOString()
+  const p = patch.patient || {}
+
+  // 1) Patient (PHI) — same row, no new patient created.
+  if (patientId) {
+    const pUpd = { updated_at: now }
+    if (p.firstName !== undefined || p.lastName !== undefined) {
+      const first = (p.firstName || '').trim() || 'Unknown'
+      pUpd.first_name = first
+      pUpd.last_name = (p.lastName || '').trim() || first
+    }
+    if (p.dob !== undefined) pUpd.date_of_birth = p.dob || null
+    if (p.gender !== undefined) pUpd.gender = GENDER_TO_PORTAL[p.gender] || 'female'
+    if (p.nationality !== undefined) pUpd.nationality = p.nationality || null
+    if (p.phoneCode !== undefined) pUpd.phone_country_code = p.phoneCode || null
+    if (p.phone !== undefined) pUpd.phone_number = p.phone || null
+    if (p.email !== undefined) pUpd.email = p.email || null
+    if (p.postal !== undefined) pUpd.postal_code = p.postal || null
+    const { error } = await db.from('portal_patients').update(pUpd).eq('id', patientId)
+    if (error) throw error
+  }
+
+  // 2) Case — registration fields only. NEVER our_ref / room / status / closed_at / location.
+  const cUpd = { updated_at: now }
+  if (patch.route !== undefined) cUpd.route = ROUTE_TO_PORTAL[patch.route] || 'direct'
+  if (patch.financialType !== undefined) {
+    cUpd.financial_type = FINANCIAL_TYPE_TO_PORTAL[patch.financialType] || 'pending'
+    cUpd.billing_facility_id = patch.financialType === 'Insurance'
+      ? (maps.facIdByCode[patch.billingFacility] || null) : null
+  }
+  if (patch.encounterPattern !== undefined) cUpd.encounter_pattern = ENCOUNTER_PATTERN_TO_PORTAL[patch.encounterPattern] || 'outpatient_single'
+  if (patch.visitDate !== undefined) cUpd.visit_date = String(patch.visitDate).slice(0, 10) || null
+  if (patch.visitTime !== undefined) cUpd.visit_time = patch.visitTime || null
+  if (p.hotel !== undefined) cUpd.hotel_or_location = p.hotel || null
+  if (p.hotelRoom !== undefined) cUpd.hotel_room_number = p.hotelRoom || null
+  if (p.note !== undefined) cUpd.short_clinical_note = p.note || null
+  const { error: cErr } = await db.from('portal_cases').update(cUpd).eq('id', caseId)
+  if (cErr) throw cErr
+
+  // 3) Insurance intake — best-effort upsert when classified Insurance. Never blocks
+  //    the save (case + patient already persisted); reports via console if RLS denies.
+  if (patch.financialType === 'Insurance' && patch.billingFacility) {
+    try {
+      const facId = maps.facIdByCode[patch.billingFacility] || null
+      const insName = (patch.insurance?.company || '').trim()
+      let companyId = null
+      if (insName) {
+        const { data: existingCo } = await db.from('portal_insurance_companies').select('id').ilike('name', insName).maybeSingle()
+        if (existingCo) companyId = existingCo.id
+        else {
+          const { data: created } = await db.from('portal_insurance_companies')
+            .insert({ name: insName, email: patch.insurance?.email || null, phone: patch.insurance?.phone || null, created_by: uid })
+            .select('id').single()
+          companyId = created?.id || null
+        }
+      }
+      const { data: existingIntake } = await db.from('portal_insurance_intakes').select('id').eq('case_id', caseId).maybeSingle()
+      if (existingIntake) {
+        const iUpd = {
+          insurance_reference_number: (patch.insurance?.ref || '').trim() || '(pending)',
+          insurance_company_email: patch.insurance?.email || null,
+          insurance_company_phone: patch.insurance?.phone || null,
+          billing_facility_id: facId, has_patient_excess: !!patch.hasPatientExcess, updated_at: now,
+        }
+        if (companyId) iUpd.insurance_company_id = companyId
+        await db.from('portal_insurance_intakes').update(iUpd).eq('id', existingIntake.id)
+      } else if (companyId) {
+        await db.from('portal_insurance_intakes').insert({
+          case_id: caseId, insurance_company_id: companyId,
+          insurance_reference_number: (patch.insurance?.ref || '').trim() || '(pending)',
+          insurance_company_email: patch.insurance?.email || null,
+          insurance_company_phone: patch.insurance?.phone || null,
+          billing_facility_id: facId, has_patient_excess: !!patch.hasPatientExcess, created_by: uid,
+        })
+      }
+    } catch (e) { console.warn('[portal] intake update skipped (case+patient saved):', e?.message) }
+  }
+  return caseId
+}
+
 /** Active rooms for a branch location CODE (e.g. 'al_kawther'). Empty for
  *  external clinics (no room board). RLS: portal_rooms readable by active users. */
 export async function fetchRoomsForLocation(locationCode) {

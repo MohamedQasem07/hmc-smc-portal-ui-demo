@@ -15,6 +15,7 @@ import {
 } from '../../../../lib/api/portalData'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
 import LiveCaseServices from './LiveCaseServices'
+import ClinicNewCaseP2C from '../clinic/ClinicNewCaseP2C'
 
 /* =========================================================================
  * LiveCaseWorkspace (Case Lifecycle Model) — supabase-mode only.
@@ -73,6 +74,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const [okMsg, setOkMsg] = useState(null)
 
   const [editing, setEditing] = useState(false)
+  const [editReg, setEditReg] = useState(false)   // P3G — full registration edit mode
   const [form, setForm] = useState({})
   const [showDischarge, setShowDischarge] = useState(false)
   const [checkoutAt, setCheckoutAt] = useState(nowLocalDatetime())
@@ -165,6 +167,17 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     )
   }
 
+  // P3G — Full registration edit mode (OPEN cases only). Renders the original
+  // multi-section registration form embedded inside this role's shell, pre-loaded
+  // with the case's data. Updates the SAME case + patient in place. Closed cases
+  // never reach here (the button is hidden once discharged).
+  if (editReg && !isClosed) {
+    return (
+      <ClinicNewCaseP2C embedded editCase={c}
+        onDone={async () => { setEditReg(false); if (refresh) await refresh(); setOkMsg('Registration updated.') }} />
+    )
+  }
+
   const roomLabel = c.centerRoomName || (c.centerRoomNumber ? `Room ${c.centerRoomNumber}` : null)
 
   return (
@@ -202,10 +215,22 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
                 <div className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--p-ink-400)' }}>{c.ourRef}</div>
               </div>
               {!isClosed && !editing && (
-                <button onClick={startEdit}
-                  className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold p-btn-ghost">
-                  <Pencil className="w-3.5 h-3.5" /> Edit details
-                </button>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <button onClick={() => { setOkMsg(null); setError(null); setEditReg(true) }}
+                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-bold p-btn-primary">
+                    <Pencil className="w-3.5 h-3.5" /> Edit Full Registration
+                  </button>
+                  <button onClick={startEdit}
+                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold p-btn-ghost">
+                    <Pencil className="w-3.5 h-3.5" /> Edit details
+                  </button>
+                </div>
+              )}
+              {isClosed && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
+                  style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-500)', border: '1px solid var(--p-border)' }}>
+                  This case is closed. Please contact admin for corrections.
+                </span>
               )}
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
