@@ -4,7 +4,8 @@ import {
   ChevronDown, Calendar, Building2, Wallet, FileText, Clock,
   ArrowUpRight, ArrowDownRight, FileCheck2, ShieldAlert, Banknote, CreditCard,
   ChevronRight, BarChart3, AlertTriangle, MapPin, Plus, Settings,
-  LayoutDashboard,
+  LayoutDashboard, DoorOpen, ArrowLeftRight, Inbox, Gift,
+  Stethoscope,
 } from 'lucide-react'
 import { AdminShell } from '../../premium/AdminShell'
 import {
@@ -16,8 +17,17 @@ import {
 } from '../../data/mock'
 import { fmtDate, fmtMoney, fmtRelative } from '../../lib/format'
 import { cn } from '../../lib/cn'
+import { IS_SUPABASE } from '../../lib/api/config'
+import { useCases } from '../../context/DemoStateContext'
+import { KpiCard } from '../../components/ui/KpiCard'
+import { Card } from '../../components/ui/Card'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { SectionHeader } from '../../components/ui/SectionHeader'
 
 export default function PremiumAdminDashboard() {
+  // Live (Supabase) mode: render ONLY real data — never the mock body below.
+  if (IS_SUPABASE) return <LiveAdminDashboard />
+
   const [date, setDate] = useState('2026-05-26')
   const [facility, setFacility] = useState('all')
   const [branch, setBranch] = useState('all')
@@ -202,6 +212,256 @@ export default function PremiumAdminDashboard() {
               </div>
             </section>
           </div>
+    </AdminShell>
+  )
+}
+
+// ====================================================================
+// Humanize a branch/clinic id for display WITHOUT importing mock data, so the
+// live path stays free of any mock dependency (e.g. "sahl_hasheesh" → "Sahl Hasheesh").
+function prettyBranch(id) {
+  if (!id) return '—'
+  return String(id).split(/[_\s-]+/).map((w) => w ? w[0].toUpperCase() + w.slice(1) : w).join(' ')
+}
+
+// ====================================================================
+// LIVE ADMIN DASHBOARD (Supabase mode) — real data only, no mock imports.
+// Backed by useCases() which, in supabase mode, is populated from fetchCases().
+// All numbers are computed from the RLS-scoped case list; clean empty states
+// when there is nothing yet. NO fake sparklines, NO mock numbers.
+// ====================================================================
+function LiveAdminDashboard() {
+  const cases = useCases()
+
+  const stats = useMemo(() => {
+    const isClosed = (c) => c.operationalStatus === 'Closed'
+    const isDischarged = (c) =>
+      c.encounterPattern === 'inpatient_admission' &&
+      (c.admission?.dischargedAt || c.operationalStatus === 'Closed')
+
+    const byFinancial = { Cash: 0, Insurance: 0, Free: 0, Pending: 0 }
+    let open = 0
+    let closed = 0
+    let admittedNow = 0
+    let dischargedClosed = 0
+    let transfersPending = 0
+    let transfersReceived = 0
+    const roomsOccupied = new Set()
+
+    // Cash-case revenue vs Insurance Excess — kept SEPARATE, grouped by
+    // currency, no FX conversion (Mohamed's rule).
+    const cashRevenueByCur = {}
+    const excessByCur = {}
+
+    for (const c of cases) {
+      // Financial type buckets
+      if (c.financialType === 'Cash') byFinancial.Cash += 1
+      else if (c.financialType === 'Insurance') byFinancial.Insurance += 1
+      else if (c.financialType === 'Free / Complimentary' || c.financialType === 'Free') byFinancial.Free += 1
+      else byFinancial.Pending += 1
+
+      // Open vs closed
+      if (isClosed(c)) closed += 1
+      else open += 1
+
+      // Inpatient admitted now vs discharged
+      if (c.encounterPattern === 'inpatient_admission') {
+        if (c.admission && !c.admission.dischargedAt && !isClosed(c)) admittedNow += 1
+        if (isDischarged(c)) dischargedClosed += 1
+      }
+
+      // Transfers
+      if (c.transfer) {
+        if (c.transfer.receivedAt || c.transfer.status === 'Received') transfersReceived += 1
+        else transfersPending += 1
+      }
+
+      // Rooms occupied (unique branch+room with an active occupant)
+      if (c.centerRoomNumber != null && !isClosed(c)) {
+        roomsOccupied.add(`${c.branchId || '?'}::${c.centerRoomNumber}`)
+      }
+
+      // Cash-invoice payments (cash-case revenue)
+      for (const l of c.paymentLines || []) {
+        const amt = Number(l.amount) || 0
+        if (!amt) continue
+        const cur = l.currency || '—'
+        cashRevenueByCur[cur] = (cashRevenueByCur[cur] || 0) + amt
+      }
+      // Patient excess (Insurance Excess) — never merged with cash revenue
+      for (const l of c.excessLines || []) {
+        const amt = Number(l.amount) || 0
+        if (!amt) continue
+        const cur = l.currency || '—'
+        excessByCur[cur] = (excessByCur[cur] || 0) + amt
+      }
+    }
+
+    return {
+      total: cases.length,
+      byFinancial,
+      open,
+      closed,
+      admittedNow,
+      dischargedClosed,
+      transfersPending,
+      transfersReceived,
+      roomsOccupied: roomsOccupied.size,
+      cashRevenueByCur,
+      excessByCur,
+    }
+  }, [cases])
+
+  const hasCases = stats.total > 0
+  const cashRows = Object.entries(stats.cashRevenueByCur)
+  const excessRows = Object.entries(stats.excessByCur)
+
+  const recentTransfers = useMemo(() =>
+    cases
+      .filter((c) => c.transfer)
+      .sort((a, b) => ((b.transfer?.sentAt || b.visitDate || '') > (a.transfer?.sentAt || a.visitDate || '') ? 1 : -1))
+      .slice(0, 6),
+  [cases])
+
+  return (
+    <AdminShell active="dashboard">
+      <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-9 space-y-6 max-w-[1500px] w-full mx-auto">
+        <SectionHeader
+          title="Admin Dashboard"
+          description="Live operational overview — every figure is computed from real cases visible to you."
+        />
+
+        {!hasCases ? (
+          <Card padding="none">
+            <EmptyState
+              icon={Inbox}
+              title="No live cases yet."
+              message="Once cases are registered they will appear here with live counts, transfers and collections."
+            />
+          </Card>
+        ) : (
+          <>
+            {/* ===== Primary KPIs ===== */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <KpiCard label="Total Cases"        value={stats.total}              icon={FileText}     tone="navy" />
+              <KpiCard label="Open / Active"      value={stats.open}               icon={Stethoscope}  tone="sky"     hint={`${stats.closed} discharged / closed`} />
+              <KpiCard label="Admitted Now"       value={stats.admittedNow}        icon={DoorOpen}     tone="violet"  hint={`${stats.dischargedClosed} discharged`} />
+              <KpiCard label="Rooms Occupied"     value={stats.roomsOccupied}      icon={Building2}    tone="emerald" hint="Center rooms with an active patient" />
+            </section>
+
+            {/* ===== Financial type breakdown ===== */}
+            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <KpiCard label="Cash Cases"      value={stats.byFinancial.Cash}      icon={Banknote}   tone="emerald" />
+              <KpiCard label="Insurance Cases" value={stats.byFinancial.Insurance} icon={FileCheck2} tone="sky" />
+              <KpiCard label="Free Cases"      value={stats.byFinancial.Free}      icon={Gift}       tone="violet" />
+              <KpiCard label="Pending Type"    value={stats.byFinancial.Pending}   icon={ShieldAlert} tone="amber"  hint="Awaiting classification" />
+            </section>
+
+            {/* ===== Transfers + Collections (cash vs excess, never merged) ===== */}
+            <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+              {/* Transfers */}
+              <Card padding="none" className="overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <SectionHeader icon={ArrowLeftRight} title="Transfers" description="Movement between clinics." className="mb-0" />
+                </div>
+                <div className="grid grid-cols-2 divide-x divide-border">
+                  <div className="px-5 py-5 text-center">
+                    <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersPending}</div>
+                    <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Pending</div>
+                  </div>
+                  <div className="px-5 py-5 text-center">
+                    <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersReceived}</div>
+                    <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Received</div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Cash-case revenue */}
+              <Card padding="none" className="overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <SectionHeader icon={Banknote} title="Cash-Case Revenue" description="By currency · no conversion." className="mb-0" />
+                </div>
+                <div className="p-4">
+                  {cashRows.length === 0 ? (
+                    <p className="text-xs text-ink-400 px-1 py-3">No cash collections yet.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {cashRows.map(([cur, amt]) => (
+                        <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
+                          <span className="text-sm font-semibold text-ink-700">{cur}</span>
+                          <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(amt, cur)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Card>
+
+              {/* Insurance Excess — separate from cash revenue */}
+              <Card padding="none" className="overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <SectionHeader icon={Wallet} title="Insurance Excess" description="Patient excess · kept separate." className="mb-0" />
+                </div>
+                <div className="p-4">
+                  {excessRows.length === 0 ? (
+                    <p className="text-xs text-ink-400 px-1 py-3">No insurance excess collected yet.</p>
+                  ) : (
+                    <ul className="space-y-1.5">
+                      {excessRows.map(([cur, amt]) => (
+                        <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
+                          <span className="text-sm font-semibold text-ink-700">{cur}</span>
+                          <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(amt, cur)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </Card>
+            </section>
+
+            {/* ===== Recent transfer movement ===== */}
+            <Card padding="none" className="overflow-hidden">
+              <div className="px-5 py-4 border-b border-border">
+                <SectionHeader
+                  icon={ArrowLeftRight}
+                  title="Recent Transfer Movement"
+                  description="Latest cases transferred between clinics."
+                  action={<Link to="/admin/cases" className="text-xs font-semibold text-navy-700">Open Cases Master →</Link>}
+                  className="mb-0"
+                />
+              </div>
+              {recentTransfers.length === 0 ? (
+                <EmptyState icon={ArrowLeftRight} title="No transfers yet." message="Transferred cases will show here as they move between clinics." />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {recentTransfers.map((c) => (
+                    <li key={c.id} className="px-5 py-3.5 flex items-center gap-3">
+                      <Avatar name={c.patient?.name || '—'} size={38} tone="navy" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-sm text-ink-900 truncate">{c.patient?.name || '—'}</span>
+                          <StatusPill tone={c.transfer?.receivedAt ? 'finalized' : 'transferred'}>
+                            {c.transfer?.receivedAt ? 'Received' : 'Pending'}
+                          </StatusPill>
+                        </div>
+                        <div className="text-[12px] mt-0.5 flex items-center gap-1.5 text-ink-500">
+                          <Building2 className="w-3 h-3" />
+                          {prettyBranch(c.transfer?.fromClinicId || c.branchId)}
+                          <span className="text-ink-300">→</span>
+                          {prettyBranch(c.transfer?.toBranchId || c.branchId)}
+                          <span className="text-ink-300">·</span>
+                          <Clock className="w-3 h-3" /> {fmtRelative(c.transfer?.sentAt || c.visitDate)}
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-ink-300 shrink-0" />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Card>
+          </>
+        )}
+      </div>
     </AdminShell>
   )
 }
