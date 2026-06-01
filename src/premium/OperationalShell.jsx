@@ -31,7 +31,7 @@ export function OperationalShell({
   const navItems = navItemsFor(role)
 
   return (
-    <div className="theme-premium min-h-screen" style={{ background: 'var(--p-canvas)' }}>
+    <div className="theme-premium p-app min-h-screen">
       {/* Persistent identity top strip (mobile + desktop) */}
       <OperationalTopBar role={role} identityName={identityName} identitySub={identitySub} />
 
@@ -95,19 +95,20 @@ function OperationalTopBar({ role, identityName, identitySub }) {
 
   return (
     <header className="sticky top-0 z-30 px-4 md:px-7 h-14 flex items-center justify-between gap-3" style={{
-      background: 'linear-gradient(180deg, rgba(10,27,61,0.96) 0%, rgba(18,43,83,0.92) 100%)',
-      borderBottom: '1px solid rgba(255,255,255,0.06)',
+      background: 'linear-gradient(180deg, rgba(10,27,61,0.97) 0%, rgba(18,43,83,0.93) 100%)',
+      borderBottom: '1px solid rgba(255,255,255,0.08)',
       backdropFilter: 'blur(14px) saturate(160%)',
       WebkitBackdropFilter: 'blur(14px) saturate(160%)',
+      paddingTop: 'env(safe-area-inset-top)',
     }}>
       <div className="flex items-center gap-3 min-w-0">
         <BrandWordmark variant="light" compact />
       </div>
 
       <div className="flex items-center gap-2 min-w-0">
-        <div className="hidden sm:flex flex-col items-end leading-tight min-w-0">
-          <span className="text-[11px] uppercase tracking-[0.12em] font-bold" style={{ color: 'rgba(255,255,255,0.55)' }}>{identitySub}</span>
-          <span className="text-sm font-semibold text-white truncate max-w-[180px]">{identityName}</span>
+        <div className="flex flex-col items-end leading-tight min-w-0">
+          <span className="hidden sm:block text-[11px] uppercase tracking-[0.12em] font-bold" style={{ color: 'rgba(255,255,255,0.55)' }}>{identitySub}</span>
+          <span className="text-[13px] sm:text-sm font-semibold text-white truncate max-w-[120px] sm:max-w-[180px]">{identityName}</span>
         </div>
         {isSignedIn && (
           <button
@@ -156,9 +157,14 @@ function DesktopRail({ role, active, identityName, identitySub }) {
     }}>
       <span className="absolute -top-24 -left-16 w-60 h-60 rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(15,181,169,0.18) 0%, transparent 65%)' }} />
 
-      <div className="relative z-10 px-4 py-4 border-b shrink-0" style={{ borderColor: 'rgba(255,255,255,0.05)' }}>
-        <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>{identitySub}</div>
-        <div className="mt-1 text-base font-bold text-white leading-tight">{identityName}</div>
+      <div className="relative z-10 px-4 py-4 border-b shrink-0 flex items-center gap-3" style={{ borderColor: 'rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, rgba(15,181,169,0.08) 0%, transparent 100%)' }}>
+        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(15,181,169,0.18)', color: '#7FE7DE', border: '1px solid rgba(15,181,169,0.25)' }}>
+          <Building2 className="w-4 h-4" />
+        </div>
+        <div className="min-w-0">
+          <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>{identitySub}</div>
+          <div className="text-[15px] font-bold text-white leading-tight truncate">{identityName}</div>
+        </div>
       </div>
 
       <nav className="relative z-10 flex-1 overflow-y-auto px-2.5 py-3 space-y-0.5">
@@ -182,18 +188,19 @@ function DesktopRail({ role, active, identityName, identitySub }) {
 
 function RailLink({ to, icon: Icon, label, active, emphasis }) {
   return (
-    <Link to={to} className={cn('flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-all relative')}
+    <Link to={to} className={cn('flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all relative', !active && !emphasis && 'hover:bg-white/[0.06]')}
           style={{
-            background: active ? 'linear-gradient(135deg, rgba(15,181,169,0.18) 0%, rgba(30,65,128,0.18) 100%)' :
-                        emphasis ? 'linear-gradient(135deg, rgba(15,181,169,0.10) 0%, rgba(15,181,169,0.04) 100%)' :
+            background: active ? 'linear-gradient(135deg, rgba(15,181,169,0.30) 0%, rgba(30,65,128,0.22) 100%)' :
+                        emphasis ? 'linear-gradient(135deg, rgba(15,181,169,0.12) 0%, rgba(15,181,169,0.04) 100%)' :
                         'transparent',
-            color: active ? 'white' : emphasis ? '#7FE7DE' : 'rgba(255,255,255,0.65)',
-            border: active ? '1px solid rgba(15,181,169,0.32)' :
+            color: active ? 'white' : emphasis ? '#7FE7DE' : 'rgba(255,255,255,0.7)',
+            border: active ? '1px solid rgba(15,181,169,0.40)' :
                     emphasis ? '1px solid rgba(15,181,169,0.20)' :
                     '1px solid transparent',
+            boxShadow: active ? 'inset 0 0 18px rgba(15,181,169,0.12)' : 'none',
           }}>
-      {active && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" style={{ background: '#0FB5A9' }} />}
-      <Icon className="w-4 h-4 shrink-0" />
+      {active && <span className="absolute left-0 inset-y-1.5 w-[3px] rounded-r-full" style={{ background: '#2DD4C7' }} />}
+      <Icon className="w-[18px] h-[18px] shrink-0" />
       <span className="flex-1 text-[13px]">{label}</span>
     </Link>
   )
@@ -208,10 +215,12 @@ function MobileBottomNav({ role, active, navItems }) {
   const items = navItems.length > 5
     ? navItems.filter((n) => keepOnMobile.includes(n.id))
     : navItems
+  const shortLabel = (n) => n.emphasis ? (n.label.includes('Direct') ? 'Direct' : 'New') : n.label.replace('My ', '')
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-2" style={{
-      background: 'rgba(255,255,255,0.92)',
-      borderTop: '1px solid var(--p-border)',
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 px-2 pb-[max(env(safe-area-inset-bottom),0.5rem)] pt-1.5" style={{
+      background: 'rgba(255,255,255,0.94)',
+      borderTop: '1px solid var(--p-border-strong)',
+      boxShadow: '0 -6px 20px rgba(10,27,61,0.06)',
       backdropFilter: 'blur(16px) saturate(160%)',
       WebkitBackdropFilter: 'blur(16px) saturate(160%)',
     }}>
@@ -221,14 +230,15 @@ function MobileBottomNav({ role, active, navItems }) {
           return (
             <li key={n.id} className="min-w-0">
               <Link to={n.to} className={cn(
-                'flex flex-col items-center justify-center gap-0.5 py-2 rounded-xl transition-colors',
-                'min-h-[52px] touch-manipulation',
+                'relative flex flex-col items-center justify-center gap-0.5 py-1.5 rounded-xl transition-all',
+                'min-h-[52px] touch-manipulation active:scale-95',
               )} style={{
                 background: isActive ? 'var(--p-teal-soft)' : 'transparent',
-                color: isActive ? 'var(--p-teal)' : 'var(--p-ink-500)',
+                color: isActive ? 'var(--p-teal-ink)' : 'var(--p-ink-500)',
               }}>
-                <n.icon className="w-5 h-5 shrink-0" />
-                <span className={cn('text-[10px] font-semibold tracking-tight w-full truncate text-center', n.emphasis && !isActive && 'text-[var(--p-teal)]')}>{n.label}</span>
+                {isActive && <span className="absolute top-0 w-7 h-[3px] rounded-full" style={{ background: 'var(--p-teal)' }} />}
+                <n.icon className={cn('shrink-0', isActive ? 'w-[22px] h-[22px]' : 'w-5 h-5')} />
+                <span className={cn('text-[10px] font-bold tracking-tight w-full truncate text-center', n.emphasis && !isActive && 'text-[var(--p-teal)]')}>{shortLabel(n)}</span>
               </Link>
             </li>
           )

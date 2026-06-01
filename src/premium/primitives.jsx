@@ -21,7 +21,7 @@ export function PremiumKpi({ label, value, hint, trend, icon: Icon, tone = 'navy
   }
   const t = iconTones[tone] || iconTones.navy
   return (
-    <div className={cn('p-card p-kpi group p-4 sm:p-5', className)}>
+    <div className={cn('p-card p-kpi p-card-top group p-4 sm:p-5', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-500)' }}>{label}</div>
@@ -37,10 +37,11 @@ export function PremiumKpi({ label, value, hint, trend, icon: Icon, tone = 'navy
         )}
       </div>
       {trend && (
-        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-semibold p-numeric" style={{ color: trend.dir === 'up' ? 'var(--p-cash)' : 'var(--p-mixed)' }}>
+        <div className="mt-3 inline-flex items-center gap-1 text-[11px] font-bold p-numeric px-2 py-0.5 rounded-full"
+          style={{ background: trend.dir === 'up' ? 'var(--p-cash-soft)' : 'var(--p-mixed-soft)', color: trend.dir === 'up' ? '#0A8F62' : '#B14242' }}>
           {trend.dir === 'up' ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
           {trend.value}
-          <span className="font-medium ms-1" style={{ color: 'var(--p-ink-400)' }}>{trend.note}</span>
+          <span className="font-medium ms-1 opacity-80">{trend.note}</span>
         </div>
       )}
     </div>
@@ -104,23 +105,35 @@ export function SectionLabel({ eyebrow, title, description, action, className })
  * StatusPill — premium status pill (replaces P1 Badge for previews)
  * -------------------------------------------------------------------- */
 const pillTones = {
-  cash:        { bg: 'var(--p-cash-soft)',        fg: '#0A8F62' },
-  insurance:   { bg: 'var(--p-insurance-soft)',   fg: '#0A8F87' },
-  pending:     { bg: 'var(--p-pending-soft)',     fg: '#A1672A' },
-  transferred: { bg: 'var(--p-transfer-soft)',    fg: '#5443A8' },
-  mixed:       { bg: 'var(--p-mixed-soft)',       fg: '#B14242' },
-  finalized:   { bg: 'var(--p-finalized-soft)',   fg: '#076D4A' },
-  navy:        { bg: '#E9EFF8',                   fg: '#1E4180' },
-  teal:        { bg: '#E0F8F6',                   fg: '#0A8F87' },
+  cash:        { bg: 'var(--p-cash-soft)',        fg: '#0A8F62', dot: '#18A877' },
+  insurance:   { bg: 'var(--p-insurance-soft)',   fg: '#0A8F87', dot: '#0FB5A9' },
+  pending:     { bg: 'var(--p-pending-soft)',     fg: '#A1672A', dot: '#E1A148' },
+  transferred: { bg: 'var(--p-transfer-soft)',    fg: '#5443A8', dot: '#6F5DCE' },
+  mixed:       { bg: 'var(--p-mixed-soft)',       fg: '#B14242', dot: '#E26A6A' },
+  finalized:   { bg: 'var(--p-finalized-soft)',   fg: '#076D4A', dot: '#0A8F62' },
+  navy:        { bg: '#E9EFF8',                   fg: '#1E4180', dot: '#4B7BC8' },
+  teal:        { bg: '#E0F8F6',                   fg: '#0A8F87', dot: '#0FB5A9' },
   ghost:       { bg: 'rgba(255,255,255,0.10)',    fg: 'rgba(255,255,255,0.92)' },
-  amber:       { bg: 'var(--p-pending-soft)',     fg: '#A1672A' },
-  red:         { bg: 'var(--p-mixed-soft)',       fg: '#B14242' },
+  amber:       { bg: 'var(--p-pending-soft)',     fg: '#A1672A', dot: '#E1A148' },
+  red:         { bg: 'var(--p-mixed-soft)',       fg: '#B14242', dot: '#E26A6A' },
+  // P3C operational status tones
+  open:        { bg: '#E9EFF8',                   fg: '#1E4180', dot: '#4B7BC8' },
+  closed:      { bg: 'var(--p-finalized-soft)',   fg: '#076D4A', dot: '#0A8F62' },
+  paid:        { bg: '#E2F7EE',                   fg: '#0A8F62', dot: '#18A877' },
+  partial:     { bg: 'var(--p-pending-soft)',     fg: '#A1672A', dot: '#E1A148' },
+  unpaid:      { bg: 'var(--p-mixed-soft)',       fg: '#B14242', dot: '#E26A6A' },
+  external:    { bg: 'var(--p-transfer-soft)',    fg: '#5443A8', dot: '#6F5DCE' },
+  internal:    { bg: '#E0F8F6',                   fg: '#0A8F87', dot: '#0FB5A9' },
+  free:        { bg: '#EEF1F6',                   fg: '#455774', dot: '#6B7B95' },
+  gold:        { bg: 'var(--p-gold-soft)',        fg: '#97651F', dot: '#D9A574' },
+  hmc:         { bg: '#E9EFF8',                   fg: '#1E4180', dot: '#1E4180' },
+  smc:         { bg: '#E0F8F6',                   fg: '#0A8F87', dot: '#0A8F87' },
 }
 export function StatusPill({ tone = 'navy', icon: Icon, dot, children, className }) {
   const t = pillTones[tone] || pillTones.navy
   return (
     <span className={cn('p-pill', className)} style={{ background: t.bg, color: t.fg }}>
-      {dot && <span className="w-1.5 h-1.5 rounded-full" style={{ background: 'currentColor' }} />}
+      {dot && <span className="w-1.5 h-1.5 rounded-full" style={{ background: t.dot || 'currentColor' }} />}
       {Icon && <Icon className="w-3 h-3" />}
       {children}
     </span>
@@ -248,7 +261,7 @@ export function PremiumSelect({ className, children, ...rest }) {
  * -------------------------------------------------------------------- */
 export function PremiumButton({ as: Tag = 'button', variant = 'primary', size = 'md', leftIcon, rightIcon, className, children, fullWidth, ...rest }) {
   const sizes = {
-    sm: 'h-9 px-3.5 text-xs',
+    sm: 'h-10 px-3.5 text-xs',
     md: 'h-11 px-5 text-sm',
     lg: 'h-12 px-6 text-[15px]',
     xl: 'h-14 px-7 text-base',
@@ -257,6 +270,8 @@ export function PremiumButton({ as: Tag = 'button', variant = 'primary', size = 
     primary: 'p-btn-primary',
     dark: 'p-btn-dark',
     ghost: 'p-btn-ghost',
+    gold: 'p-btn-gold',
+    danger: 'p-btn-danger',
   }[variant] || 'p-btn-primary'
 
   return (

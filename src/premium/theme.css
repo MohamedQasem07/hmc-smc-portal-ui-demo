@@ -409,5 +409,110 @@
 .theme-premium .p-kpi { position: relative; overflow: hidden; }
 .theme-premium .p-kpi::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(160deg, rgba(15,181,169,0.06) 0%, transparent 42%);
+  background: linear-gradient(160deg, rgba(15,181,169,0.10) 0%, transparent 55%);
+}
+
+/* =========================================================================
+   P3C (2026-06-01) — Premium identity + mobile-app transformation layer
+   ========================================================================= */
+
+/* Layered operational background — apply `p-app` to a shell root (and drop any
+   inline background) for a steel-blue gradient + faint teal/navy depth glows. */
+.theme-premium.p-app, .theme-premium .p-app {
+  background-color: var(--p-canvas);
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, rgba(15,181,169,0.08) 0%, transparent 55%),
+    radial-gradient(900px 600px at -12% -4%, rgba(30,65,128,0.09) 0%, transparent 52%),
+    linear-gradient(180deg, #EEF3FA 0%, #E4EAF4 58%, #DFE7F2 100%);
+}
+
+/* Cards read more defined + premium (stronger hairline, crisper hover) */
+.theme-premium .p-card { border-color: var(--p-border-strong); }
+.theme-premium .p-card:hover { border-color: rgba(15,181,169,0.32); }
+
+/* Top accent line variants for important cards */
+.theme-premium .p-card-top { position: relative; }
+.theme-premium .p-card-top::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  border-radius: var(--p-radius-card) var(--p-radius-card) 0 0;
+  background: linear-gradient(90deg, var(--p-teal) 0%, var(--p-teal-2) 55%, var(--p-gold) 100%);
+}
+.theme-premium .p-card-top-navy::before { background: linear-gradient(90deg, var(--p-brand-mid), var(--p-brand-deep)); }
+.theme-premium .p-card-top-gold::before { background: linear-gradient(90deg, var(--p-gold), var(--p-gold-2)); }
+
+/* Operational status-chip system — vivid, readable, consistent */
+.theme-premium .p-chip {
+  display: inline-flex; align-items: center; gap: 0.3rem;
+  padding: 0.22rem 0.55rem; border-radius: var(--p-radius-pill);
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.02em;
+  line-height: 1; white-space: nowrap; border: 1px solid transparent;
+}
+.theme-premium .p-chip-dot::before { content:''; width:6px; height:6px; border-radius:50%; background: currentColor; }
+.theme-premium .p-chip-cash      { background:#E2F7EE; color:#0A7C52; border-color:#B6E8D2; }
+.theme-premium .p-chip-insurance { background:#E0F3FB; color:#0B6E9C; border-color:#BCE3F2; }
+.theme-premium .p-chip-pending   { background:#FBF1DE; color:#9A6B1E; border-color:#F0DCB3; }
+.theme-premium .p-chip-transfer  { background:#ECE7FB; color:#5A45B0; border-color:#D8CEF4; }
+.theme-premium .p-chip-free      { background:#EAF7F0; color:#3F7A57; border-color:#CDE9D9; }
+.theme-premium .p-chip-open      { background:rgba(15,181,169,0.12); color:#0A7A72; border-color:rgba(15,181,169,0.28); }
+.theme-premium .p-chip-closed    { background:#EEF1F6; color:#5B6B86; border-color:#DCE2EC; }
+.theme-premium .p-chip-paid      { background:#E2F7EE; color:#0A7C52; border-color:#B6E8D2; }
+.theme-premium .p-chip-partial   { background:#FBF1DE; color:#9A6B1E; border-color:#F0DCB3; }
+.theme-premium .p-chip-unpaid    { background:#FBE6E5; color:#B14242; border-color:#F2C9C7; }
+.theme-premium .p-chip-external  { background:rgba(15,181,169,0.12); color:#0A7A72; border-color:rgba(15,181,169,0.28); }
+.theme-premium .p-chip-internal  { background:rgba(18,43,83,0.08); color:#1E4180; border-color:rgba(18,43,83,0.18); }
+.theme-premium .p-chip-role      { background:#EDF1F8; color:#2C3D5C; border-color:#D8E0EC; }
+.theme-premium .p-chip-branch    { background:#FBF5EC; color:#8A5E22; border-color:#EBDCC1; }
+.theme-premium .p-chip-navy      { background:rgba(18,43,83,0.10); color:#1E4180; border-color:rgba(18,43,83,0.18); }
+
+/* Danger / warning pill button */
+.theme-premium .p-btn-danger {
+  background: linear-gradient(135deg, #E2685F 0%, #C63F46 100%); color:#fff; font-weight:700;
+  border:1px solid rgba(198,63,70,0.4); border-radius: var(--p-radius-pill);
+  box-shadow: 0 8px 22px rgba(198,63,70,0.22);
+  transition: transform var(--p-dur-fast) var(--p-ease-soft), filter var(--p-dur-fast);
+}
+.theme-premium .p-btn-danger:hover { transform: translateY(-1px); filter: brightness(1.05); }
+
+/* Tactile tap feedback on every premium pill button (great on mobile) */
+.theme-premium .p-btn-primary:active, .theme-premium .p-btn-dark:active,
+.theme-premium .p-btn-gold:active, .theme-premium .p-btn-danger:active,
+.theme-premium .p-btn-ghost:active { transform: scale(0.97); }
+
+/* Minimum comfortable touch target */
+.theme-premium .p-tap { min-height: 44px; min-width: 44px; }
+
+/* Sticky table header — wrap the scroll container's <table> with .p-table-sticky */
+.theme-premium .p-table-sticky thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--p-surface-tint);
+}
+.theme-premium .p-table-zebra tbody tr:nth-child(even) { background: rgba(15,27,56,0.018); }
+
+/* Safe-area helpers for installed PWA (notch / home indicator) */
+.theme-premium .p-safe-b { padding-bottom: env(safe-area-inset-bottom); }
+.theme-premium .p-safe-t { padding-top: env(safe-area-inset-top); }
+
+/* Loading skeleton block */
+.theme-premium .p-skeleton {
+  background: linear-gradient(90deg, #EDF1F7 25%, #E2E8F2 37%, #EDF1F7 63%);
+  background-size: 400% 100%; animation: p-shimmer 1.4s ease infinite; border-radius: 8px;
+}
+
+/* Mobile type/tap tuning — keep inputs >=16px so iOS doesn't zoom on focus */
+@media (max-width: 640px) {
+  .theme-premium .p-input { font-size: 16px; height: 46px; }
+  .theme-premium select.p-input { font-size: 16px; }
+}
+
+/* Hide scrollbars where used (PremiumStepper horizontal scroll, filter rows) */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Disabled state for every premium pill button */
+.theme-premium .p-btn-primary:disabled, .theme-premium .p-btn-dark:disabled,
+.theme-premium .p-btn-ghost:disabled, .theme-premium .p-btn-gold:disabled,
+.theme-premium .p-btn-danger:disabled,
+.theme-premium .p-btn-primary[aria-disabled="true"], .theme-premium .p-btn-gold[aria-disabled="true"],
+.theme-premium .p-btn-danger[aria-disabled="true"] {
+  opacity: 0.45; cursor: not-allowed; transform: none; filter: none; box-shadow: none;
 }

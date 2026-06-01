@@ -348,44 +348,62 @@ function LiveAdminDashboard() {
   return (
     <AdminShell active="dashboard">
       <div className="px-4 sm:px-6 lg:px-10 py-5 lg:py-6 space-y-5 max-w-[1440px] w-full mx-auto">
-        <div className="flex items-end justify-between gap-3 flex-wrap pb-3 border-b" style={{ borderColor: 'var(--p-border)' }}>
-          <div className="min-w-0">
-            <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--p-teal)' }}>Admin Workspace</div>
-            <h1 className="text-[22px] lg:text-[26px] font-bold tracking-tight text-ink-900 mt-1 leading-tight">Operations Overview</h1>
-            <p className="text-xs text-ink-500 mt-1">Every figure is computed from real cases visible to you.</p>
+        {/* ===== Live hero band ===== */}
+        <section className="p-mesh p-grid-overlay relative overflow-hidden p-rise px-5 sm:px-7 py-6 sm:py-7" style={{ borderRadius: 'var(--p-radius-hero)' }}>
+          <MeshCorner position="tr" size={280} color="#2DD4C7" opacity={0.26} />
+          <MeshCorner position="bl" size={240} color="#1E4180" opacity={0.18} />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-end gap-5 lg:justify-between">
+            <div className="max-w-xl min-w-0">
+              <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>Admin Workspace · {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
+              <h1 className="p-display p-display-light text-[28px] sm:text-[34px] lg:text-[38px] mt-2 leading-tight">Operations <span style={{ color: '#7FE7DE' }}>at a glance.</span></h1>
+              <p className="text-sm mt-2 max-w-md" style={{ color: 'rgba(255,255,255,0.74)' }}>Every figure is computed from the real cases you can see — live from Supabase.</p>
+            </div>
+            <div className="grid grid-cols-3 gap-2 shrink-0">
+              {[['Total', stats.total], ['Open', stats.open], ['Admitted', stats.admittedNow]].map(([l, v]) => (
+                <div key={l} className="rounded-xl px-2.5 py-2 text-center min-w-0" style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.13)' }}>
+                  <div className="text-xl sm:text-2xl font-bold p-numeric text-white leading-none">{v}</div>
+                  <div className="text-[9px] uppercase tracking-[0.1em] font-semibold mt-1 truncate" style={{ color: 'rgba(255,255,255,0.62)' }}>{l}</div>
+                </div>
+              ))}
+            </div>
           </div>
-          <StatusPill tone="navy" dot>Live data</StatusPill>
-        </div>
+        </section>
 
         {!hasCases ? (
-          <Card padding="none">
-            <EmptyState
-              icon={Inbox}
-              title="No live cases yet."
-              message="Once cases are registered they will appear here with live counts, transfers and collections."
-            />
-          </Card>
+          <section className="p-card p-card-top relative overflow-hidden text-center px-6 py-12 sm:py-16">
+            <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-4" style={{ background: 'linear-gradient(135deg, #1E4180, #0A1B3D)', boxShadow: 'var(--p-shadow-glow)' }}>
+              <Stethoscope className="w-8 h-8 text-white" />
+            </div>
+            <div className="p-eyebrow justify-center" style={{ color: 'var(--p-teal)' }}>Platform ready</div>
+            <h2 className="text-[24px] sm:text-[30px] font-extrabold mt-1.5" style={{ color: 'var(--p-ink-900)', letterSpacing: '-0.02em' }}>Register the first case</h2>
+            <p className="text-sm mt-2 max-w-md mx-auto" style={{ color: 'var(--p-ink-500)' }}>This dashboard lights up with live counts, transfers and collections as soon as clinics start registering patients.</p>
+            <div className="mt-5 flex items-center justify-center gap-2 flex-wrap">
+              <StatusPill tone="navy" dot>9 branches</StatusPill>
+              <StatusPill tone="teal" dot>EUR · GBP · USD · EGP</StatusPill>
+              <StatusPill tone="internal" dot>Live insurance tracking</StatusPill>
+            </div>
+          </section>
         ) : (
           <>
             {/* ===== Operations KPIs ===== */}
             <section className="space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-400)' }}>Operations</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                <KpiCard label="Total Cases"        value={stats.total}              icon={FileText}     tone="navy" />
-                <KpiCard label="Open / Active"      value={stats.open}               icon={Stethoscope}  tone="sky"     hint={`${stats.closed} discharged / closed`} />
-                <KpiCard label="Admitted Now"       value={stats.admittedNow}        icon={DoorOpen}     tone="violet"  hint={`${stats.dischargedClosed} discharged`} />
-                <KpiCard label="Rooms Occupied"     value={stats.roomsOccupied}      icon={Building2}    tone="emerald" hint="Center rooms with an active patient" />
+              <SectionAccent label="Operations" />
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                <PremiumKpi label="Total Cases"    value={stats.total}         icon={FileText}    tone="navy" />
+                <PremiumKpi label="Open / Active"  value={stats.open}          icon={Stethoscope} tone="teal"     hint={`${stats.closed} discharged`} />
+                <PremiumKpi label="Admitted Now"   value={stats.admittedNow}   icon={DoorOpen}    tone="transfer" hint={`${stats.dischargedClosed} discharged`} />
+                <PremiumKpi label="Rooms Occupied" value={stats.roomsOccupied} icon={Building2}    tone="cash"     hint="Active patient rooms" />
               </div>
             </section>
 
             {/* ===== Financial mix KPIs (clean number tiles, no decorative chips) ===== */}
             <section className="space-y-2">
-              <div className="text-[11px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-400)' }}>Financial mix</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
-                <KpiCard label="Cash Cases"      value={stats.byFinancial.Cash}      tone="emerald" />
-                <KpiCard label="Insurance Cases" value={stats.byFinancial.Insurance} tone="sky" />
-                <KpiCard label="Free Cases"      value={stats.byFinancial.Free}      tone="violet" />
-                <KpiCard label="Pending Type"    value={stats.byFinancial.Pending}   tone="amber"  hint="Awaiting classification" />
+              <SectionAccent label="Financial mix" color="var(--p-gold)" />
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+                <PremiumKpi label="Cash Cases"      value={stats.byFinancial.Cash}      icon={Banknote}    tone="cash" />
+                <PremiumKpi label="Insurance Cases" value={stats.byFinancial.Insurance} icon={ShieldAlert} tone="teal" />
+                <PremiumKpi label="Free Cases"      value={stats.byFinancial.Free}      icon={Gift}        tone="transfer" />
+                <PremiumKpi label="Pending Type"    value={stats.byFinancial.Pending}   icon={Clock}       tone="pending" hint="Awaiting classification" />
               </div>
             </section>
 
@@ -565,15 +583,25 @@ function TreasuryMoneyCard({ title, icon: Icon, desc, byCur, loading, emptyText,
 // Quick-access tile → an operational screen.
 function QuickLink({ to, icon: Icon, label, desc }) {
   return (
-    <Link to={to} className="group rounded-xl p-3.5 flex items-start gap-3 bg-white border border-border transition-all hover:border-[var(--p-border-strong)] hover:shadow-sm">
-      <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-pale)', color: 'var(--p-brand-mid)' }}>
+    <Link to={to} className="group p-card p-lift rounded-2xl p-3.5 flex items-start gap-3">
+      <span className="w-10 h-10 rounded-xl inline-flex items-center justify-center shrink-0 text-white transition-transform group-hover:scale-105" style={{ background: 'linear-gradient(135deg, #1E4180, #0A1B3D)' }}>
         <Icon className="w-4 h-4" />
       </span>
-      <span className="min-w-0">
-        <span className="block text-sm font-bold text-ink-900 truncate">{label}</span>
-        <span className="block text-[11px] text-ink-500 truncate">{desc}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold truncate" style={{ color: 'var(--p-ink-900)' }}>{label}</span>
+        <span className="block text-[11px] truncate" style={{ color: 'var(--p-ink-500)' }}>{desc}</span>
       </span>
+      <ChevronRight className="w-4 h-4 mt-1 shrink-0 transition-transform group-hover:translate-x-0.5" style={{ color: 'var(--p-ink-300)' }} />
     </Link>
+  )
+}
+
+function SectionAccent({ label, color = 'var(--p-teal)' }) {
+  return (
+    <div className="flex items-center gap-2.5 mb-1">
+      <span className="w-1 h-5 rounded-full shrink-0" style={{ background: color }} />
+      <span className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-600)' }}>{label}</span>
+    </div>
   )
 }
 

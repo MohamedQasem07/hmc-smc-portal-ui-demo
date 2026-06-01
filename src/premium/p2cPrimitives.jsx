@@ -26,8 +26,8 @@ export function MiniKpi({ label, value, sub, tone = 'navy', icon: Icon, onClick 
   const Wrap = onClick ? 'button' : 'div'
   return (
     <Wrap onClick={onClick} className={cn(
-      'p-card p-kpi p-3.5 sm:p-4 text-left w-full transition-all',
-      onClick && 'hover:-translate-y-px',
+      'p-card p-kpi p-card-top p-3.5 sm:p-4 text-left w-full transition-all',
+      onClick && 'hover:-translate-y-px active:scale-[0.99]',
     )}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -36,7 +36,7 @@ export function MiniKpi({ label, value, sub, tone = 'navy', icon: Icon, onClick 
           {sub && <div className="mt-1.5 text-[11px]" style={{ color: 'var(--p-ink-500)' }}>{sub}</div>}
         </div>
         {Icon && (
-          <span className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: t.bg, color: t.fg }}>
+          <span className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0" style={{ background: t.bg, color: t.fg }}>
             <Icon className="w-4 h-4" />
           </span>
         )}
@@ -115,7 +115,7 @@ export function SectionHead({ eyebrow, title, action, description }) {
 /** A clean compact case card used in lists (mobile-first). */
 export function CaseCard({ c, to, action, showFacility = true, showRoute = true }) {
   return (
-    <Link to={to} className="block p-card p-4 transition-all hover:-translate-y-px">
+    <Link to={to} className="block p-card p-card-top p-4 transition-all hover:-translate-y-px active:scale-[0.99]">
       <div className="flex items-start gap-3">
         <Avatar name={c.patient.name} size={36} tone="navy" />
         <div className="flex-1 min-w-0">

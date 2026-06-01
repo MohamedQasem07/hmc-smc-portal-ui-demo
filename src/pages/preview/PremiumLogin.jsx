@@ -129,13 +129,14 @@ export default function PremiumLogin() {
         </aside>
 
         {/* ============ RIGHT — login card ============ */}
-        <main className="flex items-center justify-center px-5 sm:px-10 py-10 lg:py-0" style={{ background: 'linear-gradient(180deg, #FAF9F6 0%, #F4F6FB 100%)' }}>
+        <main className="flex items-center justify-center px-5 sm:px-10 py-8 lg:py-0" style={{ background: 'var(--p-canvas)' }}>
           <div className="w-full max-w-md p-rise-2">
-            {/* Mobile brand header */}
-            <div className="lg:hidden mb-8 flex flex-col items-center text-center">
-              <BrandMark size={56} />
-              <div className="mt-3 text-[11px] font-semibold uppercase tracking-[0.10em]" style={{ color: 'var(--p-ink-500)' }}>
-                HMC / SMC Clinic Portal
+            {/* Mobile brand band — navy identity on phones (desktop shows the left story panel) */}
+            <div className="lg:hidden mb-5 p-mesh p-grid-overlay rounded-2xl px-5 py-5 relative overflow-hidden text-center">
+              <div className="relative z-10 flex flex-col items-center">
+                <BrandWordmark variant="light" compact />
+                <div className="mt-2 p-eyebrow" style={{ color: '#7FE7DE' }}>Secure Clinic Operations</div>
+                <div className="mt-1 text-[13px]" style={{ color: 'rgba(255,255,255,0.74)' }}>HMC · SMC unified workspace</div>
               </div>
             </div>
 

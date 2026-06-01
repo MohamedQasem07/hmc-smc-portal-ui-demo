@@ -22,7 +22,10 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color: #11203B;
-  background: #E9EEF6;
+  background:
+    radial-gradient(ellipse 120% 55% at 50% -10%, rgba(15,181,169,0.06) 0%, transparent 55%),
+    linear-gradient(180deg, #DEE5F0 0%, #E9EEF6 45%, #EDF1F7 100%);
+  background-attachment: fixed;
   text-rendering: optimizeLegibility;
 }
 

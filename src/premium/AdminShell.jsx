@@ -18,7 +18,7 @@ import { IS_SUPABASE } from '../lib/api/config'
  */
 export function AdminShell({ active = 'dashboard', searchPlaceholder = 'Search patient, Our Ref, insurance ref…', children }) {
   return (
-    <div className="theme-premium min-h-screen" style={{ background: 'var(--p-canvas)' }}>
+    <div className="theme-premium p-app min-h-screen">
       <PremiumSidebar active={active} />
       <main className="flex-1 min-w-0 flex flex-col lg:pl-[260px]">
         <PremiumTopBar placeholder={searchPlaceholder} active={active} />
@@ -173,33 +173,34 @@ function NavLink({ to, icon: Icon, label, active, restricted, emphasis, indent }
 
 function PremiumTopBar({ placeholder, active }) {
   const [menuOpen, setMenuOpen] = useState(false)
+  const pageTitle = (NAV_ITEMS.find((n) => n.id === active)?.label || 'Dashboard').replace('+ ', '')
   return (
     <>
       {/* Desktop top bar */}
-      <header className="hidden lg:flex sticky top-0 z-20 h-16 px-6 lg:px-10 items-center justify-between" style={{
-        background: 'rgba(255, 255, 255, 0.78)',
-        backdropFilter: 'blur(14px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(14px) saturate(160%)',
-        borderBottom: '1px solid var(--p-border)',
+      <header className="hidden lg:flex sticky top-0 z-20 h-16 px-6 lg:px-10 items-center justify-between gap-4" style={{
+        background: 'rgba(255, 255, 255, 0.82)',
+        backdropFilter: 'blur(16px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(160%)',
+        borderBottom: '1px solid var(--p-border-strong)',
       }}>
-        <div className="flex items-center gap-3">
-          <StatusPill tone="navy" dot>Admin Workspace</StatusPill>
-          <span className="text-[11px]" style={{ color: 'var(--p-ink-400)' }}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-[0.14em] font-bold" style={{ color: 'var(--p-teal)' }}>Aegis · Admin Workspace</div>
+          <div className="text-[15px] font-extrabold leading-tight truncate" style={{ color: 'var(--p-ink-900)', letterSpacing: '-0.01em' }}>{pageTitle}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
+          <span className="hidden xl:inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-[11px] font-semibold" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)', color: 'var(--p-ink-500)' }}>
+            <Calendar className="w-3.5 h-3.5" style={{ color: 'var(--p-ink-400)' }} />
+            {new Date().toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
+          </span>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--p-ink-400)' }} />
             <input
               placeholder={placeholder}
-              className="h-10 w-80 rounded-full pl-9 pr-4 text-sm focus-visible:outline-none transition-all"
-              style={{
-                background: 'var(--p-surface-tint)',
-                border: '1px solid var(--p-border)',
-                color: 'var(--p-ink-700)',
-              }}
+              className="h-10 w-56 xl:w-72 rounded-full pl-9 pr-4 text-sm focus-visible:outline-none transition-all"
+              style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border-strong)', color: 'var(--p-ink-700)' }}
             />
           </div>
-          <button className="w-10 h-10 rounded-full relative flex items-center justify-center transition-colors hover:bg-[var(--p-surface-tint)]">
+          <button className="w-10 h-10 rounded-full relative flex items-center justify-center transition-colors hover:bg-[var(--p-surface-tint)]" style={{ border: '1px solid var(--p-border)' }}>
             <Bell className="w-4 h-4" style={{ color: 'var(--p-ink-600)' }} />
             <span className="absolute top-2 right-2.5 w-2 h-2 rounded-full" style={{ background: 'var(--p-mixed)' }} />
           </button>
@@ -207,16 +208,21 @@ function PremiumTopBar({ placeholder, active }) {
         </div>
       </header>
 
-      {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-30 h-14 px-4 flex items-center justify-between" style={{
-        background: 'rgba(10, 27, 61, 0.95)',
+      {/* Mobile top bar — page-title hierarchy + safe-area */}
+      <header className="lg:hidden sticky top-0 z-30 h-14 px-3 flex items-center gap-2" style={{
+        background: 'rgba(10, 27, 61, 0.96)',
         backdropFilter: 'blur(14px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(14px) saturate(160%)',
         borderBottom: '1px solid rgba(255,255,255,0.06)',
+        paddingTop: 'env(safe-area-inset-top)',
       }}>
-        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}>
+        <button onClick={() => setMenuOpen(true)} aria-label="Open menu" className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0" style={{ background: 'rgba(255,255,255,0.10)', color: 'white' }}>
           <Menu className="w-5 h-5" />
         </button>
-        <BrandWordmark variant="light" compact />
+        <div className="flex-1 min-w-0 text-center px-1">
+          <div className="text-[9px] uppercase tracking-[0.16em] font-bold" style={{ color: 'rgba(127,231,222,0.9)' }}>Aegis Admin</div>
+          <div className="text-[13px] font-bold text-white truncate leading-tight">{pageTitle}</div>
+        </div>
         <MobileSignOutButton />
       </header>
 
@@ -316,8 +322,8 @@ function MobileSignOutButton() {
       type="button"
       onClick={() => { signOut(); navigate('/login', { replace: true }) }}
       aria-label="Sign out"
-      className="w-9 h-9 rounded-lg flex items-center justify-center"
-      style={{ background: 'rgba(255,255,255,0.08)', color: 'white' }}
+      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+      style={{ background: 'rgba(255,255,255,0.10)', color: 'white' }}
     >
       <LogOut className="w-4 h-4" />
     </button>
