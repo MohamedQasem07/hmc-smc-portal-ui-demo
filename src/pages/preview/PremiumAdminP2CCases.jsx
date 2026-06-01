@@ -11,7 +11,7 @@ import { StatusPill, Avatar } from '../../premium/primitives'
 import {
   EXTERNAL_CLINICS, RECEIVING_BRANCHES,
 } from '../../data/p2c'
-import { useCases } from '../../context/DemoStateContext'
+import { useCases, useDemoState } from '../../context/DemoStateContext'
 import {
   R1_FINANCIAL_TYPES, encounterMeta, encounterSummary,
 } from '../../data/p2cR1'
@@ -43,6 +43,22 @@ export default function PremiumAdminP2CCases() {
   const [transferFilter, setTransferFilter] = useState('all')
 
   const allCases = useCases()
+  // P3J — admin receives an awaiting transfer directly from this overview (in place),
+  // for branches whose own receptionist is not set up yet. portal_receive_transfer
+  // is admin-aware; origin is preserved (the case is not counted as a direct case).
+  const { actions } = useDemoState()
+  const [recvBusy, setRecvBusy] = useState(null)   // caseId currently being received
+  const [recvMsg, setRecvMsg] = useState(null)
+  async function receiveTransfer(c) {
+    if (!IS_SUPABASE || !actions?.receiveTransfer) return
+    setRecvBusy(c.id); setRecvMsg(null)
+    try {
+      await actions.receiveTransfer(c.id)
+      setRecvMsg({ tone: 'ok', text: `Received ${c.patient?.name || 'patient'} as ${c.transfer?.toBranchName || 'destination branch'}.` })
+    } catch (e) {
+      setRecvMsg({ tone: 'err', text: e?.message || 'Receive failed.' })
+    } finally { setRecvBusy(null) }
+  }
 
   const filtered = allCases.filter((c) => {
     if (sourceFilter !== 'all' && c.registeredAtId !== sourceFilter &&
@@ -291,12 +307,22 @@ export default function PremiumAdminP2CCases() {
         {(pendingFinType > 0 || pendingCount > 0 || noRoomYet > 0) && (
           <section>
             <SectionHead eyebrow="Needs Attention" title="Operational Alerts" />
+            {recvMsg && (
+              <div className="rounded-xl px-3 py-2 mb-2 flex items-start gap-2 text-[12px]"
+                style={recvMsg.tone === 'ok'
+                  ? { background: 'var(--p-finalized-soft)', color: '#076D4A', border: '1px solid #9FD4BB' }
+                  : { background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
+                {recvMsg.tone === 'ok' ? <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                <span className="font-semibold">{recvMsg.text}</span>
+              </div>
+            )}
             <div className="space-y-2">
               {allCases.filter((c) => c.financialType === 'Pending').map((c) => (
                 <AttentionRow key={`pend-${c.id}`} c={c} reason="Pending financial type classification" tone="pending" />
               ))}
               {allCases.filter((c) => c.transfer && !c.transfer.receivedAt).map((c) => (
-                <AttentionRow key={`recv-${c.id}`} c={c} reason={`Awaiting receipt at ${c.transfer.toBranchName}`} tone="transfer" />
+                <AttentionRow key={`recv-${c.id}`} c={c} reason={`Awaiting receipt at ${c.transfer.toBranchName}`} tone="transfer"
+                  onReceive={IS_SUPABASE ? receiveTransfer : null} busy={recvBusy === c.id} />
               ))}
               {allCases.filter((c) =>
                 (c.transfer && c.transfer.receivedAt && !c.centerRoomNumber && c.operationalStatus === 'Open')
@@ -318,25 +344,35 @@ export default function PremiumAdminP2CCases() {
   )
 }
 
-function AttentionRow({ c, reason, tone }) {
+function AttentionRow({ c, reason, tone, onReceive, busy }) {
   const styles = {
     pending:  { bg: 'var(--p-pending-soft)',  fg: '#A1672A',  border: '#F0C97A' },
     transfer: { bg: 'var(--p-transfer-soft)', fg: '#5443A8',  border: '#C4BEEA' },
     mixed:    { bg: 'var(--p-mixed-soft)',    fg: '#B14242',  border: '#F0C0BF' },
   }
   const s = styles[tone] || styles.pending
+  // P3J — direct admin receive on the Operational Alert (only for awaiting transfers).
+  const canReceive = !!onReceive && c.transfer && !c.transfer.receivedAt && c.transfer.toBranchId
   return (
-    <div className="rounded-xl px-4 py-3 flex items-center gap-3"
+    <div className="rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap"
          style={{ background: s.bg, border: `1px solid ${s.border}` }}>
       <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: s.fg }} />
       <div className="flex-1 min-w-0">
         <div className="text-sm font-semibold truncate" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</div>
         <div className="text-[11px]" style={{ color: s.fg }}>{reason}</div>
       </div>
-      <div className="flex items-center gap-1.5 shrink-0">
-        <span className="text-[11px] font-mono" style={{ color: 'var(--p-ink-500)' }}>{c.ourRef}</span>
-        {c.billingFacility && <FacilityBadge code={c.billingFacility} size="sm" />}
-      </div>
+      <span className="text-[11px] font-mono shrink-0" style={{ color: 'var(--p-ink-500)' }}>{c.ourRef}</span>
+      {c.billingFacility && <FacilityBadge code={c.billingFacility} size="sm" />}
+      {canReceive && (
+        <button onClick={() => onReceive(c)} disabled={busy}
+          className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-bold p-btn-primary shrink-0"
+          style={busy ? { opacity: 0.5, cursor: 'not-allowed' } : undefined}>
+          <CheckCircle2 className="w-3 h-3" /> {busy ? 'Receiving…' : `Receive as ${c.transfer.toBranchName}`}
+        </button>
+      )}
+      <Link to={`/admin/case-detail/${c.id}`} className="inline-flex items-center gap-1 h-8 px-2.5 rounded-full text-[11px] font-semibold p-btn-ghost shrink-0">
+        View <ChevronRight className="w-3 h-3" />
+      </Link>
     </div>
   )
 }

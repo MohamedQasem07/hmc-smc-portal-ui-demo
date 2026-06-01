@@ -215,6 +215,14 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     }, 'Case deleted.')
   }
 
+  // P3J — ADMIN receives an awaiting transfer IN PLACE (no bounce to the reception
+  // screen). Calls the admin-aware portal_receive_transfer RPC; origin is preserved.
+  async function confirmReceive() {
+    await run(async () => {
+      await actions.receiveTransfer(c.id)
+    }, `Received as ${c?.transfer?.toBranchName || 'destination branch'}.`)
+  }
+
   async function saveInvoice() {
     await run(async () => { await upsertCashInvoiceCharge(c.id, invAmount, invCurrency); await loadFin() }, 'Invoice amount saved.')
   }
@@ -497,13 +505,13 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
                   {c.transfer.receivedAt && <> · Received: {fmtDate(c.transfer.receivedAt, { withTime: true })}</>}
                 </div>
                 {/* P3J — ADMIN GLOBAL OPERATION: receive an incoming transfer on behalf of the
-                    destination branch (when no branch receptionist is available). The receive
-                    RPC is admin-aware; this deep-links into the live receive+classify flow. */}
+                    destination branch IN PLACE (when no branch receptionist is available). The
+                    portal_receive_transfer RPC is admin-aware; origin location is preserved. */}
                 {isAdmin && !c.transfer.receivedAt && c.transfer.toBranchId && (
-                  <Link to={`/reception/${String(c.transfer.toBranchId).replace(/_/g, '-')}/incoming-transfers/${c.id}`}
+                  <button onClick={confirmReceive} disabled={busy}
                     className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary mt-1.5">
-                    <DoorOpen className="w-3.5 h-3.5" /> Receive as {c.transfer.toBranchName || 'destination branch'}
-                  </Link>
+                    <DoorOpen className="w-3.5 h-3.5" /> {busy ? 'Receiving…' : `Receive as ${c.transfer.toBranchName || 'destination branch'}`}
+                  </button>
                 )}
               </div>
             </section>
