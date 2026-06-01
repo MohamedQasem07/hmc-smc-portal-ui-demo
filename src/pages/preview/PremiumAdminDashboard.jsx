@@ -352,15 +352,22 @@ function LiveAdminDashboard() {
         <section className="p-mesh p-grid-overlay relative overflow-hidden p-rise px-5 sm:px-7 py-6 sm:py-7" style={{ borderRadius: 'var(--p-radius-hero)' }}>
           <MeshCorner position="tr" size={280} color="#2DD4C7" opacity={0.26} />
           <MeshCorner position="bl" size={240} color="#1E4180" opacity={0.18} />
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-end gap-5 lg:justify-between">
-            <div className="max-w-xl min-w-0">
-              <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>Admin Workspace · {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</div>
-              <h1 className="p-display p-display-light text-[28px] sm:text-[34px] lg:text-[38px] mt-2 leading-tight">Operations <span style={{ color: '#7FE7DE' }}>at a glance.</span></h1>
-              <p className="text-sm mt-2 max-w-md" style={{ color: 'rgba(255,255,255,0.74)' }}>Every figure is computed from the real cases you can see — live from Supabase.</p>
+          <MeshCorner position="br" size={200} color="#D9A574" opacity={0.10} />
+          <div className="relative z-10 space-y-5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.16em] px-2.5 py-1 rounded-full" style={{ background: 'rgba(15,181,169,0.18)', border: '1px solid rgba(15,181,169,0.30)', color: '#7FE7DE' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#2DD4C7' }} /> Live
+              </span>
+              <span className="text-[11px]" style={{ color: 'rgba(255,255,255,0.62)' }}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
-            <div className="grid grid-cols-3 gap-2 shrink-0">
-              {[['Total', stats.total], ['Open', stats.open], ['Admitted', stats.admittedNow]].map(([l, v]) => (
-                <div key={l} className="rounded-xl px-2.5 py-2 text-center min-w-0" style={{ background: 'rgba(255,255,255,0.09)', border: '1px solid rgba(255,255,255,0.13)' }}>
+            <div>
+              <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>HMC · SMC Admin</div>
+              <h1 className="p-display p-display-light text-[28px] sm:text-[34px] lg:text-[40px] mt-1.5 leading-tight">Command <span style={{ color: '#7FE7DE' }}>Center.</span></h1>
+              <p className="text-sm mt-2 max-w-lg" style={{ color: 'rgba(255,255,255,0.72)' }}>Every figure is computed live from the real cases you can see — all branches, one operations view.</p>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+              {[['Total Cases', stats.total], ['Open / Active', stats.open], ['Admitted Now', stats.admittedNow], ['Transfers', stats.transfersPending + stats.transfersReceived], ['Rooms', stats.roomsOccupied]].map(([l, v]) => (
+                <div key={l} className="rounded-xl px-2.5 py-2.5 text-center min-w-0" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.13)' }}>
                   <div className="text-xl sm:text-2xl font-bold p-numeric text-white leading-none">{v}</div>
                   <div className="text-[9px] uppercase tracking-[0.1em] font-semibold mt-1 truncate" style={{ color: 'rgba(255,255,255,0.62)' }}>{l}</div>
                 </div>
@@ -387,7 +394,7 @@ function LiveAdminDashboard() {
           <>
             {/* ===== Operations KPIs ===== */}
             <section className="space-y-2">
-              <SectionAccent label="Operations" />
+              <SectionAccent label="Today's Operations" />
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 <PremiumKpi label="Total Cases"    value={stats.total}         icon={FileText}    tone="navy" />
                 <PremiumKpi label="Open / Active"  value={stats.open}          icon={Stethoscope} tone="teal"     hint={`${stats.closed} discharged`} />
@@ -398,7 +405,7 @@ function LiveAdminDashboard() {
 
             {/* ===== Financial mix KPIs (clean number tiles, no decorative chips) ===== */}
             <section className="space-y-2">
-              <SectionAccent label="Financial mix" color="var(--p-gold)" />
+              <SectionAccent label="Cases & Branch Activity" color="var(--p-gold)" />
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
                 <PremiumKpi label="Cash Cases"      value={stats.byFinancial.Cash}      icon={Banknote}    tone="cash" />
                 <PremiumKpi label="Insurance Cases" value={stats.byFinancial.Insurance} icon={ShieldAlert} tone="teal" />
@@ -410,7 +417,7 @@ function LiveAdminDashboard() {
             {/* ===== Live Treasury — real portal_collections (read-only, no status mutation) ===== */}
             <section className="space-y-3">
               <div className="flex items-end justify-between gap-3 flex-wrap">
-                <SectionHeader title="Treasury — Live Collections"
+                <SectionHeader title="Treasury / Collections"
                   description="Real portal_collections · grouped by currency · no conversion · patient excess kept separate from cash revenue." className="mb-0" />
                 <div className="inline-flex rounded-full p-0.5 shrink-0" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
                   {[{ id: 'today', label: 'Today' }, { id: 'all', label: 'All' }].map((r) => (
@@ -518,7 +525,7 @@ function LiveAdminDashboard() {
 
         {/* ===== Quick access — live operational screens (always available) ===== */}
         <section>
-          <SectionHeader title="Quick Access" description="Jump to the operational screens." className="mb-3" />
+          <SectionHeader title="Quick Actions" description="Jump to the operational screens." className="mb-3" />
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
             <QuickLink to="/admin/p2c-cases"            icon={ClipboardList} label="All Cases"            desc="Clinic & reception" />
             <QuickLink to="/admin/collections"          icon={Banknote}      label="Collections"          desc="Treasury log" />

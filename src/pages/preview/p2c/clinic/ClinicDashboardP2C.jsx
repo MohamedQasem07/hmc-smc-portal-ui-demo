@@ -8,7 +8,7 @@ import {
 } from 'lucide-react'
 import { OperationalShell } from '../../../../premium/OperationalShell'
 import { SectionHead, DemoBanner, FacilityBadge, FinTypePill } from '../../../../premium/p2cPrimitives'
-import { StatusPill } from '../../../../premium/primitives'
+import { StatusPill, MeshCorner } from '../../../../premium/primitives'
 import { useUserMode } from '../../../../context/UserModeContext'
 import {
   useCasesForClinic, useTreasuryFor, useVisaBankFor,
@@ -89,45 +89,34 @@ export default function ClinicDashboardP2C() {
           UI demo — runtime state only. Clinic: <strong>{clinicName}</strong> · Selected Date: <strong>{dateLabel}</strong>. Switch clinics in the top bar; refresh resets all data.
         </DemoBanner>
 
-        {/* ── Dashboard Control Header ─────────────────────────────────── */}
-        <header className="p-card p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <span className="w-12 h-12 rounded-2xl inline-flex items-center justify-center shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #0FB5A9 0%, #0A8F87 100%)', color: 'white', boxShadow: 'var(--p-shadow-glow)' }}>
-              <Stethoscope className="w-5 h-5" />
-            </span>
-            <div className="min-w-0">
-              <div className="p-eyebrow">Clinic Operations Dashboard</div>
-              <h1 className="p-h1 text-xl sm:text-2xl lg:text-[26px] mt-0.5 truncate" style={{ color: 'var(--p-ink-900)' }}>
-                {clinicName}
-              </h1>
-              <p className="text-[12px] mt-0.5" style={{ color: 'var(--p-ink-500)' }}>
-                Selected Date: <strong style={{ color: 'var(--p-ink-900)' }}>{dateLabel}</strong>
-                {longLabel && <> · <span style={{ color: 'var(--p-ink-500)' }}>{longLabel}</span></>}
-              </p>
+        {/* ── Branch identity hero ─────────────────────────────────────── */}
+        <header className="p-mesh p-grid-overlay relative overflow-hidden px-5 sm:px-6 py-5" style={{ borderRadius: 'var(--p-radius-hero)' }}>
+          <MeshCorner position="tr" size={200} color="#2DD4C7" opacity={0.24} />
+          <MeshCorner position="br" size={150} color="#D9A574" opacity={0.10} />
+          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="w-12 h-12 rounded-2xl inline-flex items-center justify-center shrink-0"
+                    style={{ background: 'rgba(15,181,169,0.20)', border: '1px solid rgba(15,181,169,0.30)', color: '#7FE7DE' }}>
+                <Building2 className="w-5 h-5" />
+              </span>
+              <div className="min-w-0">
+                <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>External Clinic Workspace</div>
+                <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight truncate" style={{ letterSpacing: '-0.01em' }}>{clinicName}</h1>
+                <p className="text-[12px] mt-0.5" style={{ color: 'rgba(255,255,255,0.66)' }}>{longLabel || dateLabel}</p>
+              </div>
             </div>
-          </div>
 
-          {/* Date selector: prev · date input · next · Today */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button onClick={() => moveDay(-1)}
-              className="inline-flex items-center gap-1 h-10 w-10 justify-center rounded-full p-btn-ghost" aria-label="Previous day">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <div className="relative">
-              <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: 'var(--p-ink-400)' }} />
-              <input type="date" value={dateYmd} onChange={(e) => setDateYmd(e.target.value)}
-                className="p-input h-10 pl-9 pr-3 font-semibold" style={{ minWidth: 170 }} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <Link to="/clinic/new-case" className="p-btn-primary inline-flex items-center gap-1.5 h-11 px-5 rounded-full text-sm font-bold">
+                <Plus className="w-4 h-4" /> New Case
+              </Link>
+              <div className="inline-flex items-center gap-0.5 rounded-full p-0.5" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)' }}>
+                <button onClick={() => moveDay(-1)} className="w-9 h-9 inline-flex items-center justify-center rounded-full text-white/80 hover:bg-white/10" aria-label="Previous day"><ChevronLeft className="w-4 h-4" /></button>
+                <input type="date" value={dateYmd} onChange={(e) => setDateYmd(e.target.value)} className="h-9 px-2 rounded-full text-[13px] font-semibold bg-transparent text-white outline-none" style={{ colorScheme: 'dark' }} aria-label="Select date" />
+                <button onClick={() => moveDay(1)} className="w-9 h-9 inline-flex items-center justify-center rounded-full text-white/80 hover:bg-white/10" aria-label="Next day"><ChevronRight className="w-4 h-4" /></button>
+                <button onClick={setToday} className={cn('h-9 px-3 rounded-full text-[12px] font-bold', dateYmd === TODAY ? 'text-[#7FE7DE]' : 'text-white/90 hover:bg-white/10')}>Today</button>
+              </div>
             </div>
-            <button onClick={() => moveDay(1)}
-              className="inline-flex items-center gap-1 h-10 w-10 justify-center rounded-full p-btn-ghost" aria-label="Next day">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-            <button onClick={setToday}
-              className={cn('inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold',
-                dateYmd === TODAY ? 'p-btn-primary' : 'p-btn-ghost')}>
-              Today
-            </button>
           </div>
         </header>
 

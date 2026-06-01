@@ -1,33 +1,22 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  Eye, EyeOff, ShieldCheck, ArrowRight, Stethoscope, Globe2, Lock,
-  AlertCircle, Building2,
+  Eye, EyeOff, ShieldCheck, ArrowRight, Lock, Mail, AlertCircle,
 } from 'lucide-react'
-import { BrandMark, BrandWordmark } from '../../premium/BrandMark'
-import { PremiumButton, PremiumField, PremiumInput, StatPill } from '../../premium/primitives'
 import { useUserMode } from '../../context/UserModeContext'
 import { useDemoState } from '../../context/DemoStateContext'
 import { findUserByUsername } from '../../data/staffUsers'
 import { IS_SUPABASE } from '../../lib/api/config'
 
+const BASE = import.meta.env.BASE_URL
+
 /**
- * Premium Login (P2C.R4)
+ * Premium Login (P3D — first-impression rebuild)
  * -----------------------------------------------------------------------
- * Production-shaped login screen. Validates the entered username/password
- * against the runtime Portal Users collection (DemoStateContext.users) and
- * routes by role:
- *
- *   admin               → /admin-dashboard
- *   clinic_nurse        → /clinic/dashboard
- *   reception_kawther   → /reception/al-kawther/dashboard
- *   reception_sheraton  → /reception/sheraton/dashboard
- *
- * Inactive users are blocked with a clean error. No fake "securely
- * authenticated" claim is shown — real authentication is wired in the
- * backend phase. The Local Review Tools entry sits in the footer for
- * Mohamed to switch quickly into the legacy demo-roles workspace if
- * needed during UAT.
+ * Immersive deep-navy medical command-center login. Real HMC + SMC logos,
+ * glass card, crystal-clear fields. Auth logic is UNCHANGED from P2C.R4:
+ * validates against the runtime Portal Users in mock mode, real Supabase
+ * Auth in supabase mode, and routes by role.
  */
 export default function PremiumLogin() {
   const navigate = useNavigate()
@@ -85,163 +74,186 @@ export default function PremiumLogin() {
   }
 
   return (
-    <div className="theme-premium min-h-screen relative overflow-hidden" style={{ background: 'var(--p-canvas-warm)' }}>
-      <div className="min-h-screen grid grid-cols-1 lg:grid-cols-[1.05fr_0.95fr]">
-        {/* ============ LEFT — branded story ============ */}
-        <aside className="relative p-mesh p-grid-overlay overflow-hidden hidden lg:flex flex-col justify-between p-12 xl:p-16">
-          <span className="absolute -top-40 -right-40 w-[420px] h-[420px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(45,212,199,0.30) 0%, transparent 65%)' }} />
-          <span className="absolute -bottom-32 -left-32 w-[420px] h-[420px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(94,131,181,0.22) 0%, transparent 70%)' }} />
+    <div
+      className="theme-premium min-h-screen relative overflow-hidden flex flex-col items-center justify-center px-4 py-8"
+      style={{
+        background:
+          'radial-gradient(1200px 720px at 50% -12%, rgba(15,181,169,0.16) 0%, transparent 56%),' +
+          'radial-gradient(900px 620px at 100% 112%, rgba(217,165,116,0.13) 0%, transparent 56%),' +
+          'linear-gradient(165deg, #0A1428 0%, #0E2247 48%, #091A39 100%)',
+        paddingTop: 'max(2rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(2rem, env(safe-area-inset-bottom))',
+      }}
+    >
+      {/* decorative layers */}
+      <div className="absolute inset-0 p-grid-overlay pointer-events-none" style={{ opacity: 0.5 }} />
+      <EkgLine />
+      <span className="absolute -top-32 -left-24 w-[380px] h-[380px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(15,181,169,0.20) 0%, transparent 65%)' }} />
+      <span className="absolute -bottom-40 -right-24 w-[440px] h-[440px] rounded-full pointer-events-none" style={{ background: 'radial-gradient(circle, rgba(94,131,181,0.20) 0%, transparent 70%)' }} />
 
-          <div className="relative z-10 p-rise">
-            <BrandWordmark variant="light" />
+      {/* centered content */}
+      <div className="relative z-10 w-full max-w-[440px] mx-auto p-rise-2">
+        {/* ---- Logos ---- */}
+        <div className="text-center mb-5">
+          <div className="text-[10px] uppercase tracking-[0.22em] font-bold mb-3" style={{ color: '#7FE7DE' }}>Unified Clinic Portal</div>
+          <div className="flex items-stretch justify-center gap-3">
+            <LogoPlate src={`${BASE}brand/hmc-logo.png`} alt="Hurghada Medical Center" />
+            <span className="w-px self-center h-9" style={{ background: 'rgba(255,255,255,0.18)' }} />
+            <LogoPlate src={`${BASE}brand/smc-logo.png`} alt="Sahl Hasheesh Medical Centre" />
           </div>
+        </div>
 
-          <div className="relative z-10 p-rise-1">
-            <div className="p-eyebrow mb-4" style={{ color: '#7FE7DE' }}>Secure Clinic Operations Workspace</div>
-            <h1 className="p-display p-display-light text-[44px] xl:text-[56px] max-w-xl">
-              Coastal medicine,<br />
-              <span style={{ color: '#7FE7DE' }}>operational clarity.</span>
-            </h1>
-            <p className="mt-5 text-base xl:text-lg leading-relaxed max-w-md" style={{ color: 'rgba(255,255,255,0.72)' }}>
-              The unified Portal for every HMC and SMC branch — register cash and insurance cases,
-              route patients between clinics, and prepare invoices for review without leaving the screen.
-            </p>
+        {/* ---- Title ---- */}
+        <div className="text-center mb-4">
+          <h1 className="text-[25px] sm:text-[29px] font-extrabold text-white leading-tight" style={{ letterSpacing: '-0.02em' }}>
+            HMC <span style={{ color: '#7FE7DE' }}>/</span> SMC Clinic Portal
+          </h1>
+          <p className="text-[13px] sm:text-sm mt-1.5 max-w-sm mx-auto leading-relaxed" style={{ color: 'rgba(255,255,255,0.66)' }}>
+            Secure clinic operations, insurance tracking, and branch reporting.
+          </p>
+        </div>
 
-            <div className="mt-9 flex flex-wrap gap-2.5">
-              <StatPill label="Facilities" value="HMC · SMC" />
-              <StatPill label="Branches" value="8 active" />
-              <StatPill label="Currencies" value="EUR · GBP · USD · EGP" />
-            </div>
+        {/* ---- Facility badges ---- */}
+        <div className="flex flex-wrap items-center justify-center gap-1.5 mb-5">
+          {['HMC', 'SMC', 'External Clinics', 'Main Branches'].map((b) => (
+            <span key={b} className="text-[10px] font-bold uppercase tracking-[0.08em] px-2.5 py-1 rounded-full"
+              style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.84)' }}>{b}</span>
+          ))}
+        </div>
 
-            <div className="mt-10 grid grid-cols-3 gap-3 max-w-md">
-              <Feature icon={Stethoscope} title="Clinical-grade" body="Built for medical operations, not generic admin." />
-              <Feature icon={Globe2}      title="International" body="Insurance and assistance flow for every patient." />
-              <Feature icon={ShieldCheck} title="Protected"    body="Invoice Manager and PDF engines untouched." />
-            </div>
-          </div>
+        {/* ---- Glass login card ---- */}
+        <div className="rounded-2xl p-6 sm:p-7 relative overflow-hidden" style={{
+          background: 'rgba(255,255,255,0.07)',
+          backdropFilter: 'blur(22px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(22px) saturate(140%)',
+          border: '1px solid rgba(255,255,255,0.14)',
+          boxShadow: '0 30px 70px rgba(4,10,24,0.55)',
+        }}>
+          <span className="absolute top-0 left-6 right-6 h-px" style={{ background: 'linear-gradient(90deg, transparent, rgba(217,165,116,0.7), transparent)' }} />
+          <div className="text-[10px] uppercase tracking-[0.16em] font-bold mb-1" style={{ color: '#7FE7DE' }}>Sign in</div>
+          <h2 className="text-xl font-bold text-white">Welcome back</h2>
+          <p className="text-[13px] mt-1" style={{ color: 'rgba(255,255,255,0.62)' }}>Use your clinic or branch credentials.</p>
 
-          <div className="relative z-10 flex items-center justify-between text-[11px]" style={{ color: 'rgba(255,255,255,0.48)' }}>
-            <span>Hurghada Medical Center · Sahl Hasheesh Medical Centre</span>
-            <span className="flex items-center gap-1.5">
-              <Lock className="w-3 h-3" /> Internal use only
-            </span>
-          </div>
-        </aside>
-
-        {/* ============ RIGHT — login card ============ */}
-        <main className="flex items-center justify-center px-5 sm:px-10 py-8 lg:py-0" style={{ background: 'var(--p-canvas)' }}>
-          <div className="w-full max-w-md p-rise-2">
-            {/* Mobile brand band — navy identity on phones (desktop shows the left story panel) */}
-            <div className="lg:hidden mb-5 p-mesh p-grid-overlay rounded-2xl px-5 py-5 relative overflow-hidden text-center">
-              <div className="relative z-10 flex flex-col items-center">
-                <BrandWordmark variant="light" compact />
-                <div className="mt-2 p-eyebrow" style={{ color: '#7FE7DE' }}>Secure Clinic Operations</div>
-                <div className="mt-1 text-[13px]" style={{ color: 'rgba(255,255,255,0.74)' }}>HMC · SMC unified workspace</div>
+          <form className="mt-5 space-y-4" onSubmit={onSubmit} noValidate>
+            {/* Email / username */}
+            <div>
+              <label htmlFor="login-id" className="block text-[11px] font-bold uppercase tracking-[0.1em] mb-1.5" style={{ color: 'rgba(255,255,255,0.80)' }}>
+                {IS_SUPABASE ? 'Email' : 'Username'}
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: '#94A3B8' }} />
+                <input
+                  id="login-id"
+                  type={IS_SUPABASE ? 'email' : 'text'}
+                  value={username}
+                  onChange={(e) => { setUsername(e.target.value); setError(null) }}
+                  placeholder={IS_SUPABASE ? 'e.g. you@hmcportal.com' : 'e.g. admin · tropitel · kawther'}
+                  autoComplete="username"
+                  autoFocus
+                  className="p-login-input"
+                  style={{ paddingLeft: '40px' }}
+                />
               </div>
             </div>
 
-            <div className="p-hero-card p-8 sm:p-9 relative">
-              <div className="p-eyebrow mb-2">Sign in</div>
-              <h2 className="p-h1 text-2xl">Welcome back</h2>
-              <p className="text-sm mt-1.5" style={{ color: 'var(--p-ink-500)' }}>
-                Use your clinic or branch credentials.
-              </p>
-
-              <form className="mt-7 space-y-4" onSubmit={onSubmit} noValidate>
-                <PremiumField label={IS_SUPABASE ? 'Email' : 'Username'} required>
-                  <PremiumInput
-                    type={IS_SUPABASE ? 'email' : 'text'}
-                    value={username}
-                    onChange={(e) => { setUsername(e.target.value); setError(null) }}
-                    placeholder={IS_SUPABASE ? 'e.g. admin@portal.test' : 'e.g. admin · tropitel · kawther'}
-                    autoComplete="username"
-                    autoFocus
-                  />
-                </PremiumField>
-                <PremiumField label="Password" required>
-                  <div className="relative">
-                    <PremiumInput
-                      type={showPw ? 'text' : 'password'}
-                      value={password}
-                      onChange={(e) => { setPassword(e.target.value); setError(null) }}
-                      placeholder="••••••••"
-                      autoComplete="current-password"
-                      style={{ paddingRight: '44px' }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPw((s) => !s)}
-                      aria-label={showPw ? 'Hide password' : 'Show password'}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 rounded-md transition-colors hover:bg-black/5"
-                      style={{ color: 'var(--p-ink-400)' }}
-                    >
-                      {showPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </PremiumField>
-
-                <div className="flex items-center justify-between text-xs">
-                  <label className="flex items-center gap-2 cursor-pointer" style={{ color: 'var(--p-ink-600)' }}>
-                    <input type="checkbox" defaultChecked className="rounded text-teal-600" style={{ borderColor: 'var(--p-border-strong)' }} />
-                    Remember this device
-                  </label>
-                  <span className="font-semibold" style={{ color: 'var(--p-ink-400)' }}>Contact Admin for access</span>
-                </div>
-
-                {error && (
-                  <div
-                    role="alert"
-                    className="rounded-xl px-3.5 py-3 flex items-start gap-2.5"
-                    style={{ background: 'rgba(177, 66, 66, 0.08)', border: '1px solid rgba(177, 66, 66, 0.30)' }}
-                  >
-                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#B14242' }} />
-                    <span className="text-[12px] leading-relaxed font-semibold" style={{ color: '#7A2A2A' }}>{error}</span>
-                  </div>
-                )}
-
-                <PremiumButton type="submit" fullWidth size="lg" rightIcon={<ArrowRight className="w-4 h-4" />} disabled={submitting}>
-                  {submitting ? 'Signing in…' : 'Sign In'}
-                </PremiumButton>
-              </form>
+            {/* Password */}
+            <div>
+              <label htmlFor="login-pw" className="block text-[11px] font-bold uppercase tracking-[0.1em] mb-1.5" style={{ color: 'rgba(255,255,255,0.80)' }}>
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none" style={{ color: '#94A3B8' }} />
+                <input
+                  id="login-pw"
+                  type={showPw ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => { setPassword(e.target.value); setError(null) }}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="p-login-input"
+                  style={{ paddingLeft: '40px', paddingRight: '46px' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPw((s) => !s)}
+                  aria-label={showPw ? 'Hide password' : 'Show password'}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 w-9 h-9 rounded-lg inline-flex items-center justify-center transition-colors hover:bg-black/5"
+                  style={{ color: '#64748B' }}
+                >
+                  {showPw ? <EyeOff className="w-[18px] h-[18px]" /> : <Eye className="w-[18px] h-[18px]" />}
+                </button>
+              </div>
             </div>
 
-            <p className="text-center text-[11px] mt-6" style={{ color: 'var(--p-ink-400)' }}>
-              {!IS_SUPABASE && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/review-tools')}
-                    className="font-semibold hover:underline"
-                    style={{ color: 'var(--p-ink-500)' }}
-                  >
-                    Local Review Tools
-                  </button>
-                  <span className="mx-2">·</span>
-                </>
-              )}
+            {/* remember + forgot */}
+            <div className="flex items-center justify-between text-[12px]">
+              <label className="flex items-center gap-2 cursor-pointer select-none" style={{ color: 'rgba(255,255,255,0.72)' }}>
+                <input type="checkbox" defaultChecked className="w-4 h-4 rounded accent-teal-500" />
+                Remember this device
+              </label>
               {IS_SUPABASE && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => navigate('/set-password')}
-                    className="font-semibold hover:underline"
-                    style={{ color: 'var(--p-ink-500)' }}
-                  >
-                    Set / forgot password
-                  </button>
-                  <span className="mx-2">·</span>
-                </>
+                <button type="button" onClick={() => navigate('/set-password')} className="font-semibold hover:underline" style={{ color: '#7FE7DE' }}>
+                  Forgot password?
+                </button>
               )}
-              Need an account? Contact your HMC / SMC administrator.
-            </p>
+            </div>
+
+            {error && (
+              <div role="alert" className="rounded-xl px-3.5 py-3 flex items-start gap-2.5"
+                style={{ background: 'rgba(226,106,106,0.14)', border: '1px solid rgba(226,106,106,0.42)' }}>
+                <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#FF9C95' }} />
+                <span className="text-[12px] leading-relaxed font-semibold" style={{ color: '#FFC9C4' }}>{error}</span>
+              </div>
+            )}
+
+            <button type="submit" disabled={submitting}
+              className="p-btn-primary w-full h-12 rounded-xl text-[15px] font-bold inline-flex items-center justify-center gap-2">
+              {submitting ? 'Signing in…' : 'Sign In'}
+              {!submitting && <ArrowRight className="w-4 h-4" />}
+            </button>
+          </form>
+        </div>
+
+        {/* ---- Trust footer ---- */}
+        <div className="mt-5 text-center">
+          <div className="inline-flex items-center gap-1.5 text-[11px]" style={{ color: 'rgba(255,255,255,0.52)' }}>
+            <ShieldCheck className="w-3.5 h-3.5" /> Internal medical operations system · Authorized users only
           </div>
-        </main>
+          <div className="mt-2 text-[11px]" style={{ color: 'rgba(255,255,255,0.5)' }}>
+            {!IS_SUPABASE && (
+              <>
+                <button type="button" onClick={() => navigate('/review-tools')} className="font-semibold hover:underline" style={{ color: 'rgba(255,255,255,0.62)' }}>
+                  Local Review Tools
+                </button>
+                <span className="mx-2">·</span>
+              </>
+            )}
+            Need an account? Contact your HMC / SMC administrator.
+          </div>
+        </div>
       </div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
+function LogoPlate({ src, alt }) {
+  return (
+    <div className="rounded-xl bg-white flex items-center justify-center px-3.5"
+      style={{ height: '54px', boxShadow: '0 10px 26px rgba(4,10,24,0.40)' }}>
+      <img src={src} alt={alt} className="h-8 sm:h-9 w-auto object-contain" style={{ maxWidth: '124px' }} />
+    </div>
+  )
+}
+
+function EkgLine() {
+  return (
+    <svg className="absolute left-0 right-0 top-1/2 w-full pointer-events-none" height="120" preserveAspectRatio="none" viewBox="0 0 1200 120" style={{ opacity: 0.07 }} aria-hidden="true">
+      <path d="M0 60 H380 l18 -42 l22 84 l20 -70 l16 28 H700 l24 -52 l20 92 l18 -40 H1200" stroke="#7FE7DE" strokeWidth="2" fill="none" />
+    </svg>
+  )
+}
+
 function routeForUser(u) {
   if (!u) return '/login'
   switch (u.role) {
@@ -251,14 +263,4 @@ function routeForUser(u) {
     case 'reception_sheraton': return '/reception/sheraton/dashboard'
     default:                   return '/login'
   }
-}
-
-function Feature({ icon: Icon, title, body }) {
-  return (
-    <div className="rounded-xl px-3 py-3" style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
-      <Icon className="w-4 h-4 mb-1.5" style={{ color: '#7FE7DE' }} />
-      <div className="text-[11px] font-bold text-white">{title}</div>
-      <div className="text-[10px] leading-relaxed mt-0.5" style={{ color: 'rgba(255,255,255,0.55)' }}>{body}</div>
-    </div>
-  )
 }

@@ -274,7 +274,7 @@ export function IdentityHeader({ icon: Icon = Building2, tone = 'teal', label, s
                : tone === 'navy' ? 'linear-gradient(135deg, #1E4180 0%, #0A1B3D 100%)'
                :                    'linear-gradient(135deg, #0FB5A9 0%, #0A8F87 100%)'
   return (
-    <div className="p-card p-5 lg:p-6 flex items-start gap-4 p-rise">
+    <div className="p-card p-card-top p-5 lg:p-6 flex items-start gap-4 p-rise">
       <div className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 text-white" style={{ background: toneBg, boxShadow: 'var(--p-shadow-glow)' }}>
         <Icon className="w-5 h-5" />
       </div>

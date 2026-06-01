@@ -516,3 +516,17 @@
 .theme-premium .p-btn-danger[aria-disabled="true"] {
   opacity: 0.45; cursor: not-allowed; transform: none; filter: none; box-shadow: none;
 }
+
+/* P3D — crystal-clear login fields (solid white inputs that pop on the dark glass card) */
+.theme-premium .p-login-input {
+  width: 100%; height: 48px; border-radius: 12px; padding: 0 14px;
+  background: #FFFFFF; color: #0A1326; font-size: 16px; font-weight: 500;
+  border: 1.5px solid #D7DEEA; outline: none;
+  box-shadow: 0 2px 12px rgba(4,10,24,0.18);
+  transition: border-color .16s var(--p-ease-soft), box-shadow .16s var(--p-ease-soft);
+}
+.theme-premium .p-login-input::placeholder { color: #9AA7BC; font-weight: 400; }
+.theme-premium .p-login-input:focus {
+  border-color: var(--p-teal);
+  box-shadow: 0 0 0 3px rgba(15,181,169,0.32), 0 2px 12px rgba(4,10,24,0.18);
+}
