@@ -42,6 +42,8 @@ const NAV_ITEMS = [
   { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/admin/insurance-completion', section: 'Clinic & Reception' },
   { id: 'attendance',   label: 'Attendance',          icon: UserCheck,       to: '/admin/attendance', section: 'Administration' },
   { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/admin/users-staff', section: 'Administration' },
+  { id: 'specialist-doctors', label: 'Specialist Doctors',       icon: Stethoscope,   to: '/admin/specialist-doctors', section: 'Administration' },
+  { id: 'specialist-visits',  label: 'Specialist Visits Report', icon: FileBarChart2, to: '/admin/specialist-visits',  section: 'Administration' },
   { id: 'reference-lists', label: 'Operational Config', icon: BookOpen,       to: '/admin/reference-lists', section: 'Configuration' },
   { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/admin-control-center', section: 'Configuration' },
   { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/admin-dashboard', restricted: true, section: 'Protected' },
@@ -146,7 +148,7 @@ function NavLink({ to, icon: Icon, label, active, restricted, emphasis, indent }
     <Link to={to} className={cn(
       'relative flex items-center gap-3 rounded-xl py-2 text-sm font-medium transition-all',
       indent ? 'px-3 ms-3' : 'px-3',
-      active ? 'text-white' : 'hover:bg-white/5',
+      active ? 'text-white' : 'hover:bg-white/10 hover:text-white',
     )} style={{
       background: active ? 'linear-gradient(135deg, rgba(15,181,169,0.18) 0%, rgba(30,65,128,0.18) 100%)' :
                   emphasis ? 'linear-gradient(135deg, rgba(15,181,169,0.10) 0%, rgba(15,181,169,0.04) 100%)' :
@@ -182,7 +184,7 @@ function PremiumTopBar({ placeholder, active }) {
       }}>
         <div className="flex items-center gap-3">
           <StatusPill tone="navy" dot>Admin Workspace</StatusPill>
-          <span className="text-[11px]" style={{ color: 'var(--p-ink-400)' }}>Wednesday, 27 May 2026</span>
+          <span className="text-[11px]" style={{ color: 'var(--p-ink-400)' }}>{new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative">

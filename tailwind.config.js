@@ -7,7 +7,7 @@ export default {
     extend: {
       colors: {
         // Surfaces
-        canvas: '#F6F8FB',          // app background — soft cool white
+        canvas: '#E9EEF6',          // app background — cooler steel (white cards pop)
         surface: '#FFFFFF',         // cards, dialogs
         subtle: '#F1F5F9',          // hover surfaces, inactive chips
         border: '#E2E8F0',          // hairlines

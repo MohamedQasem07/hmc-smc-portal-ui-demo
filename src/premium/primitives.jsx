@@ -21,7 +21,7 @@ export function PremiumKpi({ label, value, hint, trend, icon: Icon, tone = 'navy
   }
   const t = iconTones[tone] || iconTones.navy
   return (
-    <div className={cn('p-card p-4 sm:p-5', className)}>
+    <div className={cn('p-card p-kpi group p-4 sm:p-5', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-500)' }}>{label}</div>
@@ -31,7 +31,7 @@ export function PremiumKpi({ label, value, hint, trend, icon: Icon, tone = 'navy
           )}
         </div>
         {Icon && (
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform" style={{ background: t.bg, color: t.fg }}>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110" style={{ background: t.bg, color: t.fg }}>
             <Icon className="w-5 h-5" />
           </div>
         )}

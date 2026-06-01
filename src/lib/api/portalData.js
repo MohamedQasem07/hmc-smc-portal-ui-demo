@@ -112,18 +112,27 @@ export function portalRowToCase(row, maps) {
       completedAt: prep.completed_at,
     } : null,
     // Specialist visits / sessions (Phase 6) — mapped from portal_encounters.
+    // Specialist name / specialty / source are parsed out of the structured note
+    // (operational tracking only — no dedicated columns). Raw note always kept.
     sessions: (row.encounters || [])
       .filter((e) => e.encounter_type === 'session')
       .sort((a, b) => (a.sequence_no || 0) - (b.sequence_no || 0))
-      .map((e) => ({
-        id: e.id,
-        sequenceNo: e.sequence_no,
-        date: e.check_in_at,
-        checkInAt: e.check_in_at,
-        checkOutAt: e.check_out_at,
-        status: e.status === 'active' ? 'active' : 'closed',
-        note: e.notes || '',
-      })),
+      .map((e) => {
+        const sp = parseSpecialistNote(e.notes)
+        return {
+          id: e.id,
+          sequenceNo: e.sequence_no,
+          date: e.check_in_at,
+          checkInAt: e.check_in_at,
+          checkOutAt: e.check_out_at,
+          status: e.status === 'active' ? 'active' : 'closed',
+          note: e.notes || '',
+          specialistName: sp.name,
+          specialty: sp.specialty,
+          source: sp.source,        // 'External' | 'Internal' | null (legacy/unstructured)
+          visitNote: sp.note,
+        }
+      }),
     // other runtime fields some pages read — safe empty defaults
     paymentLines: [], excessLines: [], visit: null, admission: null,
     cashPayment: null, mixedCurrency: false, history: [], notes: '',
@@ -419,11 +428,38 @@ export async function classifyReceivedCase(caseId, patch = {}) {
  * existing case, so adding a visit never creates a duplicate patient.
  * ========================================================================= */
 
-/** Add a specialist visit/session to a case. Specialist name/type is stored in
- *  notes (no dedicated column for pilot). Returns the new encounter id. */
-export async function insertEncounter(caseId, { specialist, note, checkInAt, checkOutAt, status, encounterType = 'session' } = {}) {
+/** Parse the structured specialist-visit note back into display/report fields.
+ *  Format written by insertEncounter:
+ *    "External Specialist Visit — <name> — <specialty> · <free note>"
+ *    "Internal Doctor Visit — <name> — <specialty> · <free note>"
+ *  Legacy ("Specialist: <name> · <note>") and unstructured text are handled
+ *  honestly — free text is surfaced as the note; nothing is fabricated. */
+export function parseSpecialistNote(raw) {
+  const s = (raw || '').trim()
+  if (!s) return { source: null, name: null, specialty: null, note: '' }
+  const i = s.indexOf(' · ')
+  const head = i >= 0 ? s.slice(0, i) : s
+  const note = i >= 0 ? s.slice(i + 3).trim() : ''
+  if (/^External Specialist Visit/i.test(head) || /^Internal Doctor Visit/i.test(head)) {
+    const source = /^Internal/i.test(head) ? 'Internal' : 'External'
+    const parts = head.split(' — ')
+    return { source, name: (parts[1] || '').trim() || null, specialty: (parts[2] || '').trim() || null, note }
+  }
+  if (/^Specialist:/i.test(head)) {
+    return { source: 'External', name: head.replace(/^Specialist:\s*/i, '').trim() || null, specialty: null, note }
+  }
+  return { source: null, name: null, specialty: null, note: s }   // unstructured legacy — honest passthrough
+}
+
+/** Add a specialist visit/session to a case. The specialist source (external by
+ *  default, or internal duty doctor), name and specialty are encoded into the
+ *  encounter note in a structured, parseable, human-readable form (no dedicated
+ *  columns — operational tracking only). Returns the new encounter id. */
+export async function insertEncounter(caseId, { specialist, specialty, source = 'external', note, checkInAt, checkOutAt, status, encounterType = 'session' } = {}) {
   const db = await getSupabaseClient()
-  const combinedNote = [specialist && `Specialist: ${specialist}`, note].filter(Boolean).join(' · ') || null
+  const kind = source === 'internal' ? 'Internal Doctor Visit' : 'External Specialist Visit'
+  const head = [kind, specialist && specialist.trim(), specialty && specialty.trim()].filter(Boolean).join(' — ')
+  const combinedNote = [head, note && note.trim()].filter(Boolean).join(' · ') || null
   const { data, error } = await db.rpc('portal_insert_encounter', {
     p_case_id: caseId,
     p_encounter_type: encounterType,
@@ -1073,10 +1109,12 @@ export async function upsertCashInvoiceCharge(caseId, amount, currency = 'EUR') 
   return data.id
 }
 
-/** Active doctors the current user may assign (RLS-scoped), for the specialist-visit
- *  picker. Reuses fetchAssignableStaff (no separate doctor directory). Optionally
- *  filtered to one location CODE; deduped by staff id. */
-export async function fetchSpecialistDoctors(locationCode = null) {
+/** Internal clinic / duty doctors the current user may pick (RLS-scoped staff,
+ *  role=doctor). Secondary/optional source for specialist visits — EXTERNAL
+ *  specialists are the default and live in the portal_specialist_doctors
+ *  directory (fetchSpecialistDirectory). Optionally filtered to one location
+ *  CODE; deduped by staff id. */
+export async function fetchInternalDoctors(locationCode = null) {
   const all = await fetchAssignableStaff()
   const seen = new Set()
   return all
@@ -1084,6 +1122,97 @@ export async function fetchSpecialistDoctors(locationCode = null) {
     .filter((s) => !locationCode || s.locationCode === locationCode)
     .filter((s) => { if (seen.has(s.staffId)) return false; seen.add(s.staffId); return true })
     .map((s) => ({ staffId: s.staffId, name: s.name, specialty: s.specialty || null, locationCode: s.locationCode }))
+}
+
+/* =========================================================================
+ * Specialist Doctors directory (EXTERNAL visiting specialists) — supabase mode.
+ * portal_specialist_doctors (migration 030). These are NOT staff: no auth login,
+ * no attendance, no clinic assignments, no billing. Admin maintains the roster
+ * (RLS portal_is_admin); any active user reads it for the case specialist-visit
+ * picker (RLS portal_is_active_user).
+ * ========================================================================= */
+
+/** List specialist doctors. activeOnly=true for pickers; false for admin management. */
+export async function fetchSpecialistDirectory({ activeOnly = false } = {}) {
+  const db = await getSupabaseClient()
+  let q = db.from('portal_specialist_doctors')
+    .select('id, doctor_name, specialty, phone, notes, active, created_at, updated_at')
+    .order('doctor_name', { ascending: true })
+  if (activeOnly) q = q.eq('active', true)
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).map((d) => ({
+    id: d.id, name: d.doctor_name, doctorName: d.doctor_name, specialty: d.specialty || '',
+    phone: d.phone || '', notes: d.notes || '', active: d.active !== false,
+    createdAt: d.created_at, updatedAt: d.updated_at,
+  }))
+}
+
+/** Create or update a specialist doctor (admin-only via RLS). Returns the id. */
+export async function upsertSpecialistDoctor({ id, doctorName, specialty, phone, notes, active = true } = {}) {
+  const db = await getSupabaseClient()
+  const name = (doctorName || '').trim()
+  const spec = (specialty || '').trim()
+  if (!name) throw new Error('Doctor name is required.')
+  if (!spec) throw new Error('Specialty is required.')
+  const row = {
+    doctor_name: name, specialty: spec,
+    phone: (phone || '').trim() || null, notes: (notes || '').trim() || null,
+    active: active !== false, updated_at: new Date().toISOString(),
+  }
+  if (id) {
+    const { error } = await db.from('portal_specialist_doctors').update(row).eq('id', id)
+    if (error) throw error
+    return id
+  }
+  const { data: au } = await db.auth.getUser()
+  row.created_by = au?.user?.id || null
+  const { data, error } = await db.from('portal_specialist_doctors').insert(row).select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+/** Activate / deactivate a specialist doctor (admin-only via RLS). */
+export async function setSpecialistDoctorActive(id, active) {
+  const db = await getSupabaseClient()
+  const { error } = await db.from('portal_specialist_doctors')
+    .update({ active: !!active, updated_at: new Date().toISOString() }).eq('id', id)
+  if (error) throw error
+}
+
+/** Admin report: specialist visits (portal_encounters type 'session') across all
+ *  cases the user may see (admin = all), enriched with case ref / patient / branch
+ *  and parsed specialist fields. Optional { from, to } (YYYY-MM-DD) on check-in. */
+export async function fetchSpecialistVisits({ from, to } = {}) {
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  let q = db.from('portal_encounters')
+    .select(`id, sequence_no, check_in_at, check_out_at, status, notes, created_at,
+      kase:case_id ( our_ref, current_location_id, registered_location_id,
+        patient:patient_id ( first_name, last_name ) )`)
+    .eq('encounter_type', 'session')
+  if (from) q = q.gte('check_in_at', `${from}T00:00:00`)
+  if (to) q = q.lte('check_in_at', `${to}T23:59:59.999`)
+  q = q.order('check_in_at', { ascending: false })
+  const { data, error } = await q
+  if (error) throw error
+  return (data || []).map((e) => {
+    const c = one(e.kase) || {}
+    const p = c.patient || {}
+    const loc = maps.locById[c.current_location_id] || maps.locById[c.registered_location_id] || {}
+    const sp = parseSpecialistNote(e.notes)
+    const mins = (e.check_in_at && e.check_out_at)
+      ? Math.max(0, Math.round((new Date(e.check_out_at) - new Date(e.check_in_at)) / 60000)) : null
+    return {
+      id: e.id, when: e.check_in_at, checkOutAt: e.check_out_at || null, durationMin: mins,
+      status: e.status === 'active' ? 'active' : 'closed',
+      caseRef: c.our_ref || '—',
+      patientName: [p.first_name, p.last_name].filter(Boolean).join(' ') || '—',
+      branchName: loc.name || '—', branchCode: loc.code || null,
+      doctorName: sp.name, specialty: sp.specialty, source: sp.source,
+      note: sp.note, rawNote: e.notes || '',
+    }
+  })
 }
 
 /* =========================================================================

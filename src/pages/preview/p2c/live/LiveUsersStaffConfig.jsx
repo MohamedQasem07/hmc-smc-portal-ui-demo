@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   Users, IdCard, MapPin, Plus, X, CheckCircle2, AlertTriangle, ShieldCheck, ChevronDown,
-  UserPlus, KeyRound, Power, Copy, Link2, Check, Stethoscope,
+  UserPlus, KeyRound, Power, Copy, Link2, Check,
 } from 'lucide-react'
 import { SectionHead } from '../../../../premium/p2cPrimitives'
 import { Avatar } from '../../../../premium/primitives'
@@ -345,7 +345,7 @@ function StaffConfig({ onOk, onErr }) {
   const [locations, setLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
-  const [form, setForm] = useState({ fullName: '', role: 'nurse', specialty: '' })
+  const [form, setForm] = useState({ fullName: '', role: 'nurse' })
   const load = useCallback(async () => {
     setLoading(true)
     try { const [s, l] = await Promise.all([fetchAdminStaff(), fetchLocations()]); setStaff(s); setLocations(l.filter((x) => x.active)) }
@@ -357,14 +357,9 @@ function StaffConfig({ onOk, onErr }) {
     if (!form.fullName.trim()) return
     setBusy(true)
     try {
-      await upsertStaff({ fullName: form.fullName.trim(), role: form.role, specialty: form.role === 'doctor' ? form.specialty.trim() : '', active: true })
-      onOk(`Staff ${form.fullName.trim()} added.`); setForm({ fullName: '', role: 'nurse', specialty: '' }); await load()
+      await upsertStaff({ fullName: form.fullName.trim(), role: form.role, active: true })
+      onOk(`Staff ${form.fullName.trim()} added.`); setForm({ fullName: '', role: 'nurse' }); await load()
     } catch (e) { onErr(e) } finally { setBusy(false) }
-  }
-  async function saveSpecialty(s, specialty) {
-    setBusy(true)
-    try { await upsertStaff({ id: s.id, fullName: s.fullName, role: s.role, phone: s.phone, active: s.active, specialty }); onOk(`Specialty updated for ${s.fullName}.`); await load() }
-    catch (e) { onErr(e) } finally { setBusy(false) }
   }
   async function assign(s, locationId) {
     if (!locationId) return
@@ -386,7 +381,7 @@ function StaffConfig({ onOk, onErr }) {
   if (loading) return <div className="p-card p-8 text-center text-sm" style={{ color: 'var(--p-ink-400)' }}>Loading staff…</div>
   return (
     <div className="space-y-3">
-      <SectionHead eyebrow="portal_staff + assignments" title={`Staff — ${staff.length}`} description="Real people for attendance/operations. Assign nurses/doctors to clinics — this is what the attendance/duty pickers read." />
+      <SectionHead eyebrow="portal_staff + assignments" title={`Staff — ${staff.length}`} description="Real people for attendance/operations (nurses, duty doctors, reception, admins). Assign nurses/doctors to clinics — this is what the attendance/duty pickers read. External visiting specialists are NOT staff — manage them in Admin → Specialist Doctors." />
 
       <div className="p-card p-3 grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
         <div className="sm:col-span-6 flex flex-col gap-1">
@@ -400,12 +395,6 @@ function StaffConfig({ onOk, onErr }) {
         <div className="sm:col-span-3">
           <button onClick={addStaff} disabled={busy || !form.fullName.trim()} className={cn('w-full inline-flex items-center justify-center gap-1.5 h-9 rounded-full text-xs font-bold p-btn-primary', (busy || !form.fullName.trim()) && 'opacity-40 cursor-not-allowed')}><Plus className="w-3.5 h-3.5" /> Add Staff</button>
         </div>
-        {form.role === 'doctor' && (
-          <div className="sm:col-span-12 flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: 'var(--p-ink-500)' }}>Specialty (doctor)</label>
-            <input value={form.specialty} onChange={(e) => setForm((p) => ({ ...p, specialty: e.target.value }))} placeholder="e.g. General Surgery, Cardiology, Pediatrics" className="p-input h-9" />
-          </div>
-        )}
       </div>
 
       <div className="space-y-2">
@@ -416,11 +405,10 @@ function StaffConfig({ onOk, onErr }) {
               <div className="min-w-0">
                 <div className="text-sm font-bold truncate" style={{ color: 'var(--p-ink-900)' }}>{s.fullName}</div>
                 <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
-                  {s.role}{s.role === 'doctor' && s.specialty ? ` · ${s.specialty}` : ''} · {s.staffCode}{s.active ? '' : ' · inactive'}
+                  {s.role} · {s.staffCode}{s.active ? '' : ' · inactive'}
                 </div>
               </div>
             </div>
-            {s.role === 'doctor' && <SpecialtyInline s={s} busy={busy} onSave={saveSpecialty} />}
             <div className="flex-1 flex flex-wrap items-center gap-1.5">
               {s.assignments.length === 0 ? (
                 <span className="text-[12px] italic" style={{ color: 'var(--p-ink-400)' }}>Not assigned to any clinic</span>
@@ -449,21 +437,6 @@ function StaffConfig({ onOk, onErr }) {
   )
 }
 
-/** Inline specialty editor for a doctor staff row (reuses portal_staff.specialty). */
-function SpecialtyInline({ s, busy, onSave }) {
-  const [val, setVal] = useState(s.specialty || '')
-  const dirty = (val || '') !== (s.specialty || '')
-  return (
-    <div className="flex items-center gap-1.5 w-full lg:w-72">
-      <Stethoscope className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--p-ink-400)' }} />
-      <input value={val} onChange={(e) => setVal(e.target.value)} placeholder="Specialty"
-        className="p-input h-8 text-[12px] flex-1" />
-      {dirty && (
-        <button onClick={() => onSave(s, val.trim())} disabled={busy}
-          className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg text-[11px] font-bold p-btn-primary shrink-0">
-          <Check className="w-3.5 h-3.5" /> Save
-        </button>
-      )}
-    </div>
-  )
-}
+// (Specialist directory removed from Users & Staff — external specialists are not
+// staff; they are managed in Admin → Specialist Doctors. portal_staff.specialty
+// column is preserved for back-compat but no longer edited here.)

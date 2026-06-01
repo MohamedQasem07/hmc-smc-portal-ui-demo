@@ -26,7 +26,7 @@ export function MiniKpi({ label, value, sub, tone = 'navy', icon: Icon, onClick 
   const Wrap = onClick ? 'button' : 'div'
   return (
     <Wrap onClick={onClick} className={cn(
-      'p-card p-3.5 sm:p-4 text-left w-full transition-all',
+      'p-card p-kpi p-3.5 sm:p-4 text-left w-full transition-all',
       onClick && 'hover:-translate-y-px',
     )}>
       <div className="flex items-start justify-between gap-2">

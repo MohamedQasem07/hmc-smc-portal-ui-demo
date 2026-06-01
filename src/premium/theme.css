@@ -25,16 +25,19 @@
   --p-teal:          #0FB5A9;   /* signature sea teal */
   --p-teal-2:        #2DD4C7;   /* gradient stop */
   --p-teal-soft:     #E0F8F6;   /* surface tint */
+  --p-teal-ink:      #0A7A72;   /* teal text on light surfaces */
 
   --p-gold:          #D9A574;   /* warm sand — premium accents, sparing */
+  --p-gold-2:        #C8884A;   /* deeper gold gradient stop */
   --p-gold-soft:     #FBF5EC;
+  --p-gold-ink:      #97651F;   /* gold text on light surfaces */
 
   /* ---------- Surface stack ---------- */
-  --p-canvas:        #F6F8FB;
+  --p-canvas:        #E9EEF6;   /* cooler steel canvas — white cards pop (operations feel) */
   --p-canvas-warm:   #FAF9F6;
   --p-surface:       #FFFFFF;
-  --p-surface-tint:  #F8FAFC;
-  --p-surface-deep:  #EEF2F8;
+  --p-surface-tint:  #F6F9FC;
+  --p-surface-deep:  #E4EAF3;
 
   /* ---------- Ink stack ---------- */
   --p-ink-950:       #060E1F;
@@ -70,7 +73,7 @@
   /* ---------- Shadow scale ---------- */
   --p-shadow-soft:    0 1px 2px rgba(10,27,61,0.05), 0 2px 6px rgba(10,27,61,0.04);
   --p-shadow-medium:  0 4px 12px rgba(10,27,61,0.06), 0 2px 4px rgba(10,27,61,0.04);
-  --p-shadow-card:    0 1px 2px rgba(10,27,61,0.04), 0 8px 24px rgba(10,27,61,0.06);
+  --p-shadow-card:    0 1px 2px rgba(10,27,61,0.05), 0 10px 28px rgba(10,27,61,0.09);
   --p-shadow-hover:   0 8px 32px rgba(10,27,61,0.12), 0 4px 8px rgba(10,27,61,0.06);
   --p-shadow-float:   0 16px 48px rgba(10,27,61,0.18), 0 8px 16px rgba(10,27,61,0.08);
   --p-shadow-glow:    0 8px 30px rgba(15, 181, 169, 0.22), 0 0 0 1px rgba(15, 181, 169, 0.10);
@@ -167,9 +170,9 @@
               border-color var(--p-dur-base) var(--p-ease-soft);
 }
 .theme-premium .p-card:hover {
-  box-shadow: var(--p-shadow-hover);
-  border-color: var(--p-border-strong);
-  transform: translateY(-1px);
+  box-shadow: 0 16px 44px rgba(10,27,61,0.14), 0 2px 10px rgba(15,181,169,0.10);
+  border-color: rgba(15,181,169,0.30);
+  transform: translateY(-2px);
 }
 
 /* Hero card — slightly larger radius, embedded glow */
@@ -359,4 +362,52 @@
   outline: 2px solid var(--p-teal);
   outline-offset: 2px;
   border-radius: 6px;
+}
+
+/* =========================================================================
+   Sprint 2026-06-01 — premium uplift: richer hover, accents, table rows
+   ========================================================================= */
+
+/* Soft teal hover on every premium data-table row */
+.theme-premium tbody tr { transition: background var(--p-dur-fast) var(--p-ease-soft); }
+.theme-premium tbody tr:hover { background: rgba(15,181,169,0.055); }
+
+/* Accent card — teal left rail for emphasis blocks */
+.theme-premium .p-card-accent { position: relative; overflow: hidden; }
+.theme-premium .p-card-accent::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  background: linear-gradient(180deg, var(--p-teal-2), var(--p-teal));
+}
+
+/* Interactive lift — clickable tiles / quick links / room cards */
+.theme-premium .p-lift {
+  transition: transform var(--p-dur-base) var(--p-ease-soft),
+              box-shadow var(--p-dur-base) var(--p-ease-soft),
+              border-color var(--p-dur-base);
+}
+.theme-premium .p-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--p-shadow-hover);
+  border-color: rgba(15,181,169,0.30);
+}
+
+/* Gold finance/status button */
+.theme-premium .p-btn-gold {
+  background: linear-gradient(135deg, var(--p-gold) 0%, var(--p-gold-2) 100%);
+  color: #2B1A05; font-weight: 700;
+  border: 1px solid rgba(151,101,31,0.35);
+  box-shadow: 0 8px 22px rgba(200,136,74,0.28);
+  border-radius: var(--p-radius-pill);
+  transition: transform var(--p-dur-fast) var(--p-ease-soft), filter var(--p-dur-fast);
+}
+.theme-premium .p-btn-gold:hover { transform: translateY(-1px); filter: brightness(1.05); }
+
+/* Stronger ghost-button hover — subtle lift + shadow */
+.theme-premium .p-btn-ghost:hover { box-shadow: var(--p-shadow-soft); transform: translateY(-1px); }
+
+/* KPI tile sheen — faint teal gradient wash on stat cards using .p-kpi */
+.theme-premium .p-kpi { position: relative; overflow: hidden; }
+.theme-premium .p-kpi::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(160deg, rgba(15,181,169,0.06) 0%, transparent 42%);
 }
