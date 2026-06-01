@@ -330,6 +330,27 @@ export async function recordCaseCollection(caseId, line, { locationCode = null, 
   return res
 }
 
+/** Record MULTIPLE collection lines from the Full Case Editor. NEW lines only:
+ *  a row with no Foreign Amount Covered is a blank row and is skipped — so saving
+ *  the editor again WITHOUT adding a line creates NO new collection / treasury rows
+ *  (the ledger is append-only; existing collections are shown read-only). A line
+ *  that WAS entered but is incomplete (e.g. Visa / Card with no FX rate) throws —
+ *  never a silent drop, never fake success. Returns the count actually recorded. */
+export async function recordCaseCollections(caseId, lines, { locationCode = null, purpose = 'cash_case_payment' } = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  let locId = null
+  if (locationCode) { try { locId = await locationIdForCode(locationCode) } catch { locId = null } }
+  let recorded = 0
+  for (const line of (lines || [])) {
+    if (!(Number(line?.fxRefAmount) > 0)) continue   // blank row → skip (new-lines-only)
+    const res = await recordCollection(db, caseId, line, purpose, locId)
+    if (res === null) throw new Error('A payment line is incomplete — Visa / Card needs an FX rate. Fix or remove it before saving.')
+    recorded++
+  }
+  return recorded
+}
+
 /** P3J — ADMIN-ONLY safe delete of a wrong/test case. Calls the SECURITY DEFINER
  *  RPC portal_admin_delete_case (strict portal_is_admin() guard) which removes the
  *  case + ALL operational children in FK-safe order (incl. collections + treasury),
@@ -1056,6 +1077,17 @@ export async function updateCaseRegistration(caseId, patientId, patch = {}) {
     cUpd.financial_type = FINANCIAL_TYPE_TO_PORTAL[patch.financialType] || 'pending'
     cUpd.billing_facility_id = patch.financialType === 'Insurance'
       ? (maps.facIdByCode[patch.billingFacility] || null) : null
+    // Free / Complimentary reason + approver — now persisted on EDIT too (was
+    // create-only, so editing a Free case silently lost the reason/approver).
+    if (patch.financialType === 'Free / Complimentary') {
+      cUpd.free_reason = patch.complimentary?.reason || null
+      cUpd.free_approved_by = patch.complimentary?.approvedBy || null
+      cUpd.free_approved_at = patch.complimentary?.approvedAt || now
+    } else {
+      cUpd.free_reason = null
+      cUpd.free_approved_by = null
+      cUpd.free_approved_at = null
+    }
   }
   if (patch.encounterPattern !== undefined) cUpd.encounter_pattern = ENCOUNTER_PATTERN_TO_PORTAL[patch.encounterPattern] || 'outpatient_single'
   if (patch.visitDate !== undefined) cUpd.visit_date = String(patch.visitDate).slice(0, 10) || null
@@ -1253,6 +1285,33 @@ export async function upsertCashInvoiceCharge(caseId, amount, currency = 'EUR') 
   }
   const { data, error } = await db.from('portal_case_charges')
     .insert({ case_id: caseId, charge_type: 'cash_case_amount', amount: amt, currency, created_by: uid })
+    .select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+/** Set / update the patient-excess EXPECTED amount as a portal_case_charges row
+ *  (charge_type='patient_excess'). Idempotent upsert (one charge per case) — mirrors
+ *  upsertCashInvoiceCharge. Powers the excess expected-vs-collected outstanding. The
+ *  actual money collected is recorded separately via recordCaseCollections(...,
+ *  { purpose: 'patient_excess' }). */
+export async function upsertExcessCharge(caseId, amount, currency = 'EUR') {
+  if (!caseId) throw new Error('No case id')
+  const amt = Number(amount)
+  if (!(amt > 0)) throw new Error('Enter a valid excess amount')
+  const db = await getSupabaseClient()
+  const uid = await currentUid(db)
+  const now = new Date().toISOString()
+  const { data: existing } = await db.from('portal_case_charges')
+    .select('id').eq('case_id', caseId).eq('charge_type', 'patient_excess').maybeSingle()
+  if (existing) {
+    const { error } = await db.from('portal_case_charges')
+      .update({ amount: amt, currency, updated_at: now }).eq('id', existing.id)
+    if (error) throw error
+    return existing.id
+  }
+  const { data, error } = await db.from('portal_case_charges')
+    .insert({ case_id: caseId, charge_type: 'patient_excess', amount: amt, currency, created_by: uid })
     .select('id').single()
   if (error) throw error
   return data.id

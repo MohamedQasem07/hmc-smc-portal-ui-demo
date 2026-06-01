@@ -24,7 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
-import { updateCaseRegistration, upsertCashInvoiceCharge, fetchLocations } from '../../../../lib/api/portalData'
+import { updateCaseRegistration, upsertCashInvoiceCharge, upsertExcessCharge, recordCaseCollections, fetchCaseFinancials, fetchLocations } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -52,7 +52,7 @@ const STEPS = [
   { id: 'review',    label: 'Review & Save', icon: CheckCircle2 },
 ]
 
-export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone } = {}) {
+export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone, adminCorrection = false } = {}) {
   const navigate = useNavigate()
   const { clinicId, currentUser } = useUserMode()
   const isEdit = !!editCase
@@ -147,6 +147,32 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const [submitting, setSubmitting] = useState(false)  // P3J — honest save state (no fake success)
   const [submitError, setSubmitError] = useState(null)
 
+  // P3K — Full Case Editor is the SINGLE money place. In edit mode load the
+  // already-recorded collections so they render READ-ONLY (the treasury ledger is
+  // append-only); only NEW lines added below are persisted on Save → saving again
+  // with no new line never duplicates. Also prefill the excess EXPECTED amount from
+  // its charge so editing never loses it.
+  const [existingFin, setExistingFin] = useState(null)
+  useEffect(() => {
+    if (!isEdit || !IS_SUPABASE || !editCase?.id) return
+    let alive = true
+    fetchCaseFinancials(editCase.id).then((f) => {
+      if (!alive) return
+      setExistingFin(f)
+      const exCharge = (f?.charges || []).find((c) => c.charge_type === 'patient_excess')
+      if (exCharge) {
+        setForm((p) => ({
+          ...p,
+          hasExcess: 'Yes',
+          excessAmount: (p.excessAmount && Number(p.excessAmount) > 0) ? p.excessAmount : String(exCharge.amount ?? ''),
+          excessCurrency: exCharge.currency || p.excessCurrency,
+        }))
+      }
+    }).catch(() => { if (alive) setExistingFin(null) })
+    return () => { alive = false }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEdit, editCase?.id])
+
   // P3J — keep blank/untouched cash payment lines aligned to the invoice currency
   // so a same-currency payment is the default (the cashier never has to switch the
   // line currency by hand). Lines that already carry an amount are left untouched.
@@ -209,6 +235,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
+  // P3K — already-recorded collections (edit mode) split by purpose, shown read-only.
+  const existingCashCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'cash_case_payment')
+  const existingExcessCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'patient_excess')
+
   async function handleSubmit(e) {
     e.preventDefault()
     // P3I — on any non-final step, "submit" (incl. Enter) just advances the stepper;
@@ -236,15 +266,30 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         visitDate: form.visitDate, visitTime: form.visitTime,
         insurance: { company: form.insuranceCompany, ref: form.insuranceRef, email: form.insuranceEmail, phone: form.insurancePhone },
         hasPatientExcess: form.financialType === 'Insurance' && form.hasExcess === 'Yes',
+        // P3K — Free reason/approver now persists on edit (was create-only).
+        complimentary: form.financialType === 'Free / Complimentary'
+          ? { reason: form.complimentaryReason, approvedBy: form.complimentaryApprovedBy } : null,
       }
       await updateCaseRegistration(editCase.id, editCase.patientId, patch)
-      // P3J — persist a changed Cash invoice amount/currency on edit. The case is
-      // already saved above; the cash amount lives in its own charge row (an
-      // idempotent upsert — re-saving the prefilled value is a no-op, so "Save
-      // without changing" never wipes it). A blank amount is skipped (never wipes).
-      if (form.financialType === 'Cash' && Number(form.invoiceAmount) > 0) {
-        await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR')
+
+      // P3K — the Full Case Editor is the SINGLE place money is recorded. All money
+      // persists from here via the existing collection model (no separate card).
+      // Charges (expected) are idempotent upserts; collections (actual money) are
+      // NEW lines only — blank rows skip, so re-saving never duplicates the ledger.
+      const locCode = editCase.currentLocationCode || editCase.registeredAtId || null
+      if (form.financialType === 'Cash') {
+        if (Number(form.invoiceAmount) > 0) {
+          await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR')
+        }
+        await recordCaseCollections(editCase.id, paymentLines, { locationCode: locCode, purpose: 'cash_case_payment' })
       }
+      if (form.financialType === 'Insurance' && form.hasExcess === 'Yes') {
+        if (Number(form.excessAmount) > 0) {
+          await upsertExcessCharge(editCase.id, Number(form.excessAmount), form.excessCurrency || 'EUR')
+        }
+        await recordCaseCollections(editCase.id, excessLines, { locationCode: locCode, purpose: 'patient_excess' })
+      }
+
       if (onDone) { onDone(); return }
       navigate(`/clinic/cases/${editCase.id}`)
       return
@@ -402,6 +447,21 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
               </div>
             </FieldGrid>
           </section>
+        )}
+
+        {/* P3K — Admin Correction Mode banner (admin editing a CLOSED case). */}
+        {isEdit && adminCorrection && (
+          <div className="p-card p-3.5 flex items-start gap-2.5 p-rise" style={{ background: 'var(--p-mixed-soft)', border: '1px solid #F0B5B5' }}>
+            <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0" style={{ background: '#B14242', color: 'white' }}>
+              <ShieldCheck className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-bold" style={{ color: '#B14242' }}>Admin Correction Mode</div>
+              <p className="text-[12px] mt-0.5" style={{ color: 'var(--p-ink-700)' }}>
+                This case is <strong>closed</strong>. Changes are admin-only and are recorded. The case stays closed unless you reopen it.
+              </p>
+            </div>
+          </div>
         )}
 
         {/* P3H — clear EDIT-MODE banner so the user knows they edit the same case (no duplicate). */}
@@ -774,16 +834,26 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                         </Field>
                       </FieldGrid>
 
+                      {isEdit && existingExcessCollections.length > 0 && (
+                        <ExistingCollectionsList collections={existingExcessCollections} title="Already-recorded excess (locked)" />
+                      )}
+
                       <PaymentLinesPanel
                         lines={excessLines}
                         setLines={setExcessLines}
                         typeLabel="Patient Excess"
-                        title="Excess Collection Lines"
-                        helperText="Cash → any currency. Visa / Card → always EGP. FX rate is editable per line — there is no fixed rate."
+                        title={isEdit ? 'Add Excess Collected Now' : 'Excess Collection Lines'}
+                        helperText={isEdit
+                          ? 'Money collected now. Already-recorded excess is locked above; saving with no new line records nothing.'
+                          : 'Cash → any currency. Visa / Card → always EGP. FX rate is editable per line — there is no fixed rate.'}
                         invoiceCurrency={form.excessCurrency}
                       />
 
-                      <TotalsCallout title="Excess collected" totals={excessTotals} dueAmount={form.excessAmount} dueCurrency={form.excessCurrency} />
+                      {isEdit ? (
+                        <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>Excess collected / outstanding totals update on the case summary after you save.</p>
+                      ) : (
+                        <TotalsCallout title="Excess collected" totals={excessTotals} dueAmount={form.excessAmount} dueCurrency={form.excessCurrency} />
+                      )}
                     </div>
                   )}
                 </div>
@@ -820,16 +890,20 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                 </FieldGrid>
 
                 {isEdit ? (
-                  /* P3J — Edit Full Registration NEVER persists payment lines
-                     (updateCaseRegistration leaves money lines to their own flow),
-                     so the editor only sets invoice amount/currency. Real money is
-                     recorded from Case Detail → "Record collection" (posts the
-                     collection + treasury movement). No misleading do-nothing UI. */
-                  <div className="rounded-xl px-3 py-2.5 text-[12px] flex items-start gap-2"
-                    style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8', color: 'var(--p-ink-700)' }}>
-                    <Info className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-                    <span>Editing here updates the <strong>invoice amount &amp; currency</strong> only. To record money actually collected, use <strong>Record collection</strong> on the case page — it posts the collection and the treasury movement and updates Collected / Outstanding.</span>
-                  </div>
+                  <>
+                    {existingCashCollections.length > 0 && (
+                      <ExistingCollectionsList collections={existingCashCollections} title="Already-recorded payments (locked)" />
+                    )}
+                    <PaymentLinesPanel
+                      lines={paymentLines}
+                      setLines={setPaymentLines}
+                      typeLabel="Invoice Payment"
+                      title="Add Payment Collected Now"
+                      helperText="Money collected now. Already-recorded payments are locked above; saving with no new line records nothing."
+                      invoiceCurrency={form.invoiceCurrency}
+                    />
+                    <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>Collected / outstanding totals update on the case summary after you save.</p>
+                  </>
                 ) : (
                   <>
                     <PaymentLinesPanel
@@ -1236,6 +1310,45 @@ function TotalsCallout({ title, totals, dueAmount, dueCurrency }) {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// P3K — read-only list of already-recorded collections (the treasury ledger is
+// append-only, so past money is shown locked; only NEW lines below are saved).
+function ExistingCollectionsList({ collections, title }) {
+  const totals = {}
+  for (const c of collections) {
+    const cur = c.actual_currency || c.invoice_currency || 'EGP'
+    totals[cur] = (totals[cur] || 0) + (Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)
+  }
+  const totalChips = Object.entries(totals)
+  return (
+    <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-600)' }}>
+        <Lock className="w-3 h-3" /> {title}
+      </div>
+      <ul className="space-y-1">
+        {collections.map((c, i) => (
+          <li key={i} className="flex items-center justify-between text-[12px]">
+            <span style={{ color: 'var(--p-ink-600)' }}>
+              {(c.payment_method || 'cash').replace(/_/g, ' ')}{c.collected_at ? ` · ${new Date(c.collected_at).toLocaleDateString('en-GB')}` : ''}
+            </span>
+            <span className="font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
+              {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {c.actual_currency || c.invoice_currency || ''}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {totalChips.length > 0 && (
+        <div className="flex flex-wrap gap-3 pt-1.5 border-t" style={{ borderColor: 'var(--p-border)' }}>
+          {totalChips.map(([cur, val]) => (
+            <span key={cur} className="text-[11px] font-bold" style={{ color: 'var(--p-ink-700)' }}>
+              Recorded: {fmt(val)} {cur}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   ArrowLeft, AlertTriangle, Building2, Hotel, Phone, Mail, BedDouble, Clock,
-  CheckCircle2, Pencil, Save, X, Send, ShieldCheck, Gift, Banknote, DoorOpen,
+  CheckCircle2, Pencil, X, Send, ShieldCheck, Gift, Banknote, DoorOpen,
   Activity, History, Trash2,
 } from 'lucide-react'
 import { SectionHead, FacilityBadge, FinTypePill, RoutePill, P2CTimeline } from '../../../../premium/p2cPrimitives'
@@ -12,8 +12,8 @@ import { useUserMode } from '../../../../context/UserModeContext'
 import { useLiveRooms } from '../../../../lib/useLiveRooms'
 import { fmtDate } from '../../../../lib/format'
 import {
-  updatePatientContact, updateCaseFields, assignRoom, dischargeCase,
-  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory, recordCaseCollection, adminDeleteCase,
+  assignRoom, dischargeCase,
+  fetchCaseFinancials, fetchRoomStayHistory, adminDeleteCase,
 } from '../../../../lib/api/portalData'
 import { escalateIfAuthError, sbEnsureSession } from '../../../../lib/api/auth'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
@@ -34,8 +34,6 @@ import ClinicNewCaseP2C from '../clinic/ClinicNewCaseP2C'
  *   - Cash invoice vs collected warning + outstanding amount
  * Mutations call actions.refreshCases() so the room board + lists stay in sync.
  * ========================================================================= */
-
-const CURRENCIES = ['EUR', 'GBP', 'USD', 'EGP']
 
 function nowLocalDatetime() {
   const d = new Date()
@@ -67,6 +65,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const [deleteText, setDeleteText] = useState('')
   const refresh = actions.refreshCases
   const isClosed = c?.operationalStatus === 'Closed'
+  // P3K — admin may open the Full Case Editor even on a closed/cancelled case
+  // (Admin Correction Mode). Normal users stay read-only after close.
+  const canOpenEditor = !isClosed || isAdmin
 
   const { rooms, reloadRooms } = useLiveRooms(c?.currentLocationCode || null)
 
@@ -128,20 +129,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const [error, setError] = useState(null)
   const [okMsg, setOkMsg] = useState(null)
 
-  const [editing, setEditing] = useState(false)
-  const [editReg, setEditReg] = useState(false)   // P3G — full registration edit mode
-  const [form, setForm] = useState({})
+  const [editReg, setEditReg] = useState(false)   // P3G/P3K — Full Case Editor (single edit place)
   const [showDischarge, setShowDischarge] = useState(false)
   const [checkoutAt, setCheckoutAt] = useState(nowLocalDatetime())
-  const [invAmount, setInvAmount] = useState('')
-  const [invCurrency, setInvCurrency] = useState('EUR')
-
-  useEffect(() => {
-    if (fin?.cashOutstanding) {
-      setInvAmount(String(fin.cashOutstanding.invoice))
-      setInvCurrency(fin.cashOutstanding.currency)
-    }
-  }, [fin])
 
   const occupiedRoomIds = useMemo(() => {
     const m = new Map()
@@ -172,24 +162,10 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     } finally { setBusy(false) }
   }
 
-  function startEdit() {
-    setForm({
-      phoneCode: c.patient.phoneCode || '', phone: c.patient.phone || '',
-      email: c.patient.email || '', postal: c.patient.postal || '',
-      hotel: c.patient.hotel || '', hotelRoom: c.patient.hotelRoom || '',
-      note: c.patient.note || '',
-    })
-    setOkMsg(null); setError(null); setEditing(true)
-  }
-  async function saveEdit() {
-    await run(async () => {
-      await updatePatientContact(c.patientId, {
-        phoneCode: form.phoneCode, phone: form.phone, email: form.email, postal: form.postal,
-      })
-      await updateCaseFields(c.id, { hotel: form.hotel, hotelRoom: form.hotelRoom, note: form.note })
-      setEditing(false)
-    }, 'Details saved.')
-  }
+  // P3K — inline "Edit details" / contact edit removed. The Full Case Editor
+  // (setEditReg) is the single edit place; patient + case fields persist there
+  // via updateCaseRegistration. Open it with a clean banner state.
+  function openEditor() { setOkMsg(null); setError(null); setEditReg(true) }
 
   async function onAssignRoom(roomId) {
     if (!roomId) return
@@ -223,20 +199,9 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     }, `Received as ${c?.transfer?.toBranchName || 'destination branch'}.`)
   }
 
-  async function saveInvoice() {
-    await run(async () => { await upsertCashInvoiceCharge(c.id, invAmount, invCurrency); await loadFin() }, 'Invoice amount saved.')
-  }
-
-  // P3J — record a REAL cash/Visa collection against this case (was missing: the
-  // panel could set the invoice but never the money actually collected, so
-  // Collected/Outstanding never moved). Persists via portal_record_collection
-  // (+ treasury movement), then reloads so the figures update.
-  async function saveCollection(line) {
-    await run(async () => {
-      await recordCaseCollection(c.id, line, { locationCode: c.currentLocationCode || null })
-      await loadFin()
-    }, 'Collection recorded.')
-  }
+  // P3K — invoice amount + collections are recorded from the Full Case Editor
+  // (the single money place), not from this summary card. The functions live in
+  // ClinicNewCaseP2C edit mode (upsertCashInvoiceCharge / recordCaseCollections).
 
   // ---- loading / not-found ----
   if (!c) {
@@ -264,9 +229,10 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   // multi-section registration form embedded inside this role's shell, pre-loaded
   // with the case's data. Updates the SAME case + patient in place. Closed cases
   // never reach here (the button is hidden once discharged).
-  if (editReg && !isClosed) {
-    // P3J — hand the stored cash invoice (amount + currency) to the edit form so
-    // Step-3 Financial prefills the real values instead of blank / EUR.
+  if (editReg && canOpenEditor) {
+    // P3K — Full Case Editor (single edit place). Hand the stored cash invoice so
+    // Step-3 Financial prefills real values. adminCorrection shows the closed-case
+    // correction banner when an admin edits a closed case.
     const editCaseWithInvoice = {
       ...c,
       cashInvoice: fin?.cashOutstanding
@@ -274,8 +240,8 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         : null,
     }
     return (
-      <ClinicNewCaseP2C embedded editCase={editCaseWithInvoice}
-        onDone={async () => { setEditReg(false); if (refresh) await refresh(); await loadFin(); setOkMsg('Registration updated.') }} />
+      <ClinicNewCaseP2C embedded editCase={editCaseWithInvoice} adminCorrection={isClosed && isAdmin}
+        onDone={async () => { setEditReg(false); if (refresh) await refresh(); await loadFin(); setOkMsg('Case updated.') }} />
     )
   }
 
@@ -322,20 +288,19 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
               </div>
             </div>
             <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-auto">
-              {!isClosed && !editing && (
-                <>
-                  <button onClick={() => { setOkMsg(null); setError(null); setEditReg(true) }}
-                    className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary">
-                    <Pencil className="w-3.5 h-3.5" /> Edit Full Registration
-                  </button>
-                  <button onClick={startEdit}
-                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold"
-                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', color: 'white' }}>
-                    <Pencil className="w-3.5 h-3.5" /> Edit details
-                  </button>
-                </>
+              {canOpenEditor && (
+                <button onClick={openEditor}
+                  className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary">
+                  <Pencil className="w-3.5 h-3.5" /> Open Full Case Editor
+                </button>
               )}
-              {isClosed && (
+              {isClosed && isAdmin && (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
+                  style={{ background: 'rgba(177,66,66,0.20)', color: '#FFD9D9', border: '1px solid rgba(240,181,181,0.5)' }}>
+                  <ShieldCheck className="w-3.5 h-3.5" /> Admin Correction Mode
+                </span>
+              )}
+              {isClosed && !isAdmin && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
                   style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.20)' }}>
                   Closed — contact admin for corrections.
@@ -349,41 +314,16 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
             <HeroInfo icon={Phone} label="Phone" value={[c.patient.phoneCode, c.patient.phone].filter(Boolean).join(' ')} />
             <HeroInfo icon={Mail} label="Email" value={c.patient.email} />
           </div>
-          {!isClosed && (!c.patient.phone || !c.patient.email) && (
-            <button onClick={startEdit} className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: '#7FE7DE' }}>
+          {canOpenEditor && (!c.patient.phone || !c.patient.email) && (
+            <button onClick={openEditor} className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: '#7FE7DE' }}>
               <Pencil className="w-3 h-3" /> Add missing contact details
             </button>
           )}
         </div>
       </section>
 
-      {/* Edit details panel (light card) */}
-      {editing && (
-        <div className="p-card p-card-top p-4 space-y-3">
-          <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-brand-mid)' }}>
-            Complete missing details
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Field label="Phone code"><input className="p-input" value={form.phoneCode} onChange={(e) => setForm({ ...form, phoneCode: e.target.value })} placeholder="+20" /></Field>
-            <Field label="Phone"><input className="p-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="100 000 0000" /></Field>
-            <Field label="Email"><input className="p-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" /></Field>
-            <Field label="Postal code"><input className="p-input" value={form.postal} onChange={(e) => setForm({ ...form, postal: e.target.value })} /></Field>
-            <Field label="Hotel"><input className="p-input" value={form.hotel} onChange={(e) => setForm({ ...form, hotel: e.target.value })} /></Field>
-            <Field label="Hotel room"><input className="p-input" value={form.hotelRoom} onChange={(e) => setForm({ ...form, hotelRoom: e.target.value })} /></Field>
-            <Field label="Clinical note" className="sm:col-span-3"><input className="p-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
-          </div>
-          <div className="flex justify-end gap-2">
-            <button onClick={() => setEditing(false)} disabled={busy}
-              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost">
-              <X className="w-4 h-4" /> Cancel
-            </button>
-            <button onClick={saveEdit} disabled={busy}
-              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-bold p-btn-primary">
-              <Save className="w-4 h-4" /> {busy ? 'Saving…' : 'Save details'}
-            </button>
-          </div>
-        </div>
-      )}
+      {/* P3K — inline "Edit details" panel removed; the Full Case Editor handles
+          patient + case + financial edits in one place. */}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         {/* LEFT — encounter / room / specialists */}
@@ -521,11 +461,19 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         {/* RIGHT — financial (surfaced first on mobile: the figure cashier needs at a glance) */}
         <div className="xl:col-span-5 space-y-5 order-first xl:order-none">
           <section className="p-card p-5 space-y-4">
-            <SectionHead eyebrow="Financial" title="Collection Summary" />
-            <FinancialPanel c={c} fin={fin} finError={finError} isClosed={isClosed} busy={busy}
-              invAmount={invAmount} setInvAmount={setInvAmount}
-              invCurrency={invCurrency} setInvCurrency={setInvCurrency}
-              onSaveInvoice={saveInvoice} onRecordCollection={saveCollection} />
+            <SectionHead eyebrow="Financial" title="Collection Summary"
+              description="Read-only summary. Invoice, collections and excess are edited in the Full Case Editor." />
+            <FinancialPanel c={c} fin={fin} finError={finError} />
+            {canOpenEditor ? (
+              <button onClick={openEditor}
+                className="w-full h-11 rounded-full text-sm font-bold p-btn-primary inline-flex items-center justify-center gap-2">
+                <Pencil className="w-4 h-4" /> Open Full Case Editor
+              </button>
+            ) : (
+              <p className="text-[11px] text-center" style={{ color: 'var(--p-ink-500)' }}>
+                Closed — contact admin to edit invoice / collections.
+              </p>
+            )}
           </section>
         </div>
       </div>
@@ -564,7 +512,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 }
 
 // =====================================================================
-function FinancialPanel({ c, fin, finError, isClosed, busy, invAmount, setInvAmount, invCurrency, setInvCurrency, onSaveInvoice, onRecordCollection }) {
+function FinancialPanel({ c, fin, finError }) {
   // P3J — honest read-failure banner. When the financial read failed (commonly a
   // dead/expired session), say so instead of rendering a misleading blank panel.
   const finErrorBanner = finError ? (
@@ -629,45 +577,22 @@ function FinancialPanel({ c, fin, finError, isClosed, busy, invAmount, setInvAmo
     return (
       <div className="space-y-3">
         {finErrorBanner}
-        <div className="rounded-xl p-3 space-y-3" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
+        <div className="rounded-xl p-3 space-y-2" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
           <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>
             <Banknote className="inline w-3.5 h-3.5 mr-1" /> Cash Invoice
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
-            <Field label="Invoice amount" className="col-span-1">
-              <input className="p-input h-10" type="number" min="0" step="0.01" value={invAmount}
-                onChange={(e) => setInvAmount(e.target.value)} disabled={isClosed || busy} />
-            </Field>
-            <Field label="Currency" className="col-span-1">
-              <select className="p-input h-10" value={invCurrency} onChange={(e) => setInvCurrency(e.target.value)} disabled={isClosed || busy}>
-                {CURRENCIES.map((cur) => <option key={cur} value={cur}>{cur}</option>)}
-              </select>
-            </Field>
-            {!isClosed && (
-              <button onClick={onSaveInvoice} disabled={busy}
-                className="h-10 rounded-full text-xs font-bold p-btn-primary col-span-2 sm:col-span-1">Save</button>
-            )}
-          </div>
-          {out && (
-            <div className="text-[12px] space-y-1 pt-1 border-t" style={{ borderColor: 'var(--p-border)' }}>
+          {out ? (
+            <div className="text-[13px] space-y-1">
               <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Invoice</span><span className="font-bold p-numeric">{fmtAmt(out.invoice)} {out.currency}</span></div>
               <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Collected</span><span className="font-bold p-numeric">{fmtAmt(out.collected)} {out.currency}</span></div>
               <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Outstanding</span>
                 <span className="font-bold p-numeric" style={{ color: under ? '#B14242' : '#0A8F62' }}>{fmtAmt(out.remaining)} {out.currency}</span>
               </div>
             </div>
+          ) : (
+            <div className="text-[12px]" style={{ color: 'var(--p-ink-500)' }}>No cash invoice recorded yet — open the Full Case Editor to add it.</div>
           )}
         </div>
-
-        {/* P3J — record the money actually collected (cash / Visa). Persists a real
-            collection + treasury movement; Collected / Outstanding then update. */}
-        {!isClosed && (
-          <CashCollectionForm
-            invoiceCurrency={out?.currency || invCurrency}
-            busy={busy}
-            onSubmit={onRecordCollection}
-          />
-        )}
 
         {under && (
           <div className="rounded-xl px-3 py-2 text-[12px] flex items-start gap-2"
@@ -701,81 +626,9 @@ function FinancialPanel({ c, fin, finError, isClosed, busy, invAmount, setInvAmo
   )
 }
 
-// P3J — inline "record collection" form for a Cash case (Case Detail). Cash
-// collects in the chosen currency; Visa / Card settles in EGP and needs an FX
-// rate to the invoice currency (same rules as intake). Disabled while saving so
-// a double-click cannot create a duplicate line.
-function CashCollectionForm({ invoiceCurrency, busy, onSubmit }) {
-  const [open, setOpen] = useState(false)
-  const [amount, setAmount] = useState('')
-  const [currency, setCurrency] = useState(invoiceCurrency || 'EGP')
-  const [method, setMethod] = useState('Cash')
-  const [fxRate, setFxRate] = useState('')
-  const isVisa = method === 'Visa / Card'
-
-  useEffect(() => { setCurrency(invoiceCurrency || 'EGP') }, [invoiceCurrency])
-
-  function reset() { setAmount(''); setFxRate(''); setMethod('Cash'); setCurrency(invoiceCurrency || 'EGP') }
-  function submit() {
-    const amt = Number(amount)
-    if (!(amt > 0)) return
-    const line = isVisa
-      ? { method: 'Visa', currency: invoiceCurrency || 'EGP', amount: amt,
-          fxRefCurrency: invoiceCurrency || 'EGP', fxRefAmount: amt, fxRate: Number(fxRate) || null }
-      : { method: 'Cash', currency, amount: amt }
-    Promise.resolve(onSubmit(line)).then(() => { reset(); setOpen(false) })
-  }
-
-  if (!open) {
-    return (
-      <button onClick={() => setOpen(true)} disabled={busy}
-        className="w-full h-10 rounded-full text-xs font-bold inline-flex items-center justify-center gap-1.5 p-btn-ghost"
-        style={{ border: '1px solid var(--p-border-strong)' }}>
-        <Banknote className="w-3.5 h-3.5" /> Record collection
-      </button>
-    )
-  }
-  return (
-    <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
-      <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>Record Collection</div>
-      <div className="grid grid-cols-2 gap-2 items-end">
-        <Field label="Method" className="col-span-2">
-          <select className="p-input h-10" value={method} onChange={(e) => setMethod(e.target.value)} disabled={busy}>
-            <option>Cash</option>
-            <option>Visa / Card</option>
-          </select>
-        </Field>
-        <Field label="Amount collected">
-          <input className="p-input h-10" type="number" min="0" step="0.01" value={amount}
-            onChange={(e) => setAmount(e.target.value)} disabled={busy} placeholder="0" />
-        </Field>
-        {isVisa ? (
-          <Field label={`FX → EGP (1 ${invoiceCurrency || 'EGP'} = ? EGP)`}>
-            <input className="p-input h-10" type="number" min="0" step="0.0001" value={fxRate}
-              onChange={(e) => setFxRate(e.target.value)} disabled={busy} placeholder="e.g. 50" />
-          </Field>
-        ) : (
-          <Field label="Currency">
-            <select className="p-input h-10" value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={busy}>
-              {CURRENCIES.map((cur) => <option key={cur} value={cur}>{cur}</option>)}
-            </select>
-          </Field>
-        )}
-      </div>
-      <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
-        {isVisa
-          ? 'Visa / Card settles in EGP. Amount is in the invoice currency; the FX rate converts it to the EGP bank settlement.'
-          : 'Physical cash is recorded in the collected currency. Use the invoice currency to reduce Outstanding.'}
-      </div>
-      <div className="flex justify-end gap-2">
-        <button onClick={() => { reset(); setOpen(false) }} disabled={busy}
-          className="h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">Cancel</button>
-        <button onClick={submit} disabled={busy || !(Number(amount) > 0) || (isVisa && !(Number(fxRate) > 0))}
-          className="h-9 px-5 rounded-full text-xs font-bold p-btn-primary">{busy ? 'Saving…' : 'Save collection'}</button>
-      </div>
-    </div>
-  )
-}
+// P3K — CashCollectionForm removed. Money (cash invoice + collections + excess)
+// is recorded ONLY from the Full Case Editor (ClinicNewCaseP2C edit mode), never
+// from this summary card — one editing place, no duplicate workflow.
 
 function DischargeModal({ c, fin, roomLabel, checkoutAt, setCheckoutAt, busy, onCancel, onConfirm }) {
   return (
