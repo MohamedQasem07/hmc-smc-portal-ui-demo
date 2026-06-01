@@ -98,14 +98,26 @@ export function FacilityBadge({ code, size = 'md' }) {
   )
 }
 
-/** Section eyebrow + title used at top of every page section. */
-export function SectionHead({ eyebrow, title, action, description }) {
+/** Section eyebrow + title used at top of every page section. P3H — gains a
+ *  teal→gold accent rail (and an optional icon chip) so every operational
+ *  section header reads premium and structured, not flat. */
+export function SectionHead({ eyebrow, title, action, description, icon: Icon }) {
   return (
     <div className="flex items-end justify-between gap-3 mb-3">
-      <div className="min-w-0">
-        {eyebrow && <div className="p-eyebrow mb-1">{eyebrow}</div>}
-        {title && <h2 className="p-h2 text-base sm:text-lg" style={{ color: 'var(--p-ink-900)' }}>{title}</h2>}
-        {description && <p className="text-xs mt-1" style={{ color: 'var(--p-ink-500)' }}>{description}</p>}
+      <div className="min-w-0 flex items-stretch gap-2.5">
+        <span className="w-1 rounded-full shrink-0"
+          style={{ background: 'linear-gradient(180deg, var(--p-teal-2) 0%, var(--p-teal) 55%, var(--p-gold) 100%)' }} />
+        {Icon && (
+          <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0 self-start"
+            style={{ background: 'var(--p-teal-soft)', color: 'var(--p-teal-ink)', border: '1px solid #A6E2DC' }}>
+            <Icon className="w-4 h-4" />
+          </span>
+        )}
+        <div className="min-w-0 py-0.5">
+          {eyebrow && <div className="p-eyebrow mb-1">{eyebrow}</div>}
+          {title && <h2 className="p-h2 text-base sm:text-lg" style={{ color: 'var(--p-ink-900)' }}>{title}</h2>}
+          {description && <p className="text-xs mt-1" style={{ color: 'var(--p-ink-500)' }}>{description}</p>}
+        </div>
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>

@@ -286,6 +286,21 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
           </div>
         </header>
 
+        {/* P3H — clear EDIT-MODE banner so the user knows they edit the same case (no duplicate). */}
+        {isEdit && (
+          <div className="p-card p-card-top-navy p-3.5 flex items-start gap-2.5 p-rise" style={{ background: 'var(--p-brand-pale)' }}>
+            <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-mid)', color: 'white' }}>
+              <Info className="w-4 h-4" />
+            </span>
+            <div className="min-w-0">
+              <div className="text-sm font-bold" style={{ color: 'var(--p-ink-900)' }}>Editing an existing case</div>
+              <p className="text-[12px] mt-0.5" style={{ color: 'var(--p-ink-600)' }}>
+                You are updating <strong>{editCase.ourRef}</strong> in place. Saving changes this same case &amp; patient — it does <strong>not</strong> create a duplicate, and the OUR Ref, room and visit status are preserved.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* P2C.R3 — locked OUR Ref shown immediately at the top */}
         <section className="p-card p-5">
           <SectionHead eyebrow="Case Identity" title="OUR Ref — auto-generated · locked"

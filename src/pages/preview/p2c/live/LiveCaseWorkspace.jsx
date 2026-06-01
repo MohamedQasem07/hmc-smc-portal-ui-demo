@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom'
 import {
   ArrowLeft, AlertTriangle, Building2, Hotel, Phone, Mail, BedDouble, Clock,
   CheckCircle2, Pencil, Save, X, Send, ShieldCheck, Gift, Banknote, DoorOpen,
+  Activity, History,
 } from 'lucide-react'
-import { SectionHead, FacilityBadge, FinTypePill, RoutePill } from '../../../../premium/p2cPrimitives'
+import { SectionHead, FacilityBadge, FinTypePill, RoutePill, P2CTimeline } from '../../../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../../../premium/primitives'
 import { useCases, useFindCase, useDemoState } from '../../../../context/DemoStateContext'
 import { useLiveRooms } from '../../../../lib/useLiveRooms'
 import { fmtDate } from '../../../../lib/format'
 import {
   updatePatientContact, updateCaseFields, assignRoom, dischargeCase,
-  fetchCaseFinancials, upsertCashInvoiceCharge,
+  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory,
 } from '../../../../lib/api/portalData'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
 import LiveCaseServices from './LiveCaseServices'
@@ -68,6 +69,41 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     try { setFin(await fetchCaseFinancials(caseId)) } catch { setFin(null) }
   }, [caseId])
   useEffect(() => { loadFin() }, [loadFin, c?.operationalStatus])
+
+  // P3H — room stay history (read-only) for the Case Detail timeline + history block.
+  const [roomHistory, setRoomHistory] = useState([])
+  useEffect(() => {
+    let alive = true
+    if (!caseId) { setRoomHistory([]); return }
+    fetchRoomStayHistory(caseId).then((r) => { if (alive) setRoomHistory(r || []) }).catch(() => { if (alive) setRoomHistory([]) })
+    return () => { alive = false }
+  }, [caseId, c?.operationalStatus, c?.centerRoomId])
+
+  // P3H — operational timeline events, time-ordered. Read-only (no mutation).
+  const timeline = useMemo(() => {
+    if (!c) return []
+    const ev = []
+    if (c.visitDate) ev.push({ at: c.visitDate, tone: 'navy', title: 'Registered & Checked In', detail: [c.registeredAtName, c.routeLabel].filter(Boolean).join(' · ') || null })
+    if (c.transfer) {
+      if (c.transfer.sentAt) ev.push({ at: c.transfer.sentAt, tone: 'transferred', title: `Transfer sent → ${c.transfer.toBranchName || '—'}`, detail: c.transfer.reason || null })
+      if (c.transfer.receivedAt) ev.push({ at: c.transfer.receivedAt, tone: 'teal', title: `Transfer received at ${c.transfer.toBranchName || '—'}`, detail: null })
+    }
+    for (const r of roomHistory) {
+      const rl = r.roomName || (r.roomCode ? `Room ${r.roomCode}` : 'Room')
+      if (r.assignedAt) ev.push({ at: r.assignedAt, tone: 'navy', title: `Room assigned — ${rl}`, detail: r.releasedAt ? null : 'Currently occupying' })
+      if (r.releasedAt) ev.push({ at: r.releasedAt, tone: 'finalized', title: `Room released — ${rl}`, detail: null })
+    }
+    for (const s of (c.sessions || [])) {
+      const at = s.checkInAt || s.date
+      if (at) ev.push({ at, tone: 'teal', title: `Specialist visit${s.specialistName ? ' — ' + s.specialistName : ''}`, detail: [s.specialty, s.source].filter(Boolean).join(' · ') || null })
+    }
+    for (const col of (fin?.collections || [])) {
+      if (col.collected_at) ev.push({ at: col.collected_at, tone: 'cash', title: `Collection — ${fmtAmt(col.actual_collected_amount)} ${col.actual_currency || ''}`.trim(), detail: (col.collection_purpose || '').replace(/_/g, ' ') || null })
+    }
+    if (c.closedAt) ev.push({ at: c.closedAt, tone: 'finalized', title: 'Discharged / Visit ended', detail: 'Case closed · room released' })
+    ev.sort((a, b) => new Date(a.at) - new Date(b.at))
+    return ev.map((e, i) => ({ ...e, key: i, done: true }))
+  }, [c, roomHistory, fin])
 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
@@ -204,84 +240,85 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         </div>
       )}
 
-      {/* Header */}
-      <div className="p-card p-5">
-        <div className="flex items-start gap-4 flex-wrap">
-          <Avatar name={c.patient.name} size={56} tone="navy" />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div className="min-w-0">
-                <h1 className="p-h1 text-xl sm:text-2xl">{c.patient.name}</h1>
-                <div className="text-[11px] font-mono mt-0.5" style={{ color: 'var(--p-ink-400)' }}>{c.ourRef}</div>
+      {/* ===== Premium identity hero ===== */}
+      <section className="p-mesh p-grid-overlay relative overflow-hidden p-rise px-5 sm:px-7 py-5 sm:py-6" style={{ borderRadius: 'var(--p-radius-hero)' }}>
+        <div className="relative z-10">
+          <div className="flex items-start gap-4 flex-wrap">
+            <Avatar name={c.patient.name} size={54} tone="teal" />
+            <div className="flex-1 min-w-0">
+              <h1 className="p-display p-display-light text-[22px] sm:text-[28px] leading-tight">{c.patient.name}</h1>
+              <div className="text-[12px] font-mono mt-1" style={{ color: 'rgba(255,255,255,0.62)' }}>{c.ourRef}</div>
+              <div className="mt-2.5 flex flex-wrap gap-1.5">
+                <FinTypePill type={c.financialType} />
+                <RoutePill route={c.route} routeLabel={c.routeLabel} />
+                {c.billingFacility && <FacilityBadge code={c.billingFacility} size="md" />}
+                {roomLabel && <StatusPill tone="navy" icon={BedDouble}>{roomLabel}</StatusPill>}
+                <StatusPill tone={isClosed ? 'finalized' : 'open'} dot>{c.operationalStatus}</StatusPill>
               </div>
+            </div>
+            <div className="flex flex-col items-stretch gap-2 shrink-0 w-full sm:w-auto">
               {!isClosed && !editing && (
-                <div className="flex items-center gap-2 flex-wrap">
+                <>
                   <button onClick={() => { setOkMsg(null); setError(null); setEditReg(true) }}
-                    className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full text-xs font-bold p-btn-primary">
+                    className="inline-flex items-center justify-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary">
                     <Pencil className="w-3.5 h-3.5" /> Edit Full Registration
                   </button>
                   <button onClick={startEdit}
-                    className="inline-flex items-center gap-1.5 h-9 px-3 rounded-full text-xs font-semibold p-btn-ghost">
+                    className="inline-flex items-center justify-center gap-1.5 h-9 px-4 rounded-full text-xs font-semibold"
+                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.20)', color: 'white' }}>
                     <Pencil className="w-3.5 h-3.5" /> Edit details
                   </button>
-                </div>
+                </>
               )}
               {isClosed && (
                 <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold"
-                  style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-500)', border: '1px solid var(--p-border)' }}>
-                  This case is closed. Please contact admin for corrections.
+                  style={{ background: 'rgba(255,255,255,0.10)', color: 'rgba(255,255,255,0.85)', border: '1px solid rgba(255,255,255,0.20)' }}>
+                  Closed — contact admin for corrections.
                 </span>
               )}
             </div>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              <FinTypePill type={c.financialType} />
-              <RoutePill route={c.route} routeLabel={c.routeLabel} />
-              {c.billingFacility && <FacilityBadge code={c.billingFacility} size="md" />}
-              {roomLabel && <StatusPill tone="navy" icon={BedDouble}>{roomLabel}</StatusPill>}
-              <StatusPill tone={isClosed ? 'finalized' : 'navy'}>{c.operationalStatus}</StatusPill>
-            </div>
-            <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <InfoItem icon={Building2} label="Current Location" value={c.registeredAtName} />
-              <InfoItem icon={Hotel} label="Hotel" value={[c.patient.hotel, c.patient.hotelRoom ? `Rm ${c.patient.hotelRoom}` : ''].filter(Boolean).join(' · ')} />
-              <InfoItem icon={Phone} label="Phone" value={[c.patient.phoneCode, c.patient.phone].filter(Boolean).join(' ')} />
-              <InfoItem icon={Mail} label="Email" value={c.patient.email} />
-            </div>
-            {!isClosed && (!c.patient.phone || !c.patient.email) && (
-              <button onClick={startEdit} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'var(--p-teal)' }}>
-                <Pencil className="w-3 h-3" /> Add missing contact details
-              </button>
-            )}
+          </div>
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <HeroInfo icon={Building2} label="Location" value={c.registeredAtName} />
+            <HeroInfo icon={Hotel} label="Hotel" value={[c.patient.hotel, c.patient.hotelRoom ? `Rm ${c.patient.hotelRoom}` : ''].filter(Boolean).join(' · ')} />
+            <HeroInfo icon={Phone} label="Phone" value={[c.patient.phoneCode, c.patient.phone].filter(Boolean).join(' ')} />
+            <HeroInfo icon={Mail} label="Email" value={c.patient.email} />
+          </div>
+          {!isClosed && (!c.patient.phone || !c.patient.email) && (
+            <button onClick={startEdit} className="mt-2.5 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: '#7FE7DE' }}>
+              <Pencil className="w-3 h-3" /> Add missing contact details
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* Edit details panel (light card) */}
+      {editing && (
+        <div className="p-card p-card-top p-4 space-y-3">
+          <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-brand-mid)' }}>
+            Complete missing details
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <Field label="Phone code"><input className="p-input" value={form.phoneCode} onChange={(e) => setForm({ ...form, phoneCode: e.target.value })} placeholder="+20" /></Field>
+            <Field label="Phone"><input className="p-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="100 000 0000" /></Field>
+            <Field label="Email"><input className="p-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" /></Field>
+            <Field label="Postal code"><input className="p-input" value={form.postal} onChange={(e) => setForm({ ...form, postal: e.target.value })} /></Field>
+            <Field label="Hotel"><input className="p-input" value={form.hotel} onChange={(e) => setForm({ ...form, hotel: e.target.value })} /></Field>
+            <Field label="Hotel room"><input className="p-input" value={form.hotelRoom} onChange={(e) => setForm({ ...form, hotelRoom: e.target.value })} /></Field>
+            <Field label="Clinical note" className="sm:col-span-3"><input className="p-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={() => setEditing(false)} disabled={busy}
+              className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost">
+              <X className="w-4 h-4" /> Cancel
+            </button>
+            <button onClick={saveEdit} disabled={busy}
+              className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-bold p-btn-primary">
+              <Save className="w-4 h-4" /> {busy ? 'Saving…' : 'Save details'}
+            </button>
           </div>
         </div>
-
-        {/* Edit panel */}
-        {editing && (
-          <div className="mt-4 rounded-xl p-4 space-y-3" style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8' }}>
-            <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-brand-mid)' }}>
-              Complete missing details
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Field label="Phone code"><input className="p-input" value={form.phoneCode} onChange={(e) => setForm({ ...form, phoneCode: e.target.value })} placeholder="+20" /></Field>
-              <Field label="Phone"><input className="p-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="100 000 0000" /></Field>
-              <Field label="Email"><input className="p-input" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="name@email.com" /></Field>
-              <Field label="Postal code"><input className="p-input" value={form.postal} onChange={(e) => setForm({ ...form, postal: e.target.value })} /></Field>
-              <Field label="Hotel"><input className="p-input" value={form.hotel} onChange={(e) => setForm({ ...form, hotel: e.target.value })} /></Field>
-              <Field label="Hotel room"><input className="p-input" value={form.hotelRoom} onChange={(e) => setForm({ ...form, hotelRoom: e.target.value })} /></Field>
-              <Field label="Clinical note" className="sm:col-span-3"><input className="p-input" value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} /></Field>
-            </div>
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEditing(false)} disabled={busy}
-                className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost">
-                <X className="w-4 h-4" /> Cancel
-              </button>
-              <button onClick={saveEdit} disabled={busy}
-                className="inline-flex items-center gap-1.5 h-10 px-5 rounded-full text-sm font-bold p-btn-primary">
-                <Save className="w-4 h-4" /> {busy ? 'Saving…' : 'Save details'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5">
         {/* LEFT — encounter / room / specialists */}
@@ -334,6 +371,47 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
                 <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
                   The room stays occupied on the board until this case is discharged.
                 </div>
+              </div>
+            )}
+          </section>
+
+          {/* P3H — Operational timeline + room stay history */}
+          <section className="p-card p-card-top p-5 space-y-4">
+            <SectionHead icon={Activity} eyebrow="Operational" title="Case Timeline"
+              description="Every operational event for this case, in order." />
+            {timeline.length === 0 ? (
+              <div className="rounded-xl px-3 py-6 text-center text-sm" style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-400)', border: '1px dashed var(--p-border-strong)' }}>
+                No events recorded yet.
+              </div>
+            ) : (
+              <P2CTimeline steps={timeline} />
+            )}
+
+            {roomHistory.length > 0 && (
+              <div className="rounded-2xl p-4 space-y-2.5" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>
+                  <History className="w-3.5 h-3.5" /> Room Stay History
+                </div>
+                <ul className="space-y-2">
+                  {roomHistory.map((r) => {
+                    const occupied = r.status === 'occupied' || !r.releasedAt
+                    return (
+                      <li key={r.id} className="rounded-xl px-3 py-2.5 flex items-center gap-x-4 gap-y-1 flex-wrap" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
+                        <span className="inline-flex items-center gap-1.5 text-sm font-bold" style={{ color: 'var(--p-ink-900)' }}>
+                          <BedDouble className="w-3.5 h-3.5" style={{ color: 'var(--p-brand-mid)' }} />
+                          {r.roomName || (r.roomCode ? `Room ${r.roomCode}` : 'Room')}
+                        </span>
+                        <span className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
+                          In: <strong style={{ color: 'var(--p-ink-800)' }}>{r.assignedAt ? fmtDate(r.assignedAt, { withTime: true }) : '—'}</strong>
+                        </span>
+                        <span className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
+                          Out: <strong style={{ color: 'var(--p-ink-800)' }}>{r.releasedAt ? fmtDate(r.releasedAt, { withTime: true }) : '—'}</strong>
+                        </span>
+                        <span className="ms-auto"><StatusPill tone={occupied ? 'open' : 'finalized'} dot>{occupied ? 'Occupied' : 'Released'}</StatusPill></span>
+                      </li>
+                    )
+                  })}
+                </ul>
               </div>
             )}
           </section>
@@ -570,6 +648,18 @@ function InfoItem({ icon: Icon, label, value }) {
         {Icon && <Icon className="w-3 h-3" />} {label}
       </div>
       <div className="text-[13px] font-semibold mt-0.5 truncate" style={{ color: 'var(--p-ink-800)' }}>{value || '—'}</div>
+    </div>
+  )
+}
+
+// P3H — info tile for the dark identity hero band (light text).
+function HeroInfo({ icon: Icon, label, value }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-[0.12em] font-bold flex items-center gap-1.5" style={{ color: 'rgba(255,255,255,0.55)' }}>
+        {Icon && <Icon className="w-3 h-3" />} {label}
+      </div>
+      <div className="text-[13px] font-semibold mt-0.5 truncate" style={{ color: 'rgba(255,255,255,0.92)' }}>{value || '—'}</div>
     </div>
   )
 }

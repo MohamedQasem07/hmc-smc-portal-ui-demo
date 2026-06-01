@@ -1162,7 +1162,7 @@ export async function fetchCaseFinancials(caseId) {
   const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
     db.from('portal_case_charges').select('id, charge_type, amount, currency, status').eq('case_id', caseId),
     db.from('portal_collections')
-      .select('collection_purpose, payment_method, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount')
+      .select('collection_purpose, payment_method, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount, collected_at')
       .eq('case_id', caseId),
   ])
   if (e1) throw e1
@@ -1180,6 +1180,25 @@ export async function fetchCaseFinancials(caseId) {
     }
   }
   return { charges: charges || [], collections: cols || [], cashOutstanding }
+}
+
+/** P3H — Room stay history for a case (READ-ONLY display in Case Detail). Every
+ *  room assignment with entry (assigned_at) + exit (released_at) + status. No
+ *  mutation; RLS: portal_room_assignments readable for accessible cases. */
+export async function fetchRoomStayHistory(caseId) {
+  if (!caseId) return []
+  const db = await getSupabaseClient()
+  const { data, error } = await db.from('portal_room_assignments')
+    .select('id, room_id, assigned_at, released_at, status, room:room_id ( room_code, room_name )')
+    .eq('case_id', caseId).order('assigned_at', { ascending: true })
+  if (error) throw error
+  return (data || []).map((r) => {
+    const rm = one(r.room) || {}
+    return {
+      id: r.id, roomCode: rm.room_code || null, roomName: rm.room_name || null,
+      assignedAt: r.assigned_at, releasedAt: r.released_at, status: r.status,
+    }
+  })
 }
 
 /** Set / update the Cash invoice amount as a portal_case_charges row
