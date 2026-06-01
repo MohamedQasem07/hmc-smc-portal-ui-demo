@@ -476,7 +476,10 @@ export default function ReceptionNewCaseP2C() {
                       onChange={(v) => update('insuranceCompany', v)}
                       autoFillContacts={({ email, phone }) => setForm((p) => ({ ...p, insuranceEmail: email || p.insuranceEmail, insurancePhone: phone || p.insurancePhone }))} />
                   </Field>
-                  <Field label="Insurance Reference Number">
+                  <Field label="Insurance Reference Number"
+                    hint={IS_SUPABASE && form.insuranceCompany && !String(form.insuranceRef || '').trim()
+                      ? 'Insurance Reference is recommended — saved as (pending) and completed by Admin later if not yet issued.'
+                      : undefined}>
                     <input value={form.insuranceRef} onChange={(e) => update('insuranceRef', e.target.value)} placeholder="e.g. ALZ-DEMO-R3-1234" className="p-input" />
                   </Field>
                   <Field label="Insurance Company Email">

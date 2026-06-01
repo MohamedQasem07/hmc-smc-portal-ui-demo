@@ -421,7 +421,7 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
           <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>
             <Banknote className="inline w-3.5 h-3.5 mr-1" /> Cash Invoice
           </div>
-          <div className="grid grid-cols-3 gap-2 items-end">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 items-end">
             <Field label="Invoice amount" className="col-span-1">
               <input className="p-input h-10" type="number" min="0" step="0.01" value={invAmount}
                 onChange={(e) => setInvAmount(e.target.value)} disabled={isClosed || busy} />
@@ -433,7 +433,7 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
             </Field>
             {!isClosed && (
               <button onClick={onSaveInvoice} disabled={busy}
-                className="h-10 rounded-full text-xs font-bold p-btn-primary col-span-1">Save</button>
+                className="h-10 rounded-full text-xs font-bold p-btn-primary col-span-2 sm:col-span-1">Save</button>
             )}
           </div>
           {out && (

@@ -4,6 +4,7 @@ import {
 } from 'lucide-react'
 import { R1_PAYMENT_METHODS, R1_CURRENCIES } from '../data/p2cR1'
 import { cn } from '../lib/cn'
+import { IS_SUPABASE } from '../lib/api/config'
 
 /* =========================================================================
  * PaymentLinesPanel (P2C.R3.1)
@@ -257,6 +258,12 @@ export function PaymentLinesPanel({
               {/* Per-line advisory + treasury channel chip */}
               <div className="lg:col-span-24 text-[11px] flex items-center gap-2 flex-wrap"
                    style={{ color: 'var(--p-ink-500)' }}>
+                {IS_SUPABASE && isVisa && Number(l.fxRefAmount) > 0 && (!l.fxRate || Number(l.fxRate) <= 0) && (
+                  <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold w-full lg:w-auto"
+                        style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+                    <Info className="w-3 h-3 shrink-0" /> FX rate required — this line is not counted until you enter the rate.
+                  </span>
+                )}
                 {isVisa ? <CreditCard className="w-3 h-3" /> : isCash ? <Wallet className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
                 {isVisa ? (
                   <span>Visa / Card settles in <strong>EGP only</strong>. Foreign Amount × FX Rate auto-fills the locked Actual EGP amount.</span>

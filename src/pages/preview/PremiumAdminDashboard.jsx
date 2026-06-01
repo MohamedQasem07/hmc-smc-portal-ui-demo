@@ -347,11 +347,15 @@ function LiveAdminDashboard() {
 
   return (
     <AdminShell active="dashboard">
-      <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-9 space-y-6 max-w-[1500px] w-full mx-auto">
-        <SectionHeader
-          title="Admin Dashboard"
-          description="Live operational overview — every figure is computed from real cases visible to you."
-        />
+      <div className="px-4 sm:px-6 lg:px-10 py-5 lg:py-6 space-y-5 max-w-[1440px] w-full mx-auto">
+        <div className="flex items-end justify-between gap-3 flex-wrap pb-3 border-b" style={{ borderColor: 'var(--p-border)' }}>
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-[0.14em]" style={{ color: 'var(--p-teal)' }}>Admin Workspace</div>
+            <h1 className="text-[22px] lg:text-[26px] font-bold tracking-tight text-ink-900 mt-1 leading-tight">Operations Overview</h1>
+            <p className="text-xs text-ink-500 mt-1">Every figure is computed from real cases visible to you.</p>
+          </div>
+          <StatusPill tone="navy" dot>Live data</StatusPill>
+        </div>
 
         {!hasCases ? (
           <Card padding="none">
@@ -363,26 +367,32 @@ function LiveAdminDashboard() {
           </Card>
         ) : (
           <>
-            {/* ===== Primary KPIs ===== */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <KpiCard label="Total Cases"        value={stats.total}              icon={FileText}     tone="navy" />
-              <KpiCard label="Open / Active"      value={stats.open}               icon={Stethoscope}  tone="sky"     hint={`${stats.closed} discharged / closed`} />
-              <KpiCard label="Admitted Now"       value={stats.admittedNow}        icon={DoorOpen}     tone="violet"  hint={`${stats.dischargedClosed} discharged`} />
-              <KpiCard label="Rooms Occupied"     value={stats.roomsOccupied}      icon={Building2}    tone="emerald" hint="Center rooms with an active patient" />
+            {/* ===== Operations KPIs ===== */}
+            <section className="space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-400)' }}>Operations</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <KpiCard label="Total Cases"        value={stats.total}              icon={FileText}     tone="navy" />
+                <KpiCard label="Open / Active"      value={stats.open}               icon={Stethoscope}  tone="sky"     hint={`${stats.closed} discharged / closed`} />
+                <KpiCard label="Admitted Now"       value={stats.admittedNow}        icon={DoorOpen}     tone="violet"  hint={`${stats.dischargedClosed} discharged`} />
+                <KpiCard label="Rooms Occupied"     value={stats.roomsOccupied}      icon={Building2}    tone="emerald" hint="Center rooms with an active patient" />
+              </div>
             </section>
 
-            {/* ===== Financial type breakdown ===== */}
-            <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-              <KpiCard label="Cash Cases"      value={stats.byFinancial.Cash}      icon={Banknote}   tone="emerald" />
-              <KpiCard label="Insurance Cases" value={stats.byFinancial.Insurance} icon={FileCheck2} tone="sky" />
-              <KpiCard label="Free Cases"      value={stats.byFinancial.Free}      icon={Gift}       tone="violet" />
-              <KpiCard label="Pending Type"    value={stats.byFinancial.Pending}   icon={ShieldAlert} tone="amber"  hint="Awaiting classification" />
+            {/* ===== Financial mix KPIs (clean number tiles, no decorative chips) ===== */}
+            <section className="space-y-2">
+              <div className="text-[11px] uppercase tracking-[0.14em] font-semibold" style={{ color: 'var(--p-ink-400)' }}>Financial mix</div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <KpiCard label="Cash Cases"      value={stats.byFinancial.Cash}      tone="emerald" />
+                <KpiCard label="Insurance Cases" value={stats.byFinancial.Insurance} tone="sky" />
+                <KpiCard label="Free Cases"      value={stats.byFinancial.Free}      tone="violet" />
+                <KpiCard label="Pending Type"    value={stats.byFinancial.Pending}   tone="amber"  hint="Awaiting classification" />
+              </div>
             </section>
 
             {/* ===== Live Treasury — real portal_collections (read-only, no status mutation) ===== */}
             <section className="space-y-3">
               <div className="flex items-end justify-between gap-3 flex-wrap">
-                <SectionHeader icon={Banknote} title="Treasury — Live Collections"
+                <SectionHeader title="Treasury — Live Collections"
                   description="Real portal_collections · grouped by currency · no conversion · patient excess kept separate from cash revenue." className="mb-0" />
                 <div className="inline-flex rounded-full p-0.5 shrink-0" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
                   {[{ id: 'today', label: 'Today' }, { id: 'all', label: 'All' }].map((r) => (
@@ -403,40 +413,44 @@ function LiveAdminDashboard() {
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <TreasuryMoneyCard title="Cash Case Revenue" icon={Banknote} desc="Cash-case invoices collected" byCur={treasury.purpose.cash_case_payment} loading={colLoading} emptyText="No cash-case collections in range." />
-                <TreasuryMoneyCard title="Insurance Excess Collected" icon={Wallet} desc="Patient excess · treasury money · separate from cash" byCur={treasury.purpose.patient_excess} loading={colLoading} emptyText="No insurance excess in range." />
-                <TreasuryMoneyCard title="Physical Cash" icon={Banknote} desc="Cash drawer · original currency" byCur={treasury.channel.physical_cash} loading={colLoading} emptyText="No physical cash in range." />
-                <TreasuryMoneyCard title="Visa / Bank" icon={CreditCard} desc="Card settlements · EGP" byCur={treasury.channel.visa_bank} loading={colLoading} emptyText="No Visa / bank collections in range." />
+                <TreasuryMoneyCard title="Cash Case Revenue" icon={Banknote} tone="emerald" desc="Cash-case invoices collected" byCur={treasury.purpose.cash_case_payment} loading={colLoading} emptyText="No cash-case collections in range." />
+                <TreasuryMoneyCard title="Insurance Excess Collected" icon={Wallet} tone="amber" desc="Patient excess — treasury money, separate from cash revenue" byCur={treasury.purpose.patient_excess} loading={colLoading} emptyText="No insurance excess in range." />
+                <TreasuryMoneyCard title="Physical Cash" icon={Banknote} tone="sky" desc="Cash drawer · original currency" byCur={treasury.channel.physical_cash} loading={colLoading} emptyText="No physical cash in range." />
+                <TreasuryMoneyCard title="Visa / Bank" icon={CreditCard} tone="navy" desc="Card settlements · EGP" byCur={treasury.channel.visa_bank} loading={colLoading} emptyText="No Visa / bank collections in range." />
+              </div>
+
+              <div className="inline-flex items-center gap-1.5 rounded-full bg-subtle border border-border px-3 py-1 text-[11px] font-medium text-ink-500">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Each currency is shown separately — no cross-currency conversion or combined total.
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
                 <Card padding="none" className="overflow-hidden">
                   <div className="px-5 py-4 border-b border-border">
-                    <SectionHeader icon={ArrowLeftRight} title="Transfers" description="Movement between clinics." className="mb-0" />
+                    <SectionHeader title="Transfers" description="Movement between clinics." className="mb-0" />
                   </div>
                   <div className="grid grid-cols-2 divide-x divide-border">
                     <div className="px-5 py-5 text-center">
-                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersPending}</div>
-                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Pending</div>
+                      <div className="text-[28px] sm:text-[32px] font-bold text-ink-900 tabular-nums leading-none tracking-tight">{stats.transfersPending}</div>
+                      <div className="mt-2 text-[10px] uppercase tracking-[0.14em] text-ink-400 font-semibold">Pending</div>
                     </div>
                     <div className="px-5 py-5 text-center">
-                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersReceived}</div>
-                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Received</div>
+                      <div className="text-[28px] sm:text-[32px] font-bold text-ink-900 tabular-nums leading-none tracking-tight">{stats.transfersReceived}</div>
+                      <div className="mt-2 text-[10px] uppercase tracking-[0.14em] text-ink-400 font-semibold">Received</div>
                     </div>
                   </div>
                 </Card>
 
                 <Card padding="none" className="overflow-hidden lg:col-span-2">
                   <div className="px-5 py-4 border-b border-border">
-                    <SectionHeader icon={Banknote} title="Collections Recorded" description={`Live collection lines · ${range === 'today' ? 'today' : 'all dates'}.`} className="mb-0" />
+                    <SectionHeader title="Collections Recorded" description={`Live collection lines · ${range === 'today' ? 'today' : 'all dates'}.`} className="mb-0" />
                   </div>
                   <div className="px-5 py-5 flex items-center gap-6 flex-wrap">
                     <div className="shrink-0">
-                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{colLoading ? '—' : treasury.count}</div>
-                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Collections</div>
+                      <div className="text-[28px] sm:text-[32px] font-bold text-ink-900 tabular-nums leading-none tracking-tight">{colLoading ? '—' : treasury.count}</div>
+                      <div className="mt-2 text-[10px] uppercase tracking-[0.14em] text-ink-400 font-semibold">Collections</div>
                     </div>
                     <p className="text-[11px] text-ink-400 flex-1 min-w-[180px]">Treasury handover reconciliation (open vs handed-over) is tracked outside Portal until that step is enabled. No cross-currency grand total is shown.</p>
-                    <Link to="/admin/collections" className="text-xs font-semibold text-navy-700 whitespace-nowrap">Open Collections →</Link>
+                    <Link to="/admin/collections" className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 h-8 rounded-full text-ink-700 hover:text-ink-900 transition-colors whitespace-nowrap" style={{ border: '1px solid var(--p-border)', background: 'var(--p-surface-tint)' }}>Open Collections <ChevronRight className="w-3.5 h-3.5" /></Link>
                   </div>
                 </Card>
               </div>
@@ -446,10 +460,9 @@ function LiveAdminDashboard() {
             <Card padding="none" className="overflow-hidden">
               <div className="px-5 py-4 border-b border-border">
                 <SectionHeader
-                  icon={ArrowLeftRight}
                   title="Recent Transfer Movement"
                   description="Latest cases transferred between clinics."
-                  action={<Link to="/admin/cases" className="text-xs font-semibold text-navy-700">Open Cases Master →</Link>}
+                  action={<Link to="/admin/p2c-cases" className="text-xs font-semibold inline-flex items-center gap-1 px-2.5 h-8 rounded-full text-ink-700 hover:text-ink-900 transition-colors" style={{ border: '1px solid var(--p-border)', background: 'var(--p-surface-tint)' }}>Open Cases <ChevronRight className="w-3.5 h-3.5" /></Link>}
                   className="mb-0"
                 />
               </div>
@@ -487,8 +500,8 @@ function LiveAdminDashboard() {
 
         {/* ===== Quick access — live operational screens (always available) ===== */}
         <section>
-          <SectionHeader icon={LayoutDashboard} title="Quick Access" description="Jump to the operational screens." className="mb-3" />
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          <SectionHeader title="Quick Access" description="Jump to the operational screens." className="mb-3" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
             <QuickLink to="/admin/p2c-cases"            icon={ClipboardList} label="All Cases"            desc="Clinic & reception" />
             <QuickLink to="/admin/collections"          icon={Banknote}      label="Collections"          desc="Treasury log" />
             <QuickLink to="/admin/insurance-completion" icon={FileCheck2}    label="Insurance Completion" desc="Billing preparation" />
@@ -506,24 +519,40 @@ function LiveAdminDashboard() {
 
 // ====================================================================
 // Live treasury money card — one currency-row list (read-only). No FX, no total.
-function TreasuryMoneyCard({ title, icon: Icon, desc, byCur, loading, emptyText }) {
+function TreasuryMoneyCard({ title, icon: Icon, desc, byCur, loading, emptyText, tone = 'navy' }) {
+  const t = {
+    emerald: { chip: 'bg-emerald-50 text-emerald-700', row: 'bg-emerald-50/40 border-emerald-100', amt: 'text-emerald-800' },
+    amber:   { chip: 'bg-amber-50 text-amber-700',     row: 'bg-amber-50/50 border-amber-200',     amt: 'text-amber-900' },
+    sky:     { chip: 'bg-sky-50 text-sky-700',         row: 'bg-sky-50/40 border-sky-100',         amt: 'text-ink-900' },
+    navy:    { chip: 'bg-navy-50 text-navy-700',       row: 'bg-subtle border-border',             amt: 'text-ink-900' },
+  }[tone] || { chip: 'bg-navy-50 text-navy-700', row: 'bg-subtle border-border', amt: 'text-ink-900' }
   const rows = Object.entries(byCur || {}).sort((a, b) => a[0].localeCompare(b[0]))
   return (
     <Card padding="none" className="overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
-        <SectionHeader icon={Icon} title={title} description={desc} className="mb-0" />
+      <div className="px-4 py-2.5 border-b border-border flex items-start gap-2.5">
+        <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', t.chip)}><Icon className="w-4 h-4" /></div>
+        <div className="min-w-0">
+          <h3 className="text-sm font-semibold text-ink-900 leading-snug">{title}</h3>
+          <p className="text-[11px] text-ink-500 mt-0.5 leading-snug">{desc}</p>
+        </div>
       </div>
       <div className="p-3">
         {loading ? (
-          <p className="text-xs text-ink-400 px-1 py-3">Loading…</p>
+          <div className="h-12 rounded-lg bg-subtle border border-border animate-pulse" />
         ) : rows.length === 0 ? (
-          <p className="text-xs text-ink-400 px-1 py-3">{emptyText}</p>
+          <div className="flex flex-col items-center text-center py-4 px-2">
+            <div className={cn('w-9 h-9 rounded-full flex items-center justify-center mb-2', t.chip)}><Icon className="w-4 h-4" /></div>
+            <p className="text-[11px] text-ink-500">{emptyText}</p>
+          </div>
         ) : (
           <ul className="space-y-1.5">
             {rows.map(([cur, v]) => (
-              <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
-                <span className="text-sm font-semibold text-ink-700">{cur} <span className="text-[10px] text-ink-400">· {v.count}</span></span>
-                <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(v.total, cur)}</span>
+              <li key={cur} className={cn('flex items-center justify-between rounded-lg border px-3 py-2.5', t.row)}>
+                <div className="min-w-0">
+                  <div className={cn('text-[15px] font-bold tabular-nums leading-tight', t.amt)}>{fmtMoney(v.total, cur)}</div>
+                  <div className="text-[11px] text-ink-500 mt-0.5">{v.count} {v.count === 1 ? 'collection' : 'collections'} · {cur}</div>
+                </div>
+                <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-400 shrink-0">{cur}</span>
               </li>
             ))}
           </ul>
@@ -536,8 +565,8 @@ function TreasuryMoneyCard({ title, icon: Icon, desc, byCur, loading, emptyText 
 // Quick-access tile → an operational screen.
 function QuickLink({ to, icon: Icon, label, desc }) {
   return (
-    <Link to={to} className="group rounded-2xl p-4 flex items-start gap-3 bg-white border border-border transition-all hover:border-[var(--p-border-strong)] hover:shadow-sm">
-      <span className="w-9 h-9 rounded-xl inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-pale)', color: 'var(--p-brand-mid)' }}>
+    <Link to={to} className="group rounded-xl p-3.5 flex items-start gap-3 bg-white border border-border transition-all hover:border-[var(--p-border-strong)] hover:shadow-sm">
+      <span className="w-8 h-8 rounded-lg inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-pale)', color: 'var(--p-brand-mid)' }}>
         <Icon className="w-4 h-4" />
       </span>
       <span className="min-w-0">

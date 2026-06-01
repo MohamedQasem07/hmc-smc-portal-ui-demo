@@ -100,7 +100,7 @@ export default function LiveCaseServices({ caseId, readOnly = false }) {
                 ? <StatusPill tone="amber" icon={Clock}>Needs review</StatusPill>
                 : <StatusPill tone="navy" icon={CheckCircle2}>Draft</StatusPill>}
               {!readOnly && (
-                <button onClick={() => remove(s.id)} disabled={busy} className="ml-0.5 w-7 h-7 rounded-full inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }}><X className="w-3.5 h-3.5" /></button>
+                <button onClick={() => remove(s.id)} disabled={busy} className="ml-0.5 w-9 h-9 rounded-full inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }} title="Remove service"><X className="w-4 h-4" /></button>
               )}
             </div>
           ))}

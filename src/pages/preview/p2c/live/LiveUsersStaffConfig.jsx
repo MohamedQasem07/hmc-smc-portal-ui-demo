@@ -234,7 +234,7 @@ function UsersConfig({ onOk, onErr }) {
                     <span key={s.id} className="inline-flex items-center gap-1.5 pl-2.5 pr-1 h-7 rounded-full text-[11px] font-semibold"
                       style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-800)', border: '1px solid var(--p-border)' }}>
                       <MapPin className="w-3 h-3" /> {s.locationName || s.locationCode}
-                      <button onClick={() => revoke(s.id, u)} disabled={busy} className="ml-0.5 w-5 h-5 rounded-full inline-flex items-center justify-center" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }}><X className="w-3 h-3" /></button>
+                      <button onClick={() => revoke(s.id, u)} disabled={busy} className="ml-0.5 w-7 h-7 rounded-full inline-flex items-center justify-center" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }}><X className="w-3 h-3" /></button>
                     </span>
                   ))}
                 <Select value="" onChange={(v) => grant(u, v)} className="w-48">
@@ -428,7 +428,7 @@ function StaffConfig({ onOk, onErr }) {
                 <span key={a.id} className="inline-flex items-center gap-1.5 pl-2.5 pr-1 h-7 rounded-full text-[11px] font-semibold"
                   style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-800)', border: '1px solid var(--p-border)' }}>
                   <MapPin className="w-3 h-3" /> {a.locationName || a.locationCode} · {a.role}
-                  <button onClick={() => unassign(a, s)} disabled={busy} className="ml-0.5 w-5 h-5 rounded-full inline-flex items-center justify-center" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }}><X className="w-3 h-3" /></button>
+                  <button onClick={() => unassign(a, s)} disabled={busy} className="ml-0.5 w-7 h-7 rounded-full inline-flex items-center justify-center" style={{ background: 'var(--p-mixed-soft)', color: '#B14242' }}><X className="w-3 h-3" /></button>
                 </span>
               ))}
             </div>
