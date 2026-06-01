@@ -12,6 +12,7 @@ import { Drawer } from '../../components/ui/Modal'
 import { useToast } from '../../components/ui/Toast'
 import { fmtDate } from '../../lib/format'
 import { OLD_CASES, OLD_CASE_STATUSES, STATUS_TONE, payStateOf } from '../../data/oldCases'
+import { IS_SUPABASE } from '../../lib/api/config'
 
 const nowISO = () => new Date().toISOString()
 const deepCopy = (rows) => rows.map((c) => ({
@@ -21,6 +22,22 @@ const deepCopy = (rows) => rows.map((c) => ({
 }))
 
 export default function OldCasesAdmin() {
+  // Live pilot: Old Cases are owner-gated (not yet imported). Show a clean,
+  // honest empty state instead of the mock archive. Mock mode keeps the demo.
+  if (IS_SUPABASE) {
+    return (
+      <AdminShell active="legacy" searchPlaceholder="Search old cases…">
+        <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto">
+          <div className="p-card p-10 text-center">
+            <div className="text-base font-semibold" style={{ color: 'var(--p-ink-700)' }}>Old Cases</div>
+            <div className="mt-2 text-sm max-w-md mx-auto" style={{ color: 'var(--p-ink-500)' }}>
+              No old cases imported yet. Historical cases will appear here once the archive import is completed.
+            </div>
+          </div>
+        </div>
+      </AdminShell>
+    )
+  }
   const { toast } = useToast()
   const [cases, setCases] = useState(() => deepCopy(OLD_CASES))
   const [selectedId, setSelectedId] = useState(null)
