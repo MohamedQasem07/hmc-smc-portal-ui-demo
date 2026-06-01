@@ -1,0 +1,14 @@
+{
+  "name": "HMC / SMC Clinic Portal",
+  "short_name": "HMC Portal",
+  "description": "Hurghada & Sahl Hasheesh Medical Centre — clinic operations portal",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0A1B3D",
+  "theme_color": "#0A1B3D",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

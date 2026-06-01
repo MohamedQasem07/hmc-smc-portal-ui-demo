@@ -59,9 +59,12 @@ Inventory (read-only, 2026-05-31) — nothing deleted/disabled:
 - [x] Final pilot checklist in report.
 
 ## Deploy
-- [ ] Production build passes (`npm run build:pages`)
-- [ ] Deploy to GitHub Pages staging (authorized) only after all above verified
-- [ ] Live smoke tests against deployed URL
+- [x] Production build passes (`npm run build:pages`) — ✓ built in 5.50s, 1704 modules, no errors
+- [x] Committed `eb549bb` on `staging-supabase`; pushed to `origin/staging-supabase`
+- [x] **LIVE DEPLOY DONE (owner-approved 2026-05-31).** `git push origin staging-supabase:main` → clean fast-forward `849ef90..28439fb`. Pages Action run **#9** (push, head_sha `28439fb`) = **success**. Live URL serves the new build (old asset `index-kTi-2hvE.js` → 404; supabase-connected; no service-role in bundle).
+  - Rollback if needed: `git push origin 849ef90:main --force` (re-deploys prior build), or Settings→Pages→Source None to unpublish. hmc-medical unchanged either way.
+- [x] **Live smoke tests against the deployed URL — ALL 12 PASS (DB-verified).** admin+clinic+reception login; Direct Cash `SHMC-3152026.007` (physical_cash EUR120); Visa `HMC202630002` (visa_bank EGP5500@55); Insurance `HMC202630003` (0 collections, intake only); Transfer `.008` tropitel→al_kawther; receive-as-Cash at al_kawther (physical_cash EUR200); specialist visit + nurse shift (recorded_by set); treasury split, daily-report date selector, admin oversight, users&staff all live. created_by/collected_by/received_by/recorded_by attribution correct throughout.
+- Note: migrations 021/022/023 are already applied to hmc-medical and are additive — the currently-live frontend doesn't call them, so the live URL is unaffected until deploy.
 
 ## Test case refs created this sprint
 - `SHMC-3152026.003` — VisaTest PatientVisa — direct Cash, 1 Visa/Card line → visa_bank EGP 5500 @ FX55 (Phase 3)
