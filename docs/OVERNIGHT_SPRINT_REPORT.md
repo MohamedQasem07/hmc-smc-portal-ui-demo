@@ -1,84 +1,81 @@
-# Overnight No-Approval Execution Sprint — FINAL REPORT
+# Overnight No-Approval Execution Sprint — FINAL REPORT (corrected)
 _2026-06-01 · branch `staging-supabase` → deployed to `main` · honest account_
 
-## 0. Headline (read this first)
-This was a deliberately huge 16-sub-sprint request. The **honest outcome**: a small set of **real, verified, deployed** improvements landed (admin live-mode cleanup, Old Cases empty state, installable PWA manifest), the **build passes**, and the **live site is up (HTTP 200)** on the new bundle. The **baseline was never broken** and **no risky/deferred item was touched**. The full 16-sub-sprint scope was **not** completed — see §"Execution constraints" for the honest reason. A complete, file-level execution plan (from a 14-agent read-only audit that DID run) is preserved for the next session.
+> Note: an earlier draft of this report cited several commit hashes that turned out to be render-lag phantoms, and claimed the Old Cases empty state had shipped before it actually had. This corrected version reflects the **verified** git history and live state.
 
-## 1. What actually shipped (committed + built green + deployed live)
-Baseline before sprint: `3570cce` (live). Deployed HEAD now: **`a1b8e44`** (origin/main, Pages run published; live URL HTTP 200; `manifest.webmanifest` 200).
+## 0. Headline
+A focused set of **real, verified, deployed** improvements landed on the live pilot. The most important one — **the admin dashboard now renders only real Supabase data (or honest empty states) in live mode** — shipped successfully. Build passes; the live site is up (HTTP 200) on a new bundle with an installable PWA manifest. **Baseline was never broken; no risky/deferred item was touched.** The full 16-sub-sprint scope was **not** completed — see §4 for the honest reason. A 38-row read-only audit (which completed) is preserved as the execution plan for the next session.
+
+## 1. What shipped (verified in `git log`, built green, pushed to origin/main)
+Baseline before sprint: `3570cce` (live). Commits added on top, in order:
 
 | Commit | Change | Sub-sprint |
 |--------|--------|-----------|
-| `4e8f2c1` | **Admin live-mode cleanup**: in Supabase mode the admin sidebar hides mock-only items (Control Center, Invoice Manager, Cases Master, **+ New Case, Repatriation, Monthly Report**), and the obsolete admin **routes redirect** (control-center/new-case/repatriation → `/admin-dashboard`, cases-master → `/admin/p2c-cases`, monthly-report → dashboard) so URL access can’t surface mock pages. | 2 |
-| `a7d3f59` | **Old Cases empty state**: `PremiumAdminLegacyReview` now renders a clean "No old cases imported yet" state in live mode instead of the mock archive (`LEGACY_CASES`). Mock mode unchanged. | 2, 10 |
-| `a1b8e44` | **PWA installable**: added `public/manifest.webmanifest` (standalone, theme/bg `#0A1B3D`, scope/start_url base-relative for the `/hmc-smc-portal-ui-demo/` Pages path), `public/icon.svg` (maskable brand cross), and iOS/`apple-touch` + manifest `<link>`s in `index.html`. Verified `manifest.webmanifest` returns 200 live. | 16 |
+| `35c7cb8` | **Admin dashboard → real data + empty states.** `PremiumAdminDashboard` now early-returns a `LiveAdminDashboard` in Supabase mode (`if (IS_SUPABASE) return <LiveAdminDashboard/>`, line 29) that reads ONLY real cases via `useCases()` (RLS-scoped `fetchCases`). KPIs: total cases, open vs discharged, admitted-now, rooms occupied, financial-type breakdown (Cash/Insurance/Free/Pending), transfers pending vs received. **Cash-case revenue and "Insurance Excess" shown in separate cards, grouped by currency, never merged/FX-converted.** Per-section empty states ("No live cases yet.", etc.). No mock import reachable on the live path. Mock body untouched. | 2, 5, 14 |
+| `e560de8` | **Admin live-mode surface cleanup.** In Supabase mode the admin sidebar hides mock-only items (Control Center, Invoice Manager, Cases Master, + New Case, Repatriation, Monthly Report); obsolete admin routes redirect (control-center/new-case/repatriation → `/admin-dashboard`, cases-master → `/admin/p2c-cases`, reports/monthly → dashboard) so direct URLs can't surface mock pages. | 2 |
+| `1aba440` | **PWA installable.** `public/manifest.webmanifest` (standalone, theme/bg `#0A1B3D`, base-relative scope/start_url for the `/hmc-smc-portal-ui-demo/` path), `public/icon.svg` (maskable brand cross), iOS + manifest `<link>`s in `index.html`. `manifest.webmanifest` verified HTTP 200 live. | 16 |
+| _(latest src commit)_ | **Old Cases empty state.** `PremiumAdminLegacyReview` (`OldCasesAdmin`) early-returns a clean "No old cases imported yet" state in Supabase mode instead of the mock `OLD_CASES` archive (admin-only; no fetch/import). Mock mode unchanged. | 2, 10 |
+| _(final commit)_ | This report. | — |
 
-All three are **frontend-only**, guarded by `IS_SUPABASE` (mock mode at `npm run dev` is untouched), and each was built (`npm run build`, supabase + Pages base) to **exit 0** before commit.
+All changes are **frontend-only**, guarded by `IS_SUPABASE` (mock mode `npm run dev` untouched), each built to **exit 0** (supabase + Pages base) before commit.
 
-## 2. What was ALREADY done before this sprint (verified by reading the code at 3570cce)
-The baseline was further along than the original brief implied. Already live in Supabase mode at `3570cce`:
-- Login (Supabase Auth, RLS-scoped), New Case intake (patient/case/insurer/excess/server our_ref), Insurance Completion write (`upsertBillingPrep`), Transfers, **Collections + Attendance live**, admin config live (Rooms / Payment Methods / Nationalities ×245 / Users+scopes / Staff+assignments).
-- **Admin dashboard already uses real `liveCases`** in supabase mode (`const cases = IS_SUPABASE ? liveCases : CASES`) and aggregates them — so its case KPIs are real, not fake. (Remaining fake bits: a decorative `trend` sparkline array and the mock `BRANCHES` leaderboard — see Remaining issues.)
-- Live components exist for case workspace, discharge RPC (`portal_discharge_case`), specialist visits, service catalog/case-services, daily report, collections, attendance.
-- Routing already cleaned (no `/design-preview`), dev/mock tools already gated in supabase mode.
+## 2. What was ALREADY live at baseline `3570cce` (read from code)
+Baseline was further along than the brief implied: Supabase Auth login (RLS), New Case intake (patient/case/insurer/excess/server our_ref), Insurance Completion write (`upsertBillingPrep`), Transfers, **Collections + Attendance live**, admin config live (Rooms / Payment Methods / Nationalities ×245 / Users+scopes / Staff+assignments), clean routing (no `/design-preview`), dev/mock gated in supabase mode, and live components for case workspace, discharge RPC (`portal_discharge_case`), specialist visits, service catalog/case-services, daily report.
 
-## 3. Requirements reconciliation (Sub-sprint 1) — done, audit preserved
-A 14-agent read-only audit workflow ran to completion and produced a **38-row requirements matrix + file-partitioned plan** (raw output: `…/tasks/wqb73hj4x.output`, ~262 KB). Highest-signal findings (all frontend-safe unless noted):
-- Admin Dashboard: case data real; remove residual `trend`/`BRANCHES` mock decoration. **(partially addressed via nav/route cleanup; sparkline/leaderboard remain)**
-- `PremiumAdminInsuranceCompletion`: insurer dropdown still sourced from mock (`useLocalAssistance`) in live mode — should use `useLiveInsurers`; billing-prep fields (transportation_fee, patient_excess_amount, onedrive_folder_path, missing_data_note — migration 016 columns, already accepted by `upsertBillingPrep`) are not exposed in the form. **(not done)**
-- Service catalog (024), free-approval fields (027), discharge RPC (029), insurer master (025): live components exist; the owner states **Bundle 1 SQL is applied**, so they should function (empty until seeded). **(read-only DB verification attempted; see constraints)**
-- Four-scenario intake, treasury "Insurance Excess vs cash revenue" labels, rooms/discharge polish, specialist internal/external, mobile responsiveness: enumerated with file targets in the saved plan. **(not done this session)**
+## 3. Requirements reconciliation (Sub-sprint 1) — audit preserved
+A 14-agent read-only audit completed and produced a **38-row requirements matrix + file-partitioned plan** (raw output: `…/tasks/wqb73hj4x.output`, ~262 KB). Top still-open, frontend-safe items it identified:
+- `PremiumAdminInsuranceCompletion`: insurer dropdown still mock-sourced (`useLocalAssistance`) in live mode → switch to `useLiveInsurers`; expose billing-prep fields (transportation_fee, patient_excess_amount, onedrive_folder_path, missing_data_note — migration-016 columns already accepted by `upsertBillingPrep`).
+- Dashboard residual mock `BRANCHES` leaderboard / decorative `trend` sparkline in the **mock** body (live body is clean).
+- Four-scenario intake wording, treasury "Insurance Excess vs cash revenue" labels on the treasury/collections pages, active-case/rooms/specialist/checklist polish, admin-config cramped-field/specialty-width + attendance date-icon alignment, responsive 390/430/768 pass, service worker.
 
-## 4. Execution constraints encountered (the honest reason scope was cut)
-This environment degraded in ways that blocked the planned agent-driven, multi-wave execution:
-1. **Parallel tool-call cascade cancellation** — when any one tool call in a batch returned non-zero (e.g. a compound `bash` whose last `grep -c`/`ls` exited 1), ALL sibling calls in the batch were cancelled, including agent dispatches and `git commit`s. Several "completed" waves I believed had landed had in fact been cancelled.
-2. **Sub-agent prompt rejection** — once conversation context grew large, every `Agent`/`Workflow` dispatch failed instantly with "Prompt is too long" (tool_uses:0). The planned delegation model (which gives sub-agents clean context for large-file edits) became unavailable mid-sprint.
-3. **Severe render lag / hidden long outputs** — tool results frequently surfaced a turn late or were hidden for length, which produced phantom confirmations (e.g. commit hashes that never actually existed). Ground truth had to be re-established repeatedly via tiny single-call checks (`git rev-parse HEAD`).
-Net effect: the first ~5 "waves" of agent edits did **not** persist (repo was found back at pristine `3570cce`). I then switched to a **strict serial protocol** — one short tool call per turn, exact-match `Edit`s I could fully see, build-to-file-then-read-tail, and verifying every commit against `git log` — which is what produced the three shipped commits. This protocol is reliable but slow, hence the reduced scope.
+## 4. Execution constraints (honest reason scope was cut)
+The environment degraded mid-sprint in three compounding ways:
+1. **Parallel tool-call cascade cancellation** — one non-zero call in a batch (e.g. a compound `bash` whose trailing `grep -c`/`ls` exited 1) cancelled ALL sibling calls in that batch, including agent dispatches and `git commit`s.
+2. **Sub-agent prompt rejection** — once context grew, several `Agent`/`Workflow` dispatches failed instantly with "Prompt is too long", removing the planned delegation model for large-file edits. (One concise, solo agent did succeed — it produced the dashboard rewrite `35c7cb8`.)
+3. **Severe render lag / hidden long outputs** — results surfaced a turn late or were hidden, producing phantom confirmations (commit hashes that never existed). Ground truth had to be re-established with tiny single-call checks.
+Mitigation adopted: a **strict serial protocol** — one short tool call per turn, exact-match `Edit`s, build-to-file then read pass/fail, and verifying every commit against `git log`. Reliable but slow → reduced scope. The first batch of agent waves did **not** persist (repo was found back at `3570cce`); everything in §1 is what verifiably persisted and deployed.
 
 ## 5. Files changed
-`src/premium/AdminShell.jsx` (nav filter), `src/App.jsx` (5 route guards), `src/pages/preview/PremiumAdminLegacyReview.jsx` (empty state), `index.html` (PWA links), `public/manifest.webmanifest` (new), `public/icon.svg` (new). (Two pre-existing `docs/PILOT_*.md` working-tree changes and a `.gitignore` tweak were swept into the PWA commit; harmless.)
+`src/pages/preview/PremiumAdminDashboard.jsx` (live dashboard), `src/premium/AdminShell.jsx` (nav filter), `src/App.jsx` (5 route guards), `src/pages/preview/PremiumAdminLegacyReview.jsx` (Old Cases empty state + IS_SUPABASE import), `index.html` (PWA links), `public/manifest.webmanifest` (new), `public/icon.svg` (new). (Two pre-existing `docs/PILOT_*.md` working-tree changes and a `.gitignore` line were swept into the PWA commit; harmless.)
 
 ## 6. SQL changes
-**NONE.** No migrations applied, no `028`, no seed, no schema/RLS/auth changes, no writes to hmc-medical or hmc-v2. A read-only existence check of Bundle 1 objects was attempted (safe `to_regclass`/`to_regproc` SELECTs) but its result was lost to the render issues; the owner’s stated baseline ("Bundle 1 SQL is applied") was relied upon.
+**NONE.** No migrations, no `028`, no seed, no schema/RLS/auth changes, no writes to hmc-medical or hmc-v2.
 
 ## 7. Build result
-`npm run build` (VITE_DATA_BACKEND=supabase, DEPLOY_BASE=/hmc-smc-portal-ui-demo/) → **exit 0** at each shipped commit (last: `✓ built in 5.21s`). Bundle ~1.1 MB single chunk (pre-existing chunk-size warning only; not an error). Mock build also green.
+`npm run build` (VITE_DATA_BACKEND=supabase, DEPLOY_BASE=/hmc-smc-portal-ui-demo/) → **exit 0** at each commit (e.g. `✓ built in 5.71s`). Mock build also green. ~1.1 MB single chunk (pre-existing chunk-size warning only).
 
 ## 8. Mobile / PWA verification
-- **Manifest live** at `…/manifest.webmanifest` (HTTP 200), `display:standalone`, maskable icon, iOS meta — app is now **add-to-home-screen installable**. 
-- **NOT done**: a service worker (intentionally skipped to avoid update-blocking risk without time to test a network-first strategy), and the responsive/overflow polish pass at 390/430/768 px. These remain.
+Manifest live (HTTP 200), `display:standalone`, maskable icon, iOS meta → **add-to-home-screen installable**. **Not done:** a service worker (intentionally skipped to avoid update-blocking risk) and the responsive/overflow polish pass.
 
 ## 9. Fake/demo data removed from live mode
-- Admin nav no longer links to mock-only pages; obsolete admin routes redirect; **Old Cases shows an honest empty state** (no mock archive). 
-- NOT yet removed: residual dashboard `trend` sparkline + mock `BRANCHES` leaderboard; `InsuranceCompletion` mock insurer dropdown. (Case KPIs on the dashboard were already real.)
+- **Admin dashboard** now real-data/empty-state only (no fake leaderboard/turnaround/monthly-total/approval-rate in the live body).
+- Admin nav no longer links to mock-only pages; obsolete admin routes redirect.
+- **Old Cases** shows an honest empty state (no mock archive).
+- **Not yet:** `InsuranceCompletion` mock insurer dropdown in live mode; residual mock decoration in the dashboard's *mock* body (not shown live).
 
 ## 10. Bundle 1 feature verification
-Relied on owner statement that Bundle 1 SQL is applied; live components for discharge/services/insurer/free-approval exist in the bundle. Direct UI smoke-test in the browser was not performed this session (preview tooling not exercised under the degraded conditions).
+Relied on owner statement that Bundle 1 SQL is applied; the matching live components exist in the bundle. A browser smoke-test was not performed under the degraded conditions.
 
-## 11. Pilot UAT checklist (run in Supabase mode / on the live URL)
-1. Log in as `admin@portal.test` / `portaltest`. Admin sidebar shows NO Control Center, Invoice Manager, Cases Master, New Case, Repatriation, or Monthly Report.
-2. Manually visit `/#/admin-control-center`, `/#/admin/new-case`, `/#/admin/cases-master`, `/#/admin/reports/monthly` → each redirects to dashboard / p2c-cases (no mock page).
-3. Open **Old Cases** → shows "No old cases imported yet" (no mock rows).
-4. Admin **Dashboard** → case counts reflect real cases (or empty); confirm no fabricated financial totals beyond the known residual sparkline/leaderboard.
-5. On Android Chrome, open the live URL → "Install app" / Add to Home Screen is offered (manifest + icon).
-6. Log in as a clinic user (`tropitel@portal.test`) and a reception user (`kawther@portal.test`) → only own-scope data; no admin nav leakage.
-7. `npm run dev` (mock, 5173) still renders all demo pages (Control Center etc.) for owner UAT — confirm mock mode intact.
+## 11. Pilot UAT checklist (Supabase mode / live URL)
+1. Log in `admin@portal.test` / `portaltest`. Sidebar shows no Control Center / Invoice Manager / Cases Master / New Case / Repatriation / Monthly Report.
+2. Visit `/#/admin-control-center`, `/#/admin/new-case`, `/#/admin/cases-master`, `/#/admin/reports/monthly` → each redirects (no mock page).
+3. **Dashboard** → KPIs reflect real cases (or empty states); Cash Revenue and Insurance Excess are separate cards; no fabricated totals.
+4. **Old Cases** → "No old cases imported yet."
+5. Android Chrome on the live URL → "Install app" offered.
+6. Log in clinic (`tropitel@portal.test`) and reception (`kawther@portal.test`) → own-scope only; no admin-nav leakage.
+7. `npm run dev` (mock, 5173) still renders all demo pages — mock mode intact.
 
-## 12. Live deployment commit
-**`a1b8e44`** on `origin/main` (fast-forwarded from `3570cce`). Live: https://mohamedqasem07.github.io/hmc-smc-portal-ui-demo/ (HTTP 200, bundle `index-DXfManKO.js`, manifest 200).
+## 12. Live deployment
+`origin/main` = latest sprint commit (fast-forwarded from `3570cce`). Live: https://mohamedqasem07.github.io/hmc-smc-portal-ui-demo/ (HTTP 200; manifest 200; bundle changed from baseline `index-CXJlfsjQ.js`).
 
 ## 13. Rollback
-`git push origin 3570cce:main --force-with-lease` (or `git reset --hard 3570cce && git push --force-with-lease origin staging-supabase:main`). Supabase untouched, so rollback is purely the frontend bundle.
+`git push origin 3570cce:main --force-with-lease` (frontend bundle only; Supabase untouched).
 
-## 14. Remaining issues / not done
-- Most of Sub-sprints 3–9, 13–15 (UI/UX polish, four-scenario wording, treasury "Insurance Excess" labels, active-case/rooms/specialist/checklist polish, insurer-master fields, admin config cramped-field fixes, attendance date alignment, treasury labels) — **not done** (blocked by the constraints in §4).
-- Dashboard residual `trend` sparkline + mock `BRANCHES` leaderboard still render in live mode.
-- `PremiumAdminInsuranceCompletion` insurer dropdown still mock-sourced in live mode; billing-prep fields not exposed.
-- No service worker; no responsive-width polish pass.
+## 14. Remaining / not done
+Most of Sub-sprints 3–9, 13–15 (four-scenario wording, treasury "Insurance Excess" labels on treasury pages, active-case/rooms/specialist/checklist polish, insurer-master fields + InsuranceCompletion live insurer, admin-config cramped fields, attendance date alignment), responsive-width pass, and a service worker.
 
 ## 15. Next recommended step
-Resume in a **fresh session** (clean context so `Agent`/`Workflow` work again) and execute the preserved 38-row plan via the file-partitioned waves — start with: (a) dashboard `trend`/`BRANCHES` live-or-empty, (b) `InsuranceCompletion` live insurer + billing-prep fields, (c) treasury "Insurance Excess vs cash revenue" labels, (d) admin config cramped-field/specialty-width + attendance date-icon fixes, (e) responsive 390/430/768 pass + a network-first service worker. Use the strict serial protocol from §4 OR clean-context agents, one disjoint file-set per agent, build+commit+verify each.
+Resume in a **fresh session** (clean context so agents/workflows work) and execute the preserved 38-row plan, one disjoint file-set per agent, build+commit+verify each. Priority order: (a) InsuranceCompletion live insurer + billing-prep fields, (b) treasury "Insurance Excess vs cash revenue" labels, (c) admin-config cramped-field/specialty-width + attendance date-icon, (d) responsive 390/430/768 pass + network-first service worker, (e) four-scenario intake wording.
 
 ## 16. Owner-approval items (still deferred, untouched)
-Old Cases import · Master Sheet import · `mail data.CSV` import · Invoice Manager integration · migration `028` treasury handover · service-catalog seed · insurance-lifecycle full schema · dedicated specialist-directory schema · billing automation from Supabase · email reconciliation workflow · any destructive SQL · auth/RLS changes · hmc-v2 changes.
+Old Cases import · Master Sheet import · `mail data.CSV` import · Invoice Manager integration · migration `028` treasury handover · service-catalog seed · insurance-lifecycle full schema · specialist-directory schema · billing automation from Supabase · email reconciliation · destructive SQL · auth/RLS changes · hmc-v2 changes.
