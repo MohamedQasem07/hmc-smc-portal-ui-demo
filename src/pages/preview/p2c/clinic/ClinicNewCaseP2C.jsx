@@ -13,7 +13,7 @@ import { InsurerCombobox } from '../../../../premium/InsurerCombobox'
 import { useUserMode } from '../../../../context/UserModeContext'
 import { useDemoState, useNextOurRef } from '../../../../context/DemoStateContext'
 import {
-  getClinicName, P2C_BILLING_FACILITIES, P2C_ROUTES_EXTERNAL,
+  getClinicName, P2C_BILLING_FACILITIES, P2C_ROUTES_EXTERNAL, ALL_CLINICS_AND_BRANCHES,
 } from '../../../../data/p2c'
 import {
   R1_FINANCIAL_TYPES, R1_CURRENCIES, R1_COUNTRY_CODES, R1_NATIONALITIES,
@@ -24,7 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
-import { updateCaseRegistration, upsertCashInvoiceCharge } from '../../../../lib/api/portalData'
+import { updateCaseRegistration, upsertCashInvoiceCharge, fetchLocations } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -54,12 +54,38 @@ const STEPS = [
 
 export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone } = {}) {
   const navigate = useNavigate()
-  const { clinicId } = useUserMode()
+  const { clinicId, currentUser } = useUserMode()
   const isEdit = !!editCase
-  // P3G — in edit mode the registering location/identity comes from the existing
-  // case (it never changes on edit), not the logged-in clinic context.
-  const regAtId = isEdit ? (editCase.registeredAtId || clinicId) : clinicId
-  const clinicName = isEdit ? (editCase.registeredAtName || getClinicName(regAtId)) : getClinicName(clinicId)
+  // P3J — ADMIN GLOBAL OPERATION: an admin holds no own-clinic scope, so they
+  // register a case ON BEHALF of any active clinic/branch via a location picker.
+  // Non-admins are ALWAYS locked to their own clinicId (the picker is hidden), so
+  // their behaviour is unchanged. Edit mode never offers the picker.
+  const isAdmin = currentUser?.role === 'admin'
+  const adminPicker = isAdmin && !isEdit
+  const [adminLocations, setAdminLocations] = useState([])  // [{ code, name, kind }]
+  const [adminLocId, setAdminLocId] = useState(null)        // a location CODE
+  useEffect(() => {
+    if (!adminPicker) return
+    let alive = true
+    if (IS_SUPABASE) {
+      fetchLocations()
+        .then((rows) => { if (alive) setAdminLocations((rows || [])
+          .filter((r) => r.active !== false && r.code !== 'legacy_unspecified')
+          .map((r) => ({ code: r.code, name: r.name, kind: r.type === 'main_branch' ? 'branch' : 'external' }))) })
+        .catch(() => {})
+    } else {
+      setAdminLocations(ALL_CLINICS_AND_BRANCHES.map((l) => ({ code: l.id, name: l.name, kind: l.kind === 'branch' ? 'branch' : 'external' })))
+    }
+    return () => { alive = false }
+  }, [adminPicker])
+  const selAdminLoc = adminLocations.find((l) => l.code === adminLocId) || null
+
+  // P3G/P3J — registering location/identity. Edit: from the existing case (never
+  // changes). Create + admin: the picked location (code). Create + non-admin: own clinic.
+  const regAtId = isEdit ? (editCase.registeredAtId || clinicId) : (isAdmin ? (adminLocId || '') : clinicId)
+  const regAtKind = isEdit ? (editCase.registeredAtKind || 'external') : (isAdmin ? (selAdminLoc?.kind || 'external') : 'external')
+  const clinicName = isEdit ? (editCase.registeredAtName || getClinicName(regAtId))
+    : (isAdmin ? (selAdminLoc?.name || '—') : getClinicName(clinicId))
   const { actions } = useDemoState()
 
   // P2C.R3 — live preview of the OUR Ref that will be assigned on submit.
@@ -156,6 +182,11 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   if (refContext.billingFacility !== (form.financialType === 'Insurance' ? (form.billingFacility || null) : null)) {
     setRefContext((p) => ({ ...p, billingFacility: form.financialType === 'Insurance' ? (form.billingFacility || null) : null }))
   }
+  // P3J — keep the OUR Ref preview's location in sync with the admin's picked
+  // clinic/branch (registeredAtId/Kind drive the ref family prefix).
+  if (refContext.registeredAtId !== regAtId || refContext.registeredAtKind !== regAtKind) {
+    setRefContext((p) => ({ ...p, registeredAtId: regAtId, registeredAtKind: regAtKind }))
+  }
 
   // Validation
   const needsFacility = showInsuranceBlock && !form.billingFacility
@@ -163,7 +194,9 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const needsTransferDest = isOtherDestination && !form.transferDestination
   // Bundle 1 / Phase E — Free / Complimentary requires reason + approver before save.
   const needsFreeApproval = showFreeBlock && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
-  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval
+  // P3J — an admin must pick the clinic/branch before the case can be created.
+  const needsAdminLocation = adminPicker && !adminLocId
+  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval && !needsAdminLocation
 
   // P3I — per-step completion (non-blocking; only drives the stepper's green check).
   const stepStatus = {
@@ -224,9 +257,9 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
     const newCase = {
       id: `r3_${Date.now()}`,
       ourRef: nextRef.ref,
-      registeredAtId: clinicId,
+      registeredAtId: regAtId,
       registeredAtName: clinicName,
-      registeredAtKind: 'external',
+      registeredAtKind: regAtKind,
       visitDate: visitDateIso,
       patient: {
         firstName: form.firstName, lastName: form.lastName,
@@ -335,6 +368,41 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
             </p>
           </div>
         </header>
+
+        {/* P3J — ADMIN GLOBAL OPERATION: choose the clinic/branch this case is filed under. */}
+        {adminPicker && (
+          <section className="p-card p-card-top-navy p-4 sm:p-5 space-y-3" style={{ background: 'var(--p-brand-pale)' }}>
+            <div className="flex items-start gap-3 flex-wrap">
+              <span className="w-9 h-9 rounded-lg inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-mid)', color: 'white' }}>
+                <ShieldCheck className="w-4 h-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-brand-mid)' }}>Admin — operate on behalf of a clinic / branch</div>
+                <p className="text-[12px] mt-0.5" style={{ color: 'var(--p-ink-600)' }}>
+                  You have no fixed clinic, so choose where this case is registered. The case is filed under the selected location — not your account.
+                </p>
+              </div>
+            </div>
+            <FieldGrid cols={2}>
+              <Field label="Register case for clinic / branch *">
+                <SelectInput value={adminLocId || ''} onChange={(v) => setAdminLocId(v || null)}
+                  options={[{ value: '', label: '— Select clinic / branch —' },
+                    ...adminLocations.map((l) => ({ value: l.code, label: `${l.name}${l.kind === 'branch' ? ' (Main Branch)' : ''}` }))]} />
+              </Field>
+              <div className="flex items-end">
+                {selAdminLoc ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-bold" style={{ background: 'var(--p-teal-soft)', color: '#0A6E63', border: '1px solid var(--p-teal)' }}>
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Admin operating for: {selAdminLoc.name}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-semibold" style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+                    <AlertTriangle className="w-3.5 h-3.5" /> Pick a location to continue
+                  </span>
+                )}
+              </div>
+            </FieldGrid>
+          </section>
+        )}
 
         {/* P3H — clear EDIT-MODE banner so the user knows they edit the same case (no duplicate). */}
         {isEdit && (

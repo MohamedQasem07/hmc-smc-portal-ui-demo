@@ -55,7 +55,7 @@ const NAV_ITEMS = [
 // unified view — its route already redirects to the live /admin/p2c-cases
 // ("All P2C Cases"), which stays reachable via the "Clinic & Reception" item,
 // so the redundant nav entry is hidden in pilot. All stay available in mock mode.
-const MOCK_ONLY_NAV_IDS = ['control', 'manager', 'cases', 'new-case', 'repatriation', 'reports-monthly']
+const MOCK_ONLY_NAV_IDS = ['control', 'manager', 'cases', 'repatriation', 'reports-monthly']
 const NAV_ITEMS_VISIBLE = IS_SUPABASE
   ? NAV_ITEMS.filter((n) => !MOCK_ONLY_NAV_IDS.includes(n.id))
   : NAV_ITEMS

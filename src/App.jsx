@@ -132,7 +132,8 @@ export default function App() {
             <Route element={<RequireRole allow={['admin']} />}>
               <Route path="/admin-dashboard"            element={<PremiumAdminDashboard />} />
               <Route path="/admin-control-center"       element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminControlCenter />} />
-              <Route path="/admin/new-case"             element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminNewCase />} />
+              {/* P3J — admin New Case is live: reuse the Supabase-wired clinic form (with admin location selector). */}
+              <Route path="/admin/new-case"             element={IS_SUPABASE ? <Navigate to="/clinic/new-case" replace /> : <PremiumAdminNewCase />} />
               <Route path="/admin/repatriation"         element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminRepatriation />} />
               <Route path="/admin/cases-master"         element={IS_SUPABASE ? <Navigate to="/admin/p2c-cases" replace /> : <PremiumAdminCasesMaster />} />
               <Route path="/admin/case-detail/:id"      element={<PremiumAdminCaseDetail />} />

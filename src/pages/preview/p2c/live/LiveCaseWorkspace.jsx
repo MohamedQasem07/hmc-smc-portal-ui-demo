@@ -8,6 +8,7 @@ import {
 import { SectionHead, FacilityBadge, FinTypePill, RoutePill, P2CTimeline } from '../../../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../../../premium/primitives'
 import { useCases, useFindCase, useDemoState } from '../../../../context/DemoStateContext'
+import { useUserMode } from '../../../../context/UserModeContext'
 import { useLiveRooms } from '../../../../lib/useLiveRooms'
 import { fmtDate } from '../../../../lib/format'
 import {
@@ -59,6 +60,8 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const c = useFindCase(caseId)
   const cases = useCases()
   const { actions } = useDemoState()
+  const { currentUser } = useUserMode()
+  const isAdmin = currentUser?.role === 'admin'   // P3J — admin global operation
   const refresh = actions.refreshCases
   const isClosed = c?.operationalStatus === 'Closed'
 
@@ -480,6 +483,15 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
                   Sent: {fmtDate(c.transfer.sentAt, { withTime: true })}
                   {c.transfer.receivedAt && <> · Received: {fmtDate(c.transfer.receivedAt, { withTime: true })}</>}
                 </div>
+                {/* P3J — ADMIN GLOBAL OPERATION: receive an incoming transfer on behalf of the
+                    destination branch (when no branch receptionist is available). The receive
+                    RPC is admin-aware; this deep-links into the live receive+classify flow. */}
+                {isAdmin && !c.transfer.receivedAt && c.transfer.toBranchId && (
+                  <Link to={`/reception/${String(c.transfer.toBranchId).replace(/_/g, '-')}/incoming-transfers/${c.id}`}
+                    className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold p-btn-primary mt-1.5">
+                    <DoorOpen className="w-3.5 h-3.5" /> Receive as {c.transfer.toBranchName || 'destination branch'}
+                  </Link>
+                )}
               </div>
             </section>
           )}

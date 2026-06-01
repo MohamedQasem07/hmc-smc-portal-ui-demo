@@ -7,8 +7,9 @@ import { SectionHead } from '../../../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../../../premium/primitives'
 import {
   fetchAttendance, fetchAssignableStaff, locationIdForCode,
-  recordNurseShift, endNurseShift, recordDoctorDuty,
+  recordNurseShift, endNurseShift, recordDoctorDuty, fetchLocations,
 } from '../../../../lib/api/portalData'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 import { fmtDMY, fmtHM, diffHM, todayYMD, parseYMD, shiftYMD, fmtLongLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
 
@@ -44,6 +45,25 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
   const [selectedNurse, setSelectedNurse] = useState('')
   const [selectedDoctor, setSelectedDoctor] = useState('')
   const [busy, setBusy] = useState(false)
+  // P3J — ADMIN COVERAGE OVERRIDE: an admin records attendance/coverage for ANY
+  // clinic/branch (the record RPCs are admin-aware via portal_has_location). They
+  // pick a clinic here; the record controls then operate on that location. Clinic
+  // users are unchanged (recordCode = their own clinicCode).
+  const [adminLocations, setAdminLocations] = useState([])  // [{ code, name }]
+  const [adminRecordCode, setAdminRecordCode] = useState('')
+  const recordCode = isAdmin ? (adminRecordCode || null) : clinicCode
+  const recordName = isAdmin ? (adminLocations.find((l) => l.code === adminRecordCode)?.name || '') : clinicName
+
+  useEffect(() => {
+    if (!isAdmin || !IS_SUPABASE) return
+    let alive = true
+    fetchLocations()
+      .then((rows) => { if (alive) setAdminLocations((rows || [])
+        .filter((r) => r.active !== false && r.code !== 'legacy_unspecified')
+        .map((r) => ({ code: r.code, name: r.name }))) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [isAdmin])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -51,26 +71,34 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
     try {
       const att = await fetchAttendance(dateYmd)
       setData(att)
-      if (!isAdmin) {
-        const [assignable, locId] = await Promise.all([fetchAssignableStaff(), locationIdForCode(clinicCode)])
+      if (recordCode) {
+        const [assignable, locId] = await Promise.all([fetchAssignableStaff(), locationIdForCode(recordCode)])
         setStaff(assignable)
         setLocationId(locId)
+      } else {
+        setStaff([]); setLocationId(null)
       }
     } catch (e) {
       setError(e?.message || 'Failed to load attendance.')
     } finally {
       setLoading(false)
     }
-  }, [dateYmd, isAdmin, clinicCode])
+  }, [dateYmd, recordCode])
 
   useEffect(() => { load() }, [load])
 
-  const nurses = useMemo(() => staff.filter((s) => s.role === 'nurse'), [staff])
-  const doctors = useMemo(() => staff.filter((s) => s.role === 'doctor'), [staff])
+  // For admin, fetchAssignableStaff returns assignable staff for EVERY clinic —
+  // scope to the picked clinic so the pickers only offer staff the RPC will accept.
+  const scopedStaff = useMemo(
+    () => (isAdmin ? staff.filter((s) => s.locationCode === adminRecordCode) : staff),
+    [isAdmin, staff, adminRecordCode],
+  )
+  const nurses = useMemo(() => scopedStaff.filter((s) => s.role === 'nurse'), [scopedStaff])
+  const doctors = useMemo(() => scopedStaff.filter((s) => s.role === 'doctor'), [scopedStaff])
   const dateLabel = fmtDMY(parseYMD(dateYmd))
   const isToday = dateYmd === todayYMD()
 
-  // For clinic mode, only one location is in scope — derive its id robustly.
+  // The location in record scope (clinic user = own; admin = picked clinic).
   const ownLocationId = locationId || nurses[0]?.locationId || doctors[0]?.locationId || null
   const activeNurseIds = new Set(data.shifts.filter((s) => s.status === 'active').map((s) => s.staffId))
   const availableNurses = nurses.filter((n) => !activeNurseIds.has(n.staffId))
@@ -169,9 +197,34 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
         </div>
       )}
 
-      {isAdmin ? (
-        <AdminOverview data={data} loading={loading} dateLabel={dateLabel} />
-      ) : (
+      {/* P3J — ADMIN COVERAGE OVERRIDE: pick a clinic/branch to record on its behalf. */}
+      {isAdmin && (
+        <section className="p-card p-4 sm:p-5 space-y-3" style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8' }}>
+          <SectionHead eyebrow="Admin coverage" title="Record attendance / coverage for a clinic"
+            description="Pick a clinic / branch to record nurse attendance or doctor day-coverage on its behalf — for clinics whose own users are not set up yet. The record is saved under your admin account." />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[11px] uppercase tracking-[0.12em] font-bold" style={{ color: 'var(--p-ink-500)' }}>Clinic / Branch</label>
+              <div className="relative">
+                <select value={adminRecordCode} onChange={(e) => { setAdminRecordCode(e.target.value); setSelectedNurse(''); setSelectedDoctor(''); setFeedback(null) }}
+                  className="p-input appearance-none w-full pr-8">
+                  <option value="">— Select clinic / branch —</option>
+                  {adminLocations.map((l) => <option key={l.code} value={l.code}>{l.name}</option>)}
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none" style={{ color: 'var(--p-ink-400)' }} />
+              </div>
+            </div>
+            {recordCode && (
+              <span className="inline-flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-bold self-end w-fit" style={{ background: 'var(--p-teal-soft)', color: '#0A6E63', border: '1px solid var(--p-teal)' }}>
+                <ShieldCheck className="w-3.5 h-3.5" /> Recorded by Admin for {recordName}
+              </span>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* Record controls — clinic users always; admin only once a clinic is picked. */}
+      {recordCode && (
         <>
           {/* Add nurse shift */}
           <section className="p-card p-4 sm:p-5">
@@ -250,6 +303,9 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
           </section>
         </>
       )}
+
+      {/* Admin: all-clinic read-only daily overview (every location — RLS returns all). */}
+      {isAdmin && <AdminOverview data={data} loading={loading} dateLabel={dateLabel} />}
     </div>
   )
 }
