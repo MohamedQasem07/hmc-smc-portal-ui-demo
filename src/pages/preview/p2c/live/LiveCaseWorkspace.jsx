@@ -12,8 +12,9 @@ import { useLiveRooms } from '../../../../lib/useLiveRooms'
 import { fmtDate } from '../../../../lib/format'
 import {
   updatePatientContact, updateCaseFields, assignRoom, dischargeCase,
-  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory,
+  fetchCaseFinancials, upsertCashInvoiceCharge, fetchRoomStayHistory, recordCaseCollection,
 } from '../../../../lib/api/portalData'
+import { escalateIfAuthError, sbEnsureSession } from '../../../../lib/api/auth'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
 import LiveCaseServices from './LiveCaseServices'
 import ClinicNewCaseP2C from '../clinic/ClinicNewCaseP2C'
@@ -64,9 +65,21 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   const { rooms, reloadRooms } = useLiveRooms(c?.currentLocationCode || null)
 
   const [fin, setFin] = useState(null)
+  const [finError, setFinError] = useState(null)
   const loadFin = useCallback(async () => {
     if (!caseId) return
-    try { setFin(await fetchCaseFinancials(caseId)) } catch { setFin(null) }
+    // P3J — NEVER silently swallow a failed financial read. A dead/expired
+    // session makes the RLS-scoped read return empty/401; surfacing it (and
+    // escalating to re-login) prevents the "the saved amount vanished" illusion
+    // — the data is safe in the DB, only the read failed.
+    try { setFin(await fetchCaseFinancials(caseId)); setFinError(null) }
+    catch (e) {
+      setFin(null)
+      const handled = await escalateIfAuthError(e)
+      setFinError(handled
+        ? 'Your session expired — sign in again to load live financials.'
+        : 'Could not load the latest financial data. Refresh to retry.')
+    }
   }, [caseId])
   useEffect(() => { loadFin() }, [loadFin, c?.operationalStatus])
 
@@ -139,9 +152,18 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 
   async function run(fn, okText) {
     setBusy(true); setError(null); setOkMsg(null)
-    try { await fn(); if (refresh) await refresh(); if (okText) setOkMsg(okText) }
-    catch (e) { setError(e?.message || 'Action failed.') }
-    finally { setBusy(false) }
+    try {
+      // P3J — verify the session is alive BEFORE writing. If the refresh token
+      // is dead, escalate to re-login and DO NOT pretend the save succeeded.
+      const s = await sbEnsureSession()
+      if (!s.ok) { setError('Your session expired — please sign in again. Nothing was saved.'); return }
+      await fn(); if (refresh) await refresh(); if (okText) setOkMsg(okText)
+    } catch (e) {
+      const handled = await escalateIfAuthError(e)
+      setError(handled
+        ? 'Your session expired — please sign in again. Nothing was saved.'
+        : (e?.message || 'Action failed.'))
+    } finally { setBusy(false) }
   }
 
   function startEdit() {
@@ -181,6 +203,17 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
     await run(async () => { await upsertCashInvoiceCharge(c.id, invAmount, invCurrency); await loadFin() }, 'Invoice amount saved.')
   }
 
+  // P3J — record a REAL cash/Visa collection against this case (was missing: the
+  // panel could set the invoice but never the money actually collected, so
+  // Collected/Outstanding never moved). Persists via portal_record_collection
+  // (+ treasury movement), then reloads so the figures update.
+  async function saveCollection(line) {
+    await run(async () => {
+      await recordCaseCollection(c.id, line, { locationCode: c.currentLocationCode || null })
+      await loadFin()
+    }, 'Collection recorded.')
+  }
+
   // ---- loading / not-found ----
   if (!c) {
     return (
@@ -208,9 +241,17 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   // with the case's data. Updates the SAME case + patient in place. Closed cases
   // never reach here (the button is hidden once discharged).
   if (editReg && !isClosed) {
+    // P3J — hand the stored cash invoice (amount + currency) to the edit form so
+    // Step-3 Financial prefills the real values instead of blank / EUR.
+    const editCaseWithInvoice = {
+      ...c,
+      cashInvoice: fin?.cashOutstanding
+        ? { amount: fin.cashOutstanding.invoice, currency: fin.cashOutstanding.currency }
+        : null,
+    }
     return (
-      <ClinicNewCaseP2C embedded editCase={c}
-        onDone={async () => { setEditReg(false); if (refresh) await refresh(); setOkMsg('Registration updated.') }} />
+      <ClinicNewCaseP2C embedded editCase={editCaseWithInvoice}
+        onDone={async () => { setEditReg(false); if (refresh) await refresh(); await loadFin(); setOkMsg('Registration updated.') }} />
     )
   }
 
@@ -448,9 +489,10 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         <div className="xl:col-span-5 space-y-5 order-first xl:order-none">
           <section className="p-card p-5 space-y-4">
             <SectionHead eyebrow="Financial" title="Collection Summary" />
-            <FinancialPanel c={c} fin={fin} isClosed={isClosed} busy={busy}
+            <FinancialPanel c={c} fin={fin} finError={finError} isClosed={isClosed} busy={busy}
               invAmount={invAmount} setInvAmount={setInvAmount}
-              invCurrency={invCurrency} setInvCurrency={setInvCurrency} onSaveInvoice={saveInvoice} />
+              invCurrency={invCurrency} setInvCurrency={setInvCurrency}
+              onSaveInvoice={saveInvoice} onRecordCollection={saveCollection} />
           </section>
         </div>
       </div>
@@ -465,7 +507,15 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 }
 
 // =====================================================================
-function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCurrency, setInvCurrency, onSaveInvoice }) {
+function FinancialPanel({ c, fin, finError, isClosed, busy, invAmount, setInvAmount, invCurrency, setInvCurrency, onSaveInvoice, onRecordCollection }) {
+  // P3J — honest read-failure banner. When the financial read failed (commonly a
+  // dead/expired session), say so instead of rendering a misleading blank panel.
+  const finErrorBanner = finError ? (
+    <div className="rounded-xl px-3 py-2 mb-3 flex items-start gap-2 text-[12px]"
+      style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
+      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span className="font-semibold">{finError}</span>
+    </div>
+  ) : null
   if (c.financialType === 'Free / Complimentary') {
     return (
       <div className="rounded-xl p-4" style={{ background: 'var(--p-gold-soft)', border: '1px solid #F1E2C9' }}>
@@ -487,6 +537,7 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
     const entries = Object.entries(excess)
     return (
       <div className="space-y-3">
+        {finErrorBanner}
         <div className="rounded-xl p-3" style={{ background: 'var(--p-brand-pale)', border: '1px solid #BCCDE8' }}>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-brand-mid)' }}>
             <ShieldCheck className="w-3.5 h-3.5" /> Insurance
@@ -520,6 +571,7 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
     const over = remaining !== null && remaining < -0.005
     return (
       <div className="space-y-3">
+        {finErrorBanner}
         <div className="rounded-xl p-3 space-y-3" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
           <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>
             <Banknote className="inline w-3.5 h-3.5 mr-1" /> Cash Invoice
@@ -549,6 +601,17 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
             </div>
           )}
         </div>
+
+        {/* P3J — record the money actually collected (cash / Visa). Persists a real
+            collection + treasury movement; Collected / Outstanding then update. */}
+        {!isClosed && (
+          <CashCollectionForm
+            invoiceCurrency={out?.currency || invCurrency}
+            busy={busy}
+            onSubmit={onRecordCollection}
+          />
+        )}
+
         {under && (
           <div className="rounded-xl px-3 py-2 text-[12px] flex items-start gap-2"
             style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
@@ -577,6 +640,82 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
       style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
       <Clock className="w-3.5 h-3.5 mt-0.5" />
       <span>Financial classification still <strong>Pending</strong>. Confirm it at the receiving branch (if transferred) or by admin.</span>
+    </div>
+  )
+}
+
+// P3J — inline "record collection" form for a Cash case (Case Detail). Cash
+// collects in the chosen currency; Visa / Card settles in EGP and needs an FX
+// rate to the invoice currency (same rules as intake). Disabled while saving so
+// a double-click cannot create a duplicate line.
+function CashCollectionForm({ invoiceCurrency, busy, onSubmit }) {
+  const [open, setOpen] = useState(false)
+  const [amount, setAmount] = useState('')
+  const [currency, setCurrency] = useState(invoiceCurrency || 'EGP')
+  const [method, setMethod] = useState('Cash')
+  const [fxRate, setFxRate] = useState('')
+  const isVisa = method === 'Visa / Card'
+
+  useEffect(() => { setCurrency(invoiceCurrency || 'EGP') }, [invoiceCurrency])
+
+  function reset() { setAmount(''); setFxRate(''); setMethod('Cash'); setCurrency(invoiceCurrency || 'EGP') }
+  function submit() {
+    const amt = Number(amount)
+    if (!(amt > 0)) return
+    const line = isVisa
+      ? { method: 'Visa', currency: invoiceCurrency || 'EGP', amount: amt,
+          fxRefCurrency: invoiceCurrency || 'EGP', fxRefAmount: amt, fxRate: Number(fxRate) || null }
+      : { method: 'Cash', currency, amount: amt }
+    Promise.resolve(onSubmit(line)).then(() => { reset(); setOpen(false) })
+  }
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} disabled={busy}
+        className="w-full h-10 rounded-full text-xs font-bold inline-flex items-center justify-center gap-1.5 p-btn-ghost"
+        style={{ border: '1px solid var(--p-border-strong)' }}>
+        <Banknote className="w-3.5 h-3.5" /> Record collection
+      </button>
+    )
+  }
+  return (
+    <div className="rounded-xl p-3 space-y-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+      <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>Record Collection</div>
+      <div className="grid grid-cols-2 gap-2 items-end">
+        <Field label="Method" className="col-span-2">
+          <select className="p-input h-10" value={method} onChange={(e) => setMethod(e.target.value)} disabled={busy}>
+            <option>Cash</option>
+            <option>Visa / Card</option>
+          </select>
+        </Field>
+        <Field label="Amount collected">
+          <input className="p-input h-10" type="number" min="0" step="0.01" value={amount}
+            onChange={(e) => setAmount(e.target.value)} disabled={busy} placeholder="0" />
+        </Field>
+        {isVisa ? (
+          <Field label={`FX → EGP (1 ${invoiceCurrency || 'EGP'} = ? EGP)`}>
+            <input className="p-input h-10" type="number" min="0" step="0.0001" value={fxRate}
+              onChange={(e) => setFxRate(e.target.value)} disabled={busy} placeholder="e.g. 50" />
+          </Field>
+        ) : (
+          <Field label="Currency">
+            <select className="p-input h-10" value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={busy}>
+              {CURRENCIES.map((cur) => <option key={cur} value={cur}>{cur}</option>)}
+            </select>
+          </Field>
+        )}
+      </div>
+      <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
+        {isVisa
+          ? 'Visa / Card settles in EGP. Amount is in the invoice currency; the FX rate converts it to the EGP bank settlement.'
+          : 'Physical cash is recorded in the collected currency. Use the invoice currency to reduce Outstanding.'}
+      </div>
+      <div className="flex justify-end gap-2">
+        <button onClick={() => { reset(); setOpen(false) }} disabled={busy}
+          className="h-9 px-4 rounded-full text-xs font-semibold p-btn-ghost">Cancel</button>
+        <button onClick={submit} disabled={busy || !(Number(amount) > 0) || (isVisa && !(Number(fxRate) > 0))}
+          className="h-9 px-5 rounded-full text-xs font-bold p-btn-primary">{busy ? 'Saving…' : 'Save collection'}</button>
+      </div>
     </div>
   )
 }

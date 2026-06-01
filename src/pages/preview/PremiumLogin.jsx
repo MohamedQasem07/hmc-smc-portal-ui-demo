@@ -20,7 +20,7 @@ const BASE = import.meta.env.BASE_URL
  */
 export default function PremiumLogin() {
   const navigate = useNavigate()
-  const { signIn, isSignedIn, currentUser } = useUserMode()
+  const { signIn, isSignedIn, currentUser, sessionExpired } = useUserMode()
   const { state, actions } = useDemoState()
 
   const [username, setUsername] = useState('')
@@ -133,6 +133,18 @@ export default function PremiumLogin() {
           <div className="text-[10px] uppercase tracking-[0.16em] font-bold mb-1" style={{ color: '#7FE7DE' }}>Sign in</div>
           <h2 className="text-xl font-bold text-white">Welcome back</h2>
           <p className="text-[13px] mt-1" style={{ color: 'rgba(255,255,255,0.62)' }}>Use your clinic or branch credentials.</p>
+
+          {/* P3J — a dead/expired session (invalid refresh token) lands here with a
+              clear reason instead of silently showing empty data inside the app. */}
+          {sessionExpired && !error && (
+            <div role="status" className="mt-4 rounded-xl px-3.5 py-3 flex items-start gap-2.5"
+              style={{ background: 'rgba(217,165,116,0.16)', border: '1px solid rgba(217,165,116,0.45)' }}>
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" style={{ color: '#E7C79B' }} />
+              <span className="text-[12px] leading-relaxed font-semibold" style={{ color: '#F2DCBB' }}>
+                Your session expired. Please sign in again — your saved data is safe.
+              </span>
+            </div>
+          )}
 
           <form className="mt-5 space-y-4" onSubmit={onSubmit} noValidate>
             {/* Email / username */}

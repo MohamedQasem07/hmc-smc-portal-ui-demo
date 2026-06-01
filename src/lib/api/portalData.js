@@ -312,6 +312,22 @@ export async function recordCollection(db, caseId, line, purpose, locId) {
   return data
 }
 
+/** P3J — record ONE real collection against a case from Case Detail (cash or
+ *  Visa/Card). Resolves the location CODE → id, then delegates to the same
+ *  secure portal_record_collection RPC the intake flow uses (it also writes the
+ *  linked treasury movement + FX). Throws on an empty/invalid line so the UI
+ *  shows a real error instead of a silent no-op. purpose defaults to
+ *  cash_case_payment (powers Collected vs Outstanding on the cash invoice). */
+export async function recordCaseCollection(caseId, line, { locationCode = null, purpose = 'cash_case_payment' } = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  let locId = null
+  if (locationCode) { try { locId = await locationIdForCode(locationCode) } catch { locId = null } }
+  const res = await recordCollection(db, caseId, line, purpose, locId)
+  if (res === null) throw new Error('Enter a valid collection amount (and an FX rate for Visa / Card).')
+  return res
+}
+
 /* =========================================================================
  * Transfers — receive & classify at the destination branch (Phase 4).
  * supabase mode only. receiveTransfer() flips the transfer + case atomically

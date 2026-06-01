@@ -3,7 +3,7 @@ import { DEMO_USERS } from '../data/mock'
 import { P2C_DEMO_USERS, EXTERNAL_CLINICS } from '../data/p2c'
 import { scopeForUser } from '../data/staffUsers'
 import { IS_SUPABASE } from '../lib/api/config'
-import { sbGetSessionUser, sbSignIn, sbSignOut, sbOnAuthChange } from '../lib/api/auth'
+import { sbGetSessionUser, sbSignIn, sbSignOut, sbOnAuthChange, setSessionExpiredHandler } from '../lib/api/auth'
 
 /**
  * UserModeContext — role state + session.
@@ -33,6 +33,7 @@ const UserModeContext = createContext({
   isSignedIn: false,
   authReady: !IS_SUPABASE,
   recoveryMode: false,
+  sessionExpired: false,
   signIn: () => {},
   signOut: () => {},
 })
@@ -81,6 +82,10 @@ export function UserModeProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(IS_SUPABASE ? null : initialSession)
   const [authReady, setAuthReady] = useState(!IS_SUPABASE)
   const [recoveryMode, setRecoveryMode] = useState(false)
+  // P3J — true after a dead/expired session was detected (invalid refresh token).
+  // Drives the "Your session expired. Please sign in again." notice on /login and
+  // forces a clean re-login instead of letting reads silently return empty.
+  const [sessionExpired, setSessionExpired] = useState(false)
   const lastUidRef = useRef(null)
 
   const setDemoRole = (next, nextClinic) => {
@@ -117,6 +122,15 @@ export function UserModeProvider({ children }) {
     if (!IS_SUPABASE) return
     let active = true
     let sub
+    // P3J — when the data layer detects a dead session (invalid refresh token),
+    // clear the user and flag expiry so the guards route to a clean re-login
+    // with a clear message (instead of the app silently reading empty data).
+    setSessionExpiredHandler(() => {
+      if (!active) return
+      lastUidRef.current = null
+      setCurrentUser(null)
+      setSessionExpired(true)
+    })
     sbGetSessionUser()
       .then((u) => { if (active) { lastUidRef.current = u?.userId || null; setCurrentUser(u); if (u) mirrorScope(u); setAuthReady(true) } })
       .catch(() => { if (active) setAuthReady(true) })
@@ -142,7 +156,7 @@ export function UserModeProvider({ children }) {
   async function signIn(arg, password) {
     if (IS_SUPABASE) {
       const res = await sbSignIn(arg, password)   // arg = email
-      if (res.user) { setCurrentUser(res.user); mirrorScope(res.user); setRecoveryMode(false) }
+      if (res.user) { setCurrentUser(res.user); mirrorScope(res.user); setRecoveryMode(false); setSessionExpired(false) }
       return res
     }
     // ---- mock path ----
@@ -180,7 +194,7 @@ export function UserModeProvider({ children }) {
       role, user, setRole,
       demoRole, clinicId, demoUser,
       setDemoRole, setClinicId,
-      currentUser, currentClinicScope, isSignedIn, authReady, recoveryMode,
+      currentUser, currentClinicScope, isSignedIn, authReady, recoveryMode, sessionExpired,
       signIn, signOut,
     }}>
       {children}

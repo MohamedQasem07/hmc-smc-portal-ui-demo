@@ -9,6 +9,7 @@ import { generateOurRef } from '../lib/ourRef'
 import { IS_SUPABASE } from '../lib/api/config'
 import { useUserMode } from './UserModeContext'
 import { fetchCases, insertCase, upsertBillingPrep, receiveTransfer as sbReceiveTransfer, classifyReceivedCase } from '../lib/api/portalData'
+import { escalateIfAuthError } from '../lib/api/auth'
 
 /* =========================================================================
  * DemoStateContext (P2C.R2)
@@ -597,7 +598,9 @@ export function DemoStateProvider({ children }) {
   const refetchCases = useCallback(async () => {
     if (!IS_SUPABASE) return
     try { dispatch({ type: 'CASES_SET', cases: await fetchCases() }) }
-    catch (e) { console.error('[portal] fetchCases failed', e) }
+    // P3J — a dead session makes RLS-scoped reads return empty; escalate to a
+    // clean re-login instead of silently showing an empty / stale case list.
+    catch (e) { console.error('[portal] fetchCases failed', e); await escalateIfAuthError(e) }
   }, [])
   useEffect(() => {
     if (!IS_SUPABASE) return

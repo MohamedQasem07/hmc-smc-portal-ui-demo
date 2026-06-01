@@ -24,7 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
-import { updateCaseRegistration } from '../../../../lib/api/portalData'
+import { updateCaseRegistration, upsertCashInvoiceCharge } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -187,6 +187,14 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         hasPatientExcess: form.financialType === 'Insurance' && form.hasExcess === 'Yes',
       }
       await updateCaseRegistration(editCase.id, editCase.patientId, patch)
+      // P3J — persist a changed Cash invoice amount/currency on edit. The case is
+      // already saved above; the cash amount lives in its own charge row (an
+      // idempotent upsert — re-saving the prefilled value is a no-op, so "Save
+      // without changing" never wipes it). A blank amount is skipped (never wipes).
+      if (form.financialType === 'Cash' && Number(form.invoiceAmount) > 0) {
+        try { await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR') }
+        catch (err) { console.warn('[portal] edit cash invoice save failed', err?.message) }
+      }
       if (onDone) { onDone(); return }
       navigate(`/clinic/cases/${editCase.id}`)
       return
@@ -848,7 +856,12 @@ function caseToForm(c) {
     hasExcess: c.hasPatientExcess ? 'Yes' : 'No',
     excessAmount: c.excessAmount != null ? String(c.excessAmount) : '',
     excessCurrency: c.excessCurrency || 'EUR',
-    invoiceNumber: '', invoiceAmount: '', invoiceCurrency: 'EUR',
+    // P3J — prefill the cash invoice from the stored amount/currency (passed in
+    // by the Case Detail workspace as c.cashInvoice). Was hardcoded blank/EUR,
+    // which made editing a Cash case look like the saved 600 EGP had vanished.
+    invoiceNumber: '',
+    invoiceAmount: c.cashInvoice && c.cashInvoice.amount != null ? String(c.cashInvoice.amount) : '',
+    invoiceCurrency: (c.cashInvoice && c.cashInvoice.currency) || 'EUR',
     complimentaryReason: c.freeReason || '', complimentaryApprovedBy: c.freeApprovedBy || '',
     encounterPattern: c.encounterPattern || 'outpatient_single',
     visitCheckInDate: visitDate, visitCheckInTime: visitTime,

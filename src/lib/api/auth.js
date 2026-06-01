@@ -139,3 +139,72 @@ export async function sbAdminUsers(action, payload = {}) {
   }
   return { ok: true, ...(data || {}) }
 }
+
+/* =========================================================================
+ * Session-expiry escalation (P3J hotfix)
+ * -----------------------------------------------------------------------
+ * Root cause of the "cash save vanished" report: a dead/expired refresh token
+ * (console: "AuthApiError: Invalid Refresh Token: Refresh Token Not Found")
+ * silently degrades the client — reads return EMPTY (RLS denies the
+ * un-authenticated role; no error is thrown) and the UI keeps showing a blank
+ * panel as if nothing was ever saved. The data is safe in the DB; only the
+ * READ fails. These helpers detect an auth-session failure, clear the stale
+ * LOCAL session, and notify the app to route to a clean re-login so the user
+ * gets a fresh token. Client session handling ONLY — no RLS / auth-schema
+ * change. Reads/writes keep working unchanged once re-authenticated.
+ * ========================================================================= */
+let _onSessionExpired = null
+
+/** The app (UserModeContext) registers a callback fired when the session dies. */
+export function setSessionExpiredHandler(fn) { _onSessionExpired = fn }
+
+/** True only when an error means the Supabase session is no longer valid
+ *  (expired access token, or a missing/invalid refresh token, or a 401). Kept
+ *  deliberately tight so a transient network / 5xx error never triggers a
+ *  false logout. */
+export function isAuthSessionError(err) {
+  if (!err) return false
+  const msg = String(err.message || err.error_description || err.msg || err).toLowerCase()
+  const status = Number(err.status || err.statusCode || err.code || 0)
+  return (
+    status === 401 ||
+    msg.includes('refresh token') ||
+    msg.includes('jwt expired') ||
+    msg.includes('token has expired') ||
+    msg.includes('invalid jwt') ||
+    msg.includes('invalid claim') ||
+    (msg.includes('session') && msg.includes('expired')) ||
+    msg.includes('not authenticated')
+  )
+}
+
+/** If `err` is an auth-session failure, clear the stale local session and
+ *  notify the app (→ clean re-login). Returns true when it handled an expiry,
+ *  so callers can show the right "session expired" message instead of a
+ *  misleading blank/empty state. Safe to call with ANY error (no-op otherwise). */
+export async function escalateIfAuthError(err) {
+  if (!isAuthSessionError(err)) return false
+  try { const db = await getSupabaseClient(); await db.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+  if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
+  return true
+}
+
+/** Proactively ensure the access token is still valid before a critical
+ *  read/write. Refreshes if it is at/near expiry; if the refresh fails (dead
+ *  refresh token) OR there is no session, escalates to a clean re-login.
+ *  Returns { ok:true } | { ok:false, expired:true }. */
+export async function sbEnsureSession() {
+  const db = await getSupabaseClient()
+  let session = null
+  try { const { data } = await db.auth.getSession(); session = data?.session || null } catch { session = null }
+  if (!session) {
+    if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
+    return { ok: false, expired: true }
+  }
+  const expMs = Number(session.expires_at || 0) * 1000
+  if (expMs && expMs - Date.now() < 30000) {
+    const { error } = await db.auth.refreshSession()
+    if (error) { await escalateIfAuthError(error); return { ok: false, expired: true } }
+  }
+  return { ok: true }
+}
