@@ -137,6 +137,9 @@ function RoomsConfig({ onOk, onErr }) {
                 <Plus className="w-3.5 h-3.5" /> Add Room
               </button>
             </div>
+            {list.length === 0 && (
+              <div className="text-[12px] italic px-1 pb-1" style={{ color: 'var(--p-ink-400)' }}>No rooms yet — use “Add Room”.</div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
               {list.map((r) => (
                 <div key={r.id} className={cn('rounded-xl px-3 py-2.5 flex items-center justify-between gap-2', !r.active && 'opacity-55')}
@@ -180,11 +183,15 @@ function PaymentMethodsConfig({ onOk, onErr }) {
     <div className="space-y-3">
       <SectionHead eyebrow="portal_payment_methods" title="Payment Methods" description="Toggle which methods/purposes are active. Cash settles in original currency; Visa/Card settles EGP. Patient excess is a collection purpose." />
       <div className="p-card overflow-hidden">
-        <table className="w-full text-[13px]">
+        <div className="overflow-x-auto">
+        <table className="w-full text-[13px] min-w-[560px]">
           <thead><tr style={{ background: 'var(--p-surface-tint)', borderBottom: '1px solid var(--p-border)' }}>
             {['Method / Purpose', 'Kind', 'Settlement', 'Status'].map((h) => <th key={h} className="px-4 py-2.5 text-left font-bold uppercase tracking-[0.08em] text-[10px]" style={{ color: 'var(--p-ink-500)' }}>{h}</th>)}
           </tr></thead>
           <tbody>
+            {rows.length === 0 && (
+              <tr><td colSpan={4} className="px-4 py-10 text-center text-sm" style={{ color: 'var(--p-ink-400)' }}>No payment methods configured.</td></tr>
+            )}
             {rows.map((m) => (
               <tr key={m.code} style={{ borderTop: '1px solid var(--p-border)' }}>
                 <td className="px-4 py-3 font-semibold" style={{ color: 'var(--p-ink-900)' }}>{m.label}<div className="text-[10px] font-mono" style={{ color: 'var(--p-ink-400)' }}>{m.code}</div></td>
@@ -199,6 +206,7 @@ function PaymentMethodsConfig({ onOk, onErr }) {
             ))}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )
@@ -237,6 +245,9 @@ function NationalitiesConfig({ onOk, onErr }) {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search nationality…" className="p-input h-10 pl-9 pr-3 w-full" />
       </div>
       <div className="p-card overflow-hidden">
+        {filtered.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm" style={{ color: 'var(--p-ink-400)' }}>{q.trim() ? `No nationality matches “${q.trim()}”.` : 'No nationalities configured.'}</div>
+        ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((n) => (
             <div key={n.id} className={cn('flex items-center justify-between gap-2 px-4 py-2.5', !n.active && 'opacity-50')} style={{ borderTop: '1px solid var(--p-border)' }}>
@@ -247,6 +258,7 @@ function NationalitiesConfig({ onOk, onErr }) {
             </div>
           ))}
         </div>
+        )}
       </div>
       {q.trim() === '' && rows.length > 60 && <div className="text-[11px] text-center" style={{ color: 'var(--p-ink-400)' }}>Showing first 60 — search to find others.</div>}
     </div>

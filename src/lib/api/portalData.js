@@ -524,6 +524,32 @@ export function summarizeCollections(rows = []) {
     a.channel.localeCompare(b.channel) || a.currency.localeCompare(b.currency))
 }
 
+/** Group collection rows (from fetchCollections) by collection_purpose AND by
+ *  treasury channel, each split by the SETTLED currency. Read-only, no cross-
+ *  currency conversion (physical cash keeps its original currency, Visa/Card is
+ *  EGP). patient_excess IS included (it is treasury money) but kept in its own
+ *  purpose bucket so a dashboard can show Cash-Case Revenue separately from
+ *  Insurance Excess (Mohamed's rule). No collection status is mutated. */
+export function summarizeCollectionsByPurpose(rows = []) {
+  const purpose = {}   // purpose -> { [currency]: { total, count } }
+  const channel = {}   // channel -> { [currency]: { total, count } }
+  const add = (bag, key, cur, amt) => {
+    bag[key] = bag[key] || {}
+    bag[key][cur] = bag[key][cur] || { total: 0, count: 0 }
+    bag[key][cur].total += amt
+    bag[key][cur].count += 1
+  }
+  for (const c of rows) {
+    const cur = c.actualCurrency || 'EGP'
+    const amt = Number(c.actualAmount) || 0
+    const p = c.purpose || 'other'
+    const ch = c.treasuryChannel || (c.method === 'visa_card' ? 'visa_bank' : 'physical_cash')
+    add(purpose, p, cur, amt)
+    add(channel, ch, cur, amt)
+  }
+  return { purpose, channel, count: rows.length }
+}
+
 /** Admin-only (RLS). Upsert billing preparation for a case. */
 export async function upsertBillingPrep(caseId, fields) {
   const db = await getSupabaseClient()

@@ -438,6 +438,11 @@ export default function ClinicNewCaseP2C() {
                   <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
                     External clinic does not need to set Treatment Mode. The receiving branch will assign Conservative or Surgical after intake.
                   </p>
+                  {IS_SUPABASE && (
+                    <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
+                      The OUR Ref above travels with the patient — the case identity does not change on transfer.
+                    </p>
+                  )}
                 </div>
               )}
             </section>
@@ -562,8 +567,8 @@ export default function ClinicNewCaseP2C() {
                 <div className="rounded-xl p-4 space-y-3" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <div>
-                      <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>Patient Excess?</div>
-                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--p-ink-500)' }}>If the patient pays an excess, collect it as Patient Excess.</p>
+                      <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>{IS_SUPABASE ? 'Insurance Excess?' : 'Patient Excess?'}</div>
+                      <p className="text-[11px] mt-0.5" style={{ color: 'var(--p-ink-500)' }}>{IS_SUPABASE ? "The patient's share of an insurance case — collected now and still treasury money, kept separate from cash-case revenue." : 'If the patient pays an excess, collect it as Patient Excess.'}</p>
                     </div>
                     <div className="flex gap-2">
                       {['No', 'Yes'].map((opt) => (
@@ -667,6 +672,7 @@ export default function ClinicNewCaseP2C() {
                     <input value={form.complimentaryApprovedBy} onChange={(e) => update('complimentaryApprovedBy', e.target.value)} placeholder="e.g. Mohamed (verbal)" className="p-input" />
                   </Field>
                 </FieldGrid>
+                {IS_SUPABASE && <p className="text-[11px]" style={{ color: '#7A4F1F' }}>The approval date &amp; time is recorded automatically on save.</p>}
               </div>
             )}
 

@@ -42,6 +42,7 @@ const NAV_ITEMS = [
   { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/admin/insurance-completion', section: 'Clinic & Reception' },
   { id: 'attendance',   label: 'Attendance',          icon: UserCheck,       to: '/admin/attendance', section: 'Administration' },
   { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/admin/users-staff', section: 'Administration' },
+  { id: 'reference-lists', label: 'Operational Config', icon: BookOpen,       to: '/admin/reference-lists', section: 'Configuration' },
   { id: 'control',      label: 'Control Center',      icon: Settings,        to: '/admin-control-center', section: 'Configuration' },
   { id: 'manager',      label: 'Invoice Manager',     icon: FileLock2,       to: '/admin-dashboard', restricted: true, section: 'Protected' },
 ]

@@ -101,7 +101,8 @@ export default function LiveSpecialistVisits({ caseId, sessions = [], onChanged,
                 <div className="text-sm font-semibold" style={{ color: 'var(--p-ink-900)' }}>{s.note || 'Specialist visit'}</div>
                 <div className="text-[11px] mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5" style={{ color: 'var(--p-ink-500)' }}>
                   <span>Check-in: {s.checkInAt ? fmtDMYHM(s.checkInAt) : '—'}</span>
-                  <span>Check-out: {s.checkOutAt ? fmtDMYHM(s.checkOutAt) : '—'}</span>
+                  <span>Check-out: {s.checkOutAt ? fmtDMYHM(s.checkOutAt) : (s.status === 'active' ? 'In progress' : '—')}</span>
+                  {s.checkInAt && s.checkOutAt && (() => { const mins = Math.max(0, Math.round((new Date(s.checkOutAt) - new Date(s.checkInAt)) / 60000)); const h = Math.floor(mins / 60), m = mins % 60; return <span>· {h ? `${h}h ` : ''}{m}m</span> })()}
                 </div>
               </div>
               {s.status === 'active'

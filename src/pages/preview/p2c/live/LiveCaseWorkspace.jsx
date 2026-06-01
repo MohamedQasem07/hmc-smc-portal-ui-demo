@@ -221,6 +221,11 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
               <InfoItem icon={Phone} label="Phone" value={[c.patient.phoneCode, c.patient.phone].filter(Boolean).join(' ')} />
               <InfoItem icon={Mail} label="Email" value={c.patient.email} />
             </div>
+            {!isClosed && (!c.patient.phone || !c.patient.email) && (
+              <button onClick={startEdit} className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold" style={{ color: 'var(--p-teal)' }}>
+                <Pencil className="w-3 h-3" /> Add missing contact details
+              </button>
+            )}
           </div>
         </div>
 
@@ -336,8 +341,8 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
           )}
         </div>
 
-        {/* RIGHT — financial */}
-        <div className="xl:col-span-5 space-y-5">
+        {/* RIGHT — financial (surfaced first on mobile: the figure cashier needs at a glance) */}
+        <div className="xl:col-span-5 space-y-5 order-first xl:order-none">
           <section className="p-card p-5 space-y-4">
             <SectionHead eyebrow="Financial" title="Collection Summary" />
             <FinancialPanel c={c} fin={fin} isClosed={isClosed} busy={busy}
@@ -349,7 +354,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 
       {/* Discharge confirmation modal */}
       {showDischarge && (
-        <DischargeModal c={c} roomLabel={roomLabel} checkoutAt={checkoutAt} setCheckoutAt={setCheckoutAt}
+        <DischargeModal c={c} fin={fin} roomLabel={roomLabel} checkoutAt={checkoutAt} setCheckoutAt={setCheckoutAt}
           busy={busy} onCancel={() => setShowDischarge(false)} onConfirm={confirmDischarge} />
       )}
     </div>
@@ -473,7 +478,7 @@ function FinancialPanel({ c, fin, isClosed, busy, invAmount, setInvAmount, invCu
   )
 }
 
-function DischargeModal({ c, roomLabel, checkoutAt, setCheckoutAt, busy, onCancel, onConfirm }) {
+function DischargeModal({ c, fin, roomLabel, checkoutAt, setCheckoutAt, busy, onCancel, onConfirm }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(10,27,61,0.45)' }}>
       <div className="p-card p-5 w-full max-w-md space-y-4" style={{ background: 'white' }}>
@@ -492,6 +497,11 @@ function DischargeModal({ c, roomLabel, checkoutAt, setCheckoutAt, busy, onCance
         <div className="text-[12px]" style={{ color: 'var(--p-ink-600)' }}>
           On confirm: the check-out time is saved, the room is released back to the board, and the case is closed (read-only). Full history is kept.
         </div>
+        {fin?.cashOutstanding && fin.cashOutstanding.remaining > 0.005 && (
+          <div className="rounded-xl px-3 py-2 text-[12px]" style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+            <strong>Heads up:</strong> {fin.cashOutstanding.remaining.toFixed(2)} {fin.cashOutstanding.currency} is still outstanding on the cash invoice. Discharge still proceeds.
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} disabled={busy}
             className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost">

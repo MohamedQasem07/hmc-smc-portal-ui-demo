@@ -1,11 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ChevronDown, Calendar, Building2, Wallet, FileText, Clock,
   ArrowUpRight, ArrowDownRight, FileCheck2, ShieldAlert, Banknote, CreditCard,
   ChevronRight, BarChart3, AlertTriangle, MapPin, Plus, Settings,
   LayoutDashboard, DoorOpen, ArrowLeftRight, Inbox, Gift,
-  Stethoscope,
+  Stethoscope, ClipboardList, Archive, Users, UserCheck, BookOpen,
 } from 'lucide-react'
 import { AdminShell } from '../../premium/AdminShell'
 import {
@@ -19,6 +19,7 @@ import { fmtDate, fmtMoney, fmtRelative } from '../../lib/format'
 import { cn } from '../../lib/cn'
 import { IS_SUPABASE } from '../../lib/api/config'
 import { useCases } from '../../context/DemoStateContext'
+import { fetchCollections, summarizeCollectionsByPurpose } from '../../lib/api/portalData'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
@@ -323,6 +324,27 @@ function LiveAdminDashboard() {
       .slice(0, 6),
   [cases])
 
+  // ---- Live treasury (real portal_collections, READ-ONLY — no status mutation) ----
+  const [range, setRange] = useState('all')          // 'today' | 'all'
+  const [collections, setCollections] = useState(null)   // null = loading
+  const [colError, setColError] = useState(null)
+  useEffect(() => {
+    let alive = true
+    let opts = {}
+    if (range === 'today') {
+      const d = new Date()
+      const y = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      opts = { from: y, to: y }
+    }
+    setCollections(null); setColError(null)
+    fetchCollections(opts)
+      .then((r) => { if (alive) setCollections(r) })
+      .catch((e) => { if (alive) { setCollections([]); setColError(e?.message || 'Failed to load collections.') } })
+    return () => { alive = false }
+  }, [range])
+  const treasury = useMemo(() => summarizeCollectionsByPurpose(collections || []), [collections])
+  const colLoading = collections === null
+
   return (
     <AdminShell active="dashboard">
       <div className="px-4 sm:px-6 lg:px-10 py-6 lg:py-9 space-y-6 max-w-[1500px] w-full mx-auto">
@@ -357,66 +379,67 @@ function LiveAdminDashboard() {
               <KpiCard label="Pending Type"    value={stats.byFinancial.Pending}   icon={ShieldAlert} tone="amber"  hint="Awaiting classification" />
             </section>
 
-            {/* ===== Transfers + Collections (cash vs excess, never merged) ===== */}
-            <section className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
-              {/* Transfers */}
-              <Card padding="none" className="overflow-hidden">
-                <div className="px-5 py-4 border-b border-border">
-                  <SectionHeader icon={ArrowLeftRight} title="Transfers" description="Movement between clinics." className="mb-0" />
+            {/* ===== Live Treasury — real portal_collections (read-only, no status mutation) ===== */}
+            <section className="space-y-3">
+              <div className="flex items-end justify-between gap-3 flex-wrap">
+                <SectionHeader icon={Banknote} title="Treasury — Live Collections"
+                  description="Real portal_collections · grouped by currency · no conversion · patient excess kept separate from cash revenue." className="mb-0" />
+                <div className="inline-flex rounded-full p-0.5 shrink-0" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+                  {[{ id: 'today', label: 'Today' }, { id: 'all', label: 'All' }].map((r) => (
+                    <button key={r.id} onClick={() => setRange(r.id)}
+                      className={cn('h-8 px-3.5 rounded-full text-xs font-semibold transition-colors',
+                        range === r.id ? 'bg-white text-ink-900 shadow-sm' : 'text-ink-500')}>
+                      {r.label}
+                    </button>
+                  ))}
                 </div>
-                <div className="grid grid-cols-2 divide-x divide-border">
-                  <div className="px-5 py-5 text-center">
-                    <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersPending}</div>
-                    <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Pending</div>
-                  </div>
-                  <div className="px-5 py-5 text-center">
-                    <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersReceived}</div>
-                    <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Received</div>
-                  </div>
-                </div>
-              </Card>
+              </div>
 
-              {/* Cash-case revenue */}
-              <Card padding="none" className="overflow-hidden">
-                <div className="px-5 py-4 border-b border-border">
-                  <SectionHeader icon={Banknote} title="Cash-Case Revenue" description="By currency · no conversion." className="mb-0" />
+              {colError && (
+                <div className="rounded-xl px-3 py-2.5 flex items-start gap-2 text-[12px]"
+                  style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
+                  <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" /><span className="font-semibold">{colError}</span>
                 </div>
-                <div className="p-4">
-                  {cashRows.length === 0 ? (
-                    <p className="text-xs text-ink-400 px-1 py-3">Live cash collections appear on the Collections page, grouped by channel &amp; currency.</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {cashRows.map(([cur, amt]) => (
-                        <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
-                          <span className="text-sm font-semibold text-ink-700">{cur}</span>
-                          <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(amt, cur)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Card>
+              )}
 
-              {/* Insurance Excess — separate from cash revenue */}
-              <Card padding="none" className="overflow-hidden">
-                <div className="px-5 py-4 border-b border-border">
-                  <SectionHeader icon={Wallet} title="Insurance Excess" description="Patient excess · kept separate." className="mb-0" />
-                </div>
-                <div className="p-4">
-                  {excessRows.length === 0 ? (
-                    <p className="text-xs text-ink-400 px-1 py-3">Patient excess appears on the Collections page, kept separate from cash-case revenue.</p>
-                  ) : (
-                    <ul className="space-y-1.5">
-                      {excessRows.map(([cur, amt]) => (
-                        <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
-                          <span className="text-sm font-semibold text-ink-700">{cur}</span>
-                          <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(amt, cur)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </Card>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                <TreasuryMoneyCard title="Cash Case Revenue" icon={Banknote} desc="Cash-case invoices collected" byCur={treasury.purpose.cash_case_payment} loading={colLoading} emptyText="No cash-case collections in range." />
+                <TreasuryMoneyCard title="Insurance Excess Collected" icon={Wallet} desc="Patient excess · treasury money · separate from cash" byCur={treasury.purpose.patient_excess} loading={colLoading} emptyText="No insurance excess in range." />
+                <TreasuryMoneyCard title="Physical Cash" icon={Banknote} desc="Cash drawer · original currency" byCur={treasury.channel.physical_cash} loading={colLoading} emptyText="No physical cash in range." />
+                <TreasuryMoneyCard title="Visa / Bank" icon={CreditCard} desc="Card settlements · EGP" byCur={treasury.channel.visa_bank} loading={colLoading} emptyText="No Visa / bank collections in range." />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4">
+                <Card padding="none" className="overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border">
+                    <SectionHeader icon={ArrowLeftRight} title="Transfers" description="Movement between clinics." className="mb-0" />
+                  </div>
+                  <div className="grid grid-cols-2 divide-x divide-border">
+                    <div className="px-5 py-5 text-center">
+                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersPending}</div>
+                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Pending</div>
+                    </div>
+                    <div className="px-5 py-5 text-center">
+                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{stats.transfersReceived}</div>
+                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Received</div>
+                    </div>
+                  </div>
+                </Card>
+
+                <Card padding="none" className="overflow-hidden lg:col-span-2">
+                  <div className="px-5 py-4 border-b border-border">
+                    <SectionHeader icon={Banknote} title="Collections Recorded" description={`Live collection lines · ${range === 'today' ? 'today' : 'all dates'}.`} className="mb-0" />
+                  </div>
+                  <div className="px-5 py-5 flex items-center gap-6 flex-wrap">
+                    <div className="shrink-0">
+                      <div className="text-2xl sm:text-3xl font-semibold text-ink-900 tabular-nums leading-none">{colLoading ? '—' : treasury.count}</div>
+                      <div className="mt-1.5 text-[11px] uppercase tracking-wide text-ink-500 font-medium">Collections</div>
+                    </div>
+                    <p className="text-[11px] text-ink-400 flex-1 min-w-[180px]">Treasury handover reconciliation (open vs handed-over) is tracked outside Portal until that step is enabled. No cross-currency grand total is shown.</p>
+                    <Link to="/admin/collections" className="text-xs font-semibold text-navy-700 whitespace-nowrap">Open Collections →</Link>
+                  </div>
+                </Card>
+              </div>
             </section>
 
             {/* ===== Recent transfer movement ===== */}
@@ -461,8 +484,67 @@ function LiveAdminDashboard() {
             </Card>
           </>
         )}
+
+        {/* ===== Quick access — live operational screens (always available) ===== */}
+        <section>
+          <SectionHeader icon={LayoutDashboard} title="Quick Access" description="Jump to the operational screens." className="mb-3" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+            <QuickLink to="/admin/p2c-cases"            icon={ClipboardList} label="All Cases"            desc="Clinic & reception" />
+            <QuickLink to="/admin/collections"          icon={Banknote}      label="Collections"          desc="Treasury log" />
+            <QuickLink to="/admin/insurance-completion" icon={FileCheck2}    label="Insurance Completion" desc="Billing preparation" />
+            <QuickLink to="/admin/legacy-review"        icon={Archive}       label="Old Cases"            desc="Historical archive" />
+            <QuickLink to="/admin/users-staff"          icon={Users}         label="Users & Staff"        desc="Accounts & roles" />
+            <QuickLink to="/admin/attendance"           icon={UserCheck}     label="Attendance"           desc="Nurse & doctor duty" />
+            <QuickLink to="/admin/reference-lists"      icon={BookOpen}      label="Operational Config"   desc="Services · insurers · rooms" />
+            <QuickLink to="/admin/reports/daily"        icon={FileText}      label="Daily Report"         desc="Collections by date" />
+          </div>
+        </section>
       </div>
     </AdminShell>
+  )
+}
+
+// ====================================================================
+// Live treasury money card — one currency-row list (read-only). No FX, no total.
+function TreasuryMoneyCard({ title, icon: Icon, desc, byCur, loading, emptyText }) {
+  const rows = Object.entries(byCur || {}).sort((a, b) => a[0].localeCompare(b[0]))
+  return (
+    <Card padding="none" className="overflow-hidden">
+      <div className="px-4 py-3 border-b border-border">
+        <SectionHeader icon={Icon} title={title} description={desc} className="mb-0" />
+      </div>
+      <div className="p-3">
+        {loading ? (
+          <p className="text-xs text-ink-400 px-1 py-3">Loading…</p>
+        ) : rows.length === 0 ? (
+          <p className="text-xs text-ink-400 px-1 py-3">{emptyText}</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {rows.map(([cur, v]) => (
+              <li key={cur} className="flex items-center justify-between rounded-lg bg-subtle border border-border px-3 py-2">
+                <span className="text-sm font-semibold text-ink-700">{cur} <span className="text-[10px] text-ink-400">· {v.count}</span></span>
+                <span className="text-sm font-bold text-ink-900 tabular-nums">{fmtMoney(v.total, cur)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </Card>
+  )
+}
+
+// Quick-access tile → an operational screen.
+function QuickLink({ to, icon: Icon, label, desc }) {
+  return (
+    <Link to={to} className="group rounded-2xl p-4 flex items-start gap-3 bg-white border border-border transition-all hover:border-[var(--p-border-strong)] hover:shadow-sm">
+      <span className="w-9 h-9 rounded-xl inline-flex items-center justify-center shrink-0" style={{ background: 'var(--p-brand-pale)', color: 'var(--p-brand-mid)' }}>
+        <Icon className="w-4 h-4" />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-bold text-ink-900 truncate">{label}</span>
+        <span className="block text-[11px] text-ink-500 truncate">{desc}</span>
+      </span>
+    </Link>
   )
 }
 

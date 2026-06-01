@@ -489,7 +489,7 @@ export default function ReceptionNewCaseP2C() {
 
                 <div className="rounded-xl p-4 space-y-3" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>Patient Excess?</div>
+                    <div className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-700)' }}>{IS_SUPABASE ? 'Insurance Excess?' : 'Patient Excess?'}</div>
                     <div className="flex gap-2">
                       {['No', 'Yes'].map((opt) => (
                         <button key={opt} type="button" onClick={() => update('hasExcess', opt)}
@@ -500,6 +500,7 @@ export default function ReceptionNewCaseP2C() {
                       ))}
                     </div>
                   </div>
+                  {IS_SUPABASE && <div className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>The patient's share of an insurance case — collected now and still treasury money (kept separate from cash-case revenue).</div>}
                   {form.hasExcess === 'Yes' && (
                     <div className="space-y-3">
                       <FieldGrid cols={2}>
@@ -541,6 +542,14 @@ export default function ReceptionNewCaseP2C() {
                   typeLabel="Invoice Payment" title="Payment Lines"
                   helperText="Cash → any currency · Visa / Card → always EGP. FX rate is editable per line."
                   invoiceCurrency={form.invoiceCurrency} />
+                {IS_SUPABASE && Number(form.invoiceAmount) > 0 && (() => {
+                  const due = Number(form.invoiceAmount) || 0
+                  const got = Number(cashTotals[form.invoiceCurrency]) || 0
+                  const out = Math.round((due - got) * 100) / 100
+                  return out > 0.005
+                    ? <Inline tone="pending">Under-collected: <strong>{out.toFixed(2)} {form.invoiceCurrency}</strong> still due against the {due.toFixed(2)} {form.invoiceCurrency} invoice. You can still save — the balance stays outstanding.</Inline>
+                    : <Inline tone="info">Fully collected in {form.invoiceCurrency}.{got > due ? ` Overpaid by ${(got - due).toFixed(2)}.` : ''}</Inline>
+                })()}
               </div>
             )}
 
@@ -554,6 +563,7 @@ export default function ReceptionNewCaseP2C() {
                     <input value={form.complimentaryApprovedBy} onChange={(e) => update('complimentaryApprovedBy', e.target.value)} className="p-input" />
                   </Field>
                 </FieldGrid>
+                {IS_SUPABASE && <div className="text-[11px]" style={{ color: '#7A4F1F' }}>Reason and approver are required. The approval date &amp; time is recorded automatically on save. This case appears in reports as Free / Complimentary — never as unpaid Cash.</div>}
               </div>
             )}
           </section>
