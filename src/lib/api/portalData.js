@@ -552,6 +552,7 @@ export async function fetchCollections(opts = {}) {
       foreign_amount_covered, actual_currency, fx_rate, actual_collected_amount,
       treasury_channel, status, collection_location_id, collected_by, collected_at,
       caseref:case_id ( our_ref, patient:patient_id ( first_name, last_name ) )`)
+    .neq('status', 'cancelled')   // corrected/voided collections never count toward active totals
   if (opts.from) cq = cq.gte('collected_at', `${opts.from}T00:00:00`)
   if (opts.to) cq = cq.lte('collected_at', `${opts.to}T23:59:59.999`)
   cq = cq.order('collected_at', { ascending: false })
@@ -1248,10 +1249,15 @@ export async function fetchCaseFinancials(caseId) {
     if (myUid && !collectorNames[myUid]) collectorNames[myUid] = 'You'
   } catch { /* names are best-effort only */ }
 
+  // Active vs corrected/voided. ACTIVE drives every money figure; CANCELLED rows are
+  // kept only for the admin-only "Corrected history" block — never counted.
+  const active = (cols || []).filter((c) => c.status !== 'cancelled')
+  const cancelledCollections = (cols || []).filter((c) => c.status === 'cancelled')
+
   const cashCharge = (charges || []).find((c) => c.charge_type === 'cash_case_amount')
   let cashOutstanding = null
   if (cashCharge) {
-    const cashCols = (cols || []).filter((c) => c.collection_purpose === 'cash_case_payment')
+    const cashCols = active.filter((c) => c.collection_purpose === 'cash_case_payment')
     const collectedByCurrency = {}
     for (const c of cashCols) {
       const cur = c.actual_currency || c.invoice_currency || cashCharge.currency
@@ -1269,7 +1275,7 @@ export async function fetchCaseFinancials(caseId) {
       otherCurrencies,
     }
   }
-  return { charges: charges || [], collections: cols || [], cashOutstanding, collectorNames }
+  return { charges: charges || [], collections: active, cancelledCollections, cashOutstanding, collectorNames }
 }
 
 /** Pilot Supervision — BULK financial summary for every case the user may see,
@@ -1285,7 +1291,7 @@ export async function fetchCaseFinancialIndex() {
   const db = await getSupabaseClient()
   const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
     db.from('portal_case_charges').select('case_id, charge_type, amount, currency'),
-    db.from('portal_collections').select('case_id, collection_purpose, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount'),
+    db.from('portal_collections').select('case_id, collection_purpose, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount').neq('status', 'cancelled'),
   ])
   if (e1) throw e1
   if (e2) throw e2
@@ -1323,6 +1329,32 @@ export async function fetchCaseFinancialIndex() {
     delete e._cashCol; delete e._exCol
   }
   return byCase
+}
+
+/** ADMIN-ONLY safe correction of a wrong/misclassified collection (migration 032).
+ *  Calls the atomic SECURITY DEFINER RPC portal_admin_correct_collection, which
+ *  reverses the old treasury movement(s), marks the old collection 'cancelled',
+ *  inserts the corrected collection + its movement, and writes a before/after audit
+ *  — all in one transaction. SETTLED-AMOUNT-CENTRIC: the real paid amount is
+ *  preserved (no FX re-conversion) unless the admin enters a different amount. The
+ *  frontend NEVER touches treasury rows directly. Throws on any rule/denied/config
+ *  error (never a silent partial). patch: { method:'cash'|'visa_card', amount?,
+ *  currency?, fxRate? }. */
+export async function correctCollection(collectionId, patch = {}, reason) {
+  if (!collectionId) throw new Error('No collection id')
+  if (!reason || !String(reason).trim()) throw new Error('A correction reason is required.')
+  const db = await getSupabaseClient()
+  const method = /visa|card/i.test(patch.method || '') ? 'visa_card' : 'cash'
+  const { data, error } = await db.rpc('portal_admin_correct_collection', {
+    p_collection_id: collectionId,
+    p_new_payment_method: method,
+    p_new_actual_amount: (patch.amount != null && patch.amount !== '') ? Number(patch.amount) : null,
+    p_new_actual_currency: patch.currency || null,
+    p_new_fx_rate: (patch.fxRate != null && patch.fxRate !== '') ? Number(patch.fxRate) : null,
+    p_reason: String(reason).trim(),
+  })
+  if (error) throw error
+  return data
 }
 
 /** P3H — Room stay history for a case (READ-ONLY display in Case Detail). Every

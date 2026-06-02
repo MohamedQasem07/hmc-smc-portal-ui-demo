@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import {
   ChevronDown, CheckCircle2, AlertTriangle, Info, Stethoscope,
   User, Banknote, ShieldCheck, Calendar, Repeat, BedDouble,
-  Gift, Send, ArrowRight, Hotel, Plane, Lock,
+  Gift, Send, ArrowRight, Hotel, Plane, Lock, Pencil, X, RotateCcw,
 } from 'lucide-react'
 import { OperationalShell } from '../../../../premium/OperationalShell'
 import { SectionHead, DemoBanner, FacilityBadge } from '../../../../premium/p2cPrimitives'
@@ -24,7 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
-import { updateCaseRegistration, upsertCashInvoiceCharge, upsertExcessCharge, recordCaseCollections, fetchCaseFinancials, fetchLocations } from '../../../../lib/api/portalData'
+import { updateCaseRegistration, upsertCashInvoiceCharge, upsertExcessCharge, recordCaseCollections, fetchCaseFinancials, fetchLocations, correctCollection } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -255,9 +255,35 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
-  // P3K — already-recorded collections (edit mode) split by purpose, shown read-only.
+  // P3K — already-recorded ACTIVE collections (edit mode) split by purpose, shown read-only.
   const existingCashCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'cash_case_payment')
   const existingExcessCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'patient_excess')
+  // P3O — corrected/voided collections (status='cancelled') for the admin-only history block.
+  const cancelledCash = (existingFin?.cancelledCollections || []).filter((c) => c.collection_purpose === 'cash_case_payment')
+  const cancelledExcess = (existingFin?.cancelledCollections || []).filter((c) => c.collection_purpose === 'patient_excess')
+
+  // P3O — ADMIN-ONLY "Correct collection" (reverse-and-replace). Normal users never
+  // see the button (isAdmin declared above); the RPC + RLS double-guard non-admins.
+  const [correctTarget, setCorrectTarget] = useState(null)   // the collection being corrected
+  const [correctBusy, setCorrectBusy] = useState(false)
+  const [correctErr, setCorrectErr] = useState(null)
+  const [correctOk, setCorrectOk] = useState(null)
+  async function reloadExistingFin() {
+    if (!editCase?.id) return
+    try { setExistingFin(await fetchCaseFinancials(editCase.id)) } catch { /* keep prior */ }
+  }
+  async function submitCorrection(patch, reason) {
+    if (!correctTarget) return
+    setCorrectBusy(true); setCorrectErr(null); setCorrectOk(null)
+    try {
+      await correctCollection(correctTarget.id, patch, reason)
+      setCorrectTarget(null)
+      await reloadExistingFin()
+      setCorrectOk('Collection corrected. The old entry was reversed and moved to corrected history.')
+    } catch (e) {
+      setCorrectErr(e?.message || 'Correction failed. Nothing was changed.')
+    } finally { setCorrectBusy(false) }
+  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -861,7 +887,11 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
                       {isEdit && existingExcessCollections.length > 0 && (
                         <ExistingCollectionsList collections={existingExcessCollections} title="Already-recorded excess (locked)"
-                          collectorNames={existingFin?.collectorNames} chargeCurrency={form.excessCurrency} />
+                          collectorNames={existingFin?.collectorNames} chargeCurrency={form.excessCurrency}
+                          canCorrect={isAdmin} onCorrect={(c) => { setCorrectErr(null); setCorrectOk(null); setCorrectTarget(c) }} />
+                      )}
+                      {isEdit && isAdmin && cancelledExcess.length > 0 && (
+                        <CancelledHistoryList collections={cancelledExcess} collectorNames={existingFin?.collectorNames} />
                       )}
 
                       <PaymentLinesPanel
@@ -919,8 +949,14 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                   <>
                     {existingCashCollections.length > 0 && (
                       <ExistingCollectionsList collections={existingCashCollections} title="Already-recorded payments (locked)"
-                        collectorNames={existingFin?.collectorNames} chargeCurrency={form.invoiceCurrency} />
+                        collectorNames={existingFin?.collectorNames} chargeCurrency={form.invoiceCurrency}
+                        canCorrect={isAdmin} onCorrect={(c) => { setCorrectErr(null); setCorrectOk(null); setCorrectTarget(c) }} />
                     )}
+                    {isAdmin && cancelledCash.length > 0 && (
+                      <CancelledHistoryList collections={cancelledCash} collectorNames={existingFin?.collectorNames} />
+                    )}
+                    {correctOk && <Inline tone="ok" icon={CheckCircle2}>{correctOk}</Inline>}
+                    {correctErr && <Inline tone="reject" icon={AlertTriangle}>{correctErr}</Inline>}
                     <PaymentLinesPanel
                       lines={paymentLines}
                       setLines={setPaymentLines}
@@ -1028,13 +1064,21 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
       </div>
   )
 
+  // P3O — admin-only collection-correction modal (reverse-and-replace). Rendered in
+  // both embedded + full modes so it overlays wherever the editor lives.
+  const correctModal = (isAdmin && correctTarget) ? (
+    <CollectionCorrectModal collection={correctTarget} busy={correctBusy} error={correctErr}
+      onCancel={() => { setCorrectTarget(null); setCorrectErr(null) }}
+      onSubmit={submitCorrection} />
+  ) : null
+
   // P3G — embedded edit mode renders only the form body; the parent Case Detail
   // already supplies the role-correct shell (Admin / Operational). Create mode
   // keeps its own OperationalShell wrapper (unchanged).
-  return embedded ? body : (
+  return embedded ? (<>{body}{correctModal}</>) : (
     <OperationalShell role="clinic_nurse" active="new-case"
       identityName={clinicName} identitySub="External Clinic Workspace">
-      {body}
+      {body}{correctModal}
     </OperationalShell>
   )
 }
@@ -1343,7 +1387,7 @@ function TotalsCallout({ title, totals, dueAmount, dueCurrency }) {
 
 // P3K — read-only list of already-recorded collections (the treasury ledger is
 // append-only, so past money is shown locked; only NEW lines below are saved).
-function ExistingCollectionsList({ collections, title, collectorNames = {}, chargeCurrency = null }) {
+function ExistingCollectionsList({ collections, title, collectorNames = {}, chargeCurrency = null, canCorrect = false, onCorrect = null }) {
   const totals = {}
   for (const c of collections) {
     const cur = c.actual_currency || c.invoice_currency || 'EGP'
@@ -1371,8 +1415,17 @@ function ExistingCollectionsList({ collections, title, collectorNames = {}, char
                   {c.collected_at ? new Date(c.collected_at).toLocaleString('en-GB') : '—'}{name ? ` · by ${name}` : ''}
                 </div>
               </div>
-              <div className="text-[13px] font-bold p-numeric shrink-0" style={{ color: 'var(--p-ink-900)' }}>
-                {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {cur}
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="text-[13px] font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
+                  {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {cur}
+                </div>
+                {canCorrect && onCorrect && (
+                  <button type="button" onClick={() => onCorrect(c)}
+                    className="inline-flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-bold"
+                    style={{ background: 'var(--p-ink-900)', color: 'white' }}>
+                    <Pencil className="w-3 h-3" /> Correct
+                  </button>
+                )}
               </div>
             </li>
           )
@@ -1390,10 +1443,113 @@ function ExistingCollectionsList({ collections, title, collectorNames = {}, char
   )
 }
 
+// P3O — ADMIN-ONLY corrected/voided history. Active totals exclude these; shown only
+// so an admin can see what was reversed. Normal users never receive this block.
+function CancelledHistoryList({ collections, collectorNames = {} }) {
+  if (!collections || collections.length === 0) return null
+  return (
+    <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--p-surface-tint)', border: '1px dashed var(--p-border-strong)' }}>
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-500)' }}>
+        <RotateCcw className="w-3 h-3" /> Corrected history — reversed (admin only)
+      </div>
+      <ul className="space-y-1.5">
+        {collections.map((c, i) => {
+          const cur = c.actual_currency || c.invoice_currency || ''
+          const name = collectorNames[c.collected_by] || null
+          return (
+            <li key={i} className="rounded-lg px-2.5 py-1.5 flex items-center justify-between gap-3" style={{ background: 'white', border: '1px solid var(--p-border)', opacity: 0.72 }}>
+              <span className="text-[11.5px] truncate" style={{ color: 'var(--p-ink-500)', textDecoration: 'line-through' }}>
+                {(c.payment_method || 'cash').replace(/_/g, ' ')}{c.treasury_channel ? ` · ${String(c.treasury_channel).replace(/_/g, ' ')}` : ''}
+                {c.collected_at ? ` · ${new Date(c.collected_at).toLocaleDateString('en-GB')}` : ''}{name ? ` · ${name}` : ''}
+              </span>
+              <span className="text-[12px] font-bold p-numeric shrink-0" style={{ color: 'var(--p-ink-400)', textDecoration: 'line-through' }}>
+                {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {cur}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="text-[10.5px]" style={{ color: 'var(--p-ink-500)' }}>Reversed &amp; excluded from every active total. Replaced by the active row(s) above.</div>
+    </div>
+  )
+}
+
+// P3O — admin reverse-and-replace correction modal. Settled-amount-centric: defaults
+// to the real paid amount + the old method; admin typically just switches the method
+// (e.g. Physical Cash → Visa/Card). Reason is required (audited). Calls the RPC.
+function CollectionCorrectModal({ collection, busy, error, onCancel, onSubmit }) {
+  const oldMethod = collection.payment_method === 'visa_card' ? 'visa_card' : 'cash'
+  const oldAmt = Number(collection.actual_collected_amount ?? collection.foreign_amount_covered) || 0
+  const oldCur = collection.actual_currency || collection.invoice_currency || 'EGP'
+  const oldChannel = collection.treasury_channel || (oldMethod === 'visa_card' ? 'visa_bank' : 'physical_cash')
+  const [method, setMethod] = useState(oldMethod)
+  const [amount, setAmount] = useState(String(oldAmt))
+  const [currency, setCurrency] = useState(oldCur)
+  const [reason, setReason] = useState('')
+  const isVisa = method === 'visa_card'
+  useEffect(() => { if (isVisa && currency !== 'EGP') setCurrency('EGP') }, [isVisa, currency])
+  const newChannel = isVisa ? 'visa_bank' : 'physical_cash'
+  const canSubmit = reason.trim().length > 0 && Number(amount) > 0 && !busy
+  const ch = (s) => String(s).replace(/_/g, ' ')
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'rgba(20,28,46,0.55)' }}>
+      <div className="w-full max-w-md rounded-2xl p-5 space-y-4" style={{ background: 'white', boxShadow: 'var(--p-shadow-card)' }}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-900)' }}>
+            <ShieldCheck className="w-4 h-4" style={{ color: 'var(--p-teal)' }} /> Correct collection — Admin
+          </div>
+          <button type="button" onClick={onCancel} aria-label="Close" style={{ color: 'var(--p-ink-400)' }}><X className="w-4 h-4" /></button>
+        </div>
+
+        <div className="rounded-xl px-3 py-2 text-[12px] leading-relaxed" style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+          This <strong>reverses</strong> the original {ch(oldMethod)} · {fmt(oldAmt)} {oldCur} ({ch(oldChannel)}) and <strong>replaces</strong> it with the values below. Treasury moves from <strong>{ch(oldChannel)}</strong> to <strong>{ch(newChannel)}</strong>. The original is kept as reversed history.
+        </div>
+
+        <Field label="Corrected method">
+          <div className="flex gap-2">
+            {[['cash', 'Physical Cash'], ['visa_card', 'Visa / Card']].map(([v, l]) => (
+              <button key={v} type="button" onClick={() => setMethod(v)}
+                className="flex-1 h-10 rounded-xl text-xs font-bold border-2"
+                style={method === v ? { background: 'var(--p-teal)', color: 'white', borderColor: 'var(--p-teal)' } : { background: 'white', color: 'var(--p-ink-700)', borderColor: 'var(--p-border)' }}>{l}</button>
+            ))}
+          </div>
+        </Field>
+        <FieldGrid cols={2}>
+          <Field label="Settled amount">
+            <input type="number" value={amount} onChange={(e) => setAmount(e.target.value)} className="p-input" />
+          </Field>
+          <Field label="Currency" hint={isVisa ? 'Visa / Card settles in EGP.' : undefined}>
+            <SelectInput value={currency} onChange={setCurrency} options={R1_CURRENCIES.map((c) => ({ value: c, label: c }))} />
+          </Field>
+        </FieldGrid>
+        <Field label="Correction reason *">
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="p-input"
+            placeholder="Why is this being corrected? (required — stored in the audit log)" />
+        </Field>
+
+        {error && <Inline tone="reject" icon={AlertTriangle}>{error}</Inline>}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <button type="button" onClick={onCancel} className="h-10 px-4 rounded-full text-xs font-bold"
+            style={{ background: 'var(--p-surface-tint)', color: 'var(--p-ink-700)', border: '1px solid var(--p-border)' }}>Cancel</button>
+          <button type="button" disabled={!canSubmit} onClick={() => onSubmit({ method, amount, currency }, reason)}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-xs font-bold"
+            style={{ background: canSubmit ? '#B14242' : 'var(--p-ink-300)', color: 'white', cursor: canSubmit ? 'pointer' : 'not-allowed' }}>
+            <RotateCcw className="w-3.5 h-3.5" /> {busy ? 'Correcting…' : 'Reverse & Replace'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function Inline({ tone = 'pending', icon: Icon, children }) {
   const tones = {
     pending: { bg: 'var(--p-pending-soft)', fg: '#A1672A', border: '#F0C97A' },
     warn:    { bg: 'var(--p-mixed-soft)',   fg: '#B14242', border: '#F0B5B5' },
+    reject:  { bg: 'var(--p-mixed-soft)',   fg: '#B14242', border: '#F0B5B5' },
+    ok:      { bg: 'var(--p-finalized-soft)', fg: '#076D4A', border: '#9FD4BB' },
     info:    { bg: 'var(--p-surface-tint)', fg: 'var(--p-ink-700)', border: 'var(--p-border)' },
   }[tone] || { bg: 'var(--p-surface-tint)', fg: 'var(--p-ink-700)', border: 'var(--p-border)' }
   return (
