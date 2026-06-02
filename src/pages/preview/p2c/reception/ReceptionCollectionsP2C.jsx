@@ -3,6 +3,7 @@ import { Banknote, CreditCard, Wallet } from 'lucide-react'
 import { OperationalShell, IdentityHeader } from '../../../../premium/OperationalShell'
 import { SectionHead, CurrencyTable, MiniKpi, DemoBanner, ReportActions } from '../../../../premium/p2cPrimitives'
 import { casesForBranch, summarize } from '../../../../data/p2c'
+import { useUserMode } from '../../../../context/UserModeContext'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 import LiveCollectionsList from '../live/LiveCollectionsList'
 
@@ -19,14 +20,16 @@ export default function ReceptionCollectionsP2C() {
 
 function SupabaseBranchCollections() {
   const { branchSlug } = useParams()
-  const { name: branchName, role } = branchConfig(branchSlug)
+  const { operateAs } = useUserMode()
+  const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   return (
     <OperationalShell role={role} active="collections"
       identityName={branchName} identitySub="Branch Reception Workspace">
       <div className="w-full max-w-[1400px] mx-auto px-4 sm:px-6 pt-5 pb-12 space-y-6">
         <IdentityHeader icon={Banknote} tone="gold" label="Branch Collections"
           subtitle={`${branchName} · Live Supabase`} />
-        <LiveCollectionsList scopeNote={`${branchName} — your branch's collections only.`} />
+        <LiveCollectionsList filterLocationCode={operateAs ? branchId : null}
+          scopeNote={`${branchName} — your branch's collections only.`} />
       </div>
     </OperationalShell>
   )

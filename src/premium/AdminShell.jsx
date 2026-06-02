@@ -39,6 +39,7 @@ const NAV_ITEMS = [
   { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/admin/reports/monthly', indent: true },
   { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/admin/repatriation' },
   { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/admin/p2c-cases', section: 'Clinic & Reception' },
+  { id: 'operate-as',   label: 'Operate as Clinic/Branch', icon: UserCheck,  to: '/admin/operate-as', section: 'Clinic & Reception' },
   { id: 'insurance-completion', label: 'Insurance Completion', icon: FileLock2, to: '/admin/insurance-completion', section: 'Clinic & Reception' },
   { id: 'attendance',   label: 'Attendance',          icon: UserCheck,       to: '/admin/attendance', section: 'Administration' },
   { id: 'users-staff',  label: 'Users & Staff',       icon: Users,           to: '/admin/users-staff', section: 'Administration' },

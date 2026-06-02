@@ -119,8 +119,10 @@ export default function ReceptionNewCaseP2C() {
     if (!canSubmit) return
 
     const nowIso = new Date().toISOString()
-    const visitDateIso = new Date(`${form.visitDate}T${form.visitTime || '10:00'}:00`).toISOString()
-    const checkInIso = new Date(`${form.visitCheckInDate || form.visitDate}T${form.visitCheckInTime || form.visitTime || '10:00'}:00`).toISOString()
+    // Phase A — the case visit date/time IS the Visit Check-In / Admission date the
+    // user entered (form.visitDate has no input of its own).
+    const visitDateIso = new Date(`${form.visitCheckInDate || form.visitDate}T${form.visitCheckInTime || form.visitTime || '10:00'}:00`).toISOString()
+    const checkInIso = visitDateIso
     const newId = `r2_${Date.now()}`
 
     const newCase = {

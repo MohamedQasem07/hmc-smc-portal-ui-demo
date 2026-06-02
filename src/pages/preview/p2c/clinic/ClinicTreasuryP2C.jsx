@@ -43,7 +43,7 @@ export default function ClinicTreasuryP2C() {
 }
 
 function SupabaseClinicCollections() {
-  const { clinicId } = useUserMode()
+  const { clinicId, operateAs } = useUserMode()
   const clinicName = getClinicName(clinicId)
   return (
     <OperationalShell role="clinic_nurse" active="treasury"
@@ -51,7 +51,8 @@ function SupabaseClinicCollections() {
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto space-y-6">
         <IdentityHeader icon={Wallet} tone="gold" label="Collections"
           subtitle={`${clinicName} · Live Supabase`} />
-        <LiveCollectionsList scopeNote={`${clinicName} — your clinic's collections only (cash in original currency; Visa settles in EGP).`} />
+        <LiveCollectionsList filterLocationCode={operateAs ? clinicId : null}
+          scopeNote={`${clinicName} — your clinic's collections only (cash in original currency; Visa settles in EGP).`} />
       </div>
     </OperationalShell>
   )

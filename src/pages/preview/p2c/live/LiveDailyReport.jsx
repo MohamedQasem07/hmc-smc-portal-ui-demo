@@ -30,7 +30,7 @@ function fmtAmt(n) {
   return new Intl.NumberFormat('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(n))
 }
 
-export default function LiveDailyReport({ scopeNote }) {
+export default function LiveDailyReport({ scopeNote, filterLocationCode = null }) {
   const [date, setDate] = useState(todayYmd())
   const [cases, setCases] = useState([])
   const [collections, setCollections] = useState([])
@@ -44,12 +44,18 @@ export default function LiveDailyReport({ scopeNote }) {
         fetchCases({ from: day, to: day }),
         fetchCollections({ from: day, to: day }),
       ])
-      setCases(cs); setCollections(cols)
+      // Operate-As: an admin's RLS read returns every location — narrow to the
+      // operated clinic/branch. No-op for RLS-scoped clinic/reception users.
+      const fcs = filterLocationCode
+        ? cs.filter((c) => c.registeredAtId === filterLocationCode || c.currentLocationCode === filterLocationCode || c.transfer?.toBranchId === filterLocationCode)
+        : cs
+      const fcol = filterLocationCode ? cols.filter((c) => c.locationCode === filterLocationCode) : cols
+      setCases(fcs); setCollections(fcol)
     } catch (e) {
       setError(e?.message || 'Failed to load the daily report.')
       setCases([]); setCollections([])
     } finally { setLoading(false) }
-  }, [])
+  }, [filterLocationCode])
 
   useEffect(() => { load(date) }, [date, load])
 

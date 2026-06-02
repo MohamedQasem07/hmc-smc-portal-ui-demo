@@ -14,6 +14,7 @@ import {
 import { R1_CURRENCIES, R1_TODAY_LABEL } from '../../../../data/p2cR1'
 import { fmtDMY, fmtDMYHM } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { useUserMode } from '../../../../context/UserModeContext'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 import LiveCollectionsList from '../live/LiveCollectionsList'
 
@@ -32,12 +33,14 @@ function branchConfig(slug) {
 
 function ReceptionTreasuryLive() {
   const { branchSlug } = useParams()
-  const { name: branchName, role } = branchConfig(branchSlug)
+  const { operateAs } = useUserMode()
+  const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   return (
     <OperationalShell role={role} active="treasury" identityName={branchName} identitySub="Reception & Rooms Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto space-y-6">
         <IdentityHeader icon={Wallet} tone="gold" label="Treasury & Collections" subtitle={`${branchName} · Live Supabase`} />
-        <LiveCollectionsList scopeNote={`${branchName} — branch collections (cash in original currency; Visa settles EGP). Handover closure deferred (Phase 5b).`} />
+        <LiveCollectionsList filterLocationCode={operateAs ? branchId : null}
+          scopeNote={`${branchName} — branch collections (cash in original currency; Visa settles EGP). Handover closure deferred (Phase 5b).`} />
       </div>
     </OperationalShell>
   )

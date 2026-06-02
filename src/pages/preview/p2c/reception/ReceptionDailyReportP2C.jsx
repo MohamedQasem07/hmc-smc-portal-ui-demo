@@ -14,6 +14,7 @@ import {
 import {
   R1_TODAY, R1_TODAY_LABEL, R1_CURRENCIES,
 } from '../../../../data/p2cR1'
+import { useUserMode } from '../../../../context/UserModeContext'
 import { IS_SUPABASE } from '../../../../lib/api/config'
 import LiveDailyReport from '../live/LiveDailyReport'
 
@@ -28,12 +29,14 @@ function branchConfig(slug) {
 
 function ReceptionDailyReportLive() {
   const { branchSlug } = useParams()
-  const { name: branchName, role } = branchConfig(branchSlug)
+  const { operateAs } = useUserMode()
+  const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   return (
     <OperationalShell role={role} active="report" identityName={branchName} identitySub="Reception & Rooms Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1400px] mx-auto space-y-6">
         <IdentityHeader icon={FileBarChart2} tone="navy" label="Daily Report" subtitle={`${branchName} · Live Supabase`} />
-        <LiveDailyReport scopeNote={`${branchName} — branch cases & collections (RLS-scoped).`} />
+        <LiveDailyReport filterLocationCode={operateAs ? branchId : null}
+          scopeNote={`${branchName} — branch cases & collections (RLS-scoped).`} />
       </div>
     </OperationalShell>
   )

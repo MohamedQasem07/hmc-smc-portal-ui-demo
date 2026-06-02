@@ -29,13 +29,14 @@ import LiveDailyReport from '../live/LiveDailyReport'
  * ========================================================================= */
 
 function ClinicDailyReportLive() {
-  const { clinicId } = useUserMode()
+  const { clinicId, operateAs } = useUserMode()
   const clinicName = getClinicName(clinicId)
   return (
     <OperationalShell role="clinic_nurse" active="report" identityName={clinicName} identitySub="External Clinic Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1400px] mx-auto space-y-6">
         <IdentityHeader icon={FileBarChart2} tone="navy" label="Daily Report" subtitle={`${clinicName} · Live Supabase`} />
-        <LiveDailyReport scopeNote={`${clinicName} — your clinic's cases & collections only (RLS-scoped).`} />
+        <LiveDailyReport filterLocationCode={operateAs ? clinicId : null}
+          scopeNote={`${clinicName} — your clinic's cases & collections only (RLS-scoped).`} />
       </div>
     </OperationalShell>
   )

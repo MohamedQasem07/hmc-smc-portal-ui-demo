@@ -45,7 +45,7 @@ function shortId(uid) {
   return uid ? `usr:${String(uid).slice(0, 8)}` : '—'
 }
 
-export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · portal_collections' }) {
+export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · portal_collections', filterLocationCode = null }) {
   const [rows, setRows] = useState(null)   // null = not loaded yet
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -65,7 +65,9 @@ export default function LiveCollectionsList({ scopeNote, eyebrow = 'Live · port
 
   useEffect(() => { load() }, [load])
 
-  const list = rows || []
+  // Operate-As: an admin's RLS read returns every location's collections — narrow
+  // to the operated clinic/branch. No-op for RLS-scoped clinic/reception users.
+  const list = (rows || []).filter((c) => !filterLocationCode || c.locationCode === filterLocationCode)
   const cashCount = list.filter((c) => c.method === 'cash').length
   const visaCount = list.filter((c) => c.method === 'visa_card').length
   const summary = summarizeCollections(list)

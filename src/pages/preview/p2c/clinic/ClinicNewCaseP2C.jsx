@@ -52,16 +52,19 @@ const STEPS = [
   { id: 'review',    label: 'Review & Save', icon: CheckCircle2 },
 ]
 
+// Phase B — which destination a transfer route targets (for location-aware filtering).
+const ROUTE_TARGET = { to_al_kawther: 'al_kawther', to_sheraton: 'sheraton' }
+
 export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone, adminCorrection = false } = {}) {
   const navigate = useNavigate()
-  const { clinicId, currentUser } = useUserMode()
+  const { clinicId, currentUser, operateAs } = useUserMode()
   const isEdit = !!editCase
   // P3J — ADMIN GLOBAL OPERATION: an admin holds no own-clinic scope, so they
   // register a case ON BEHALF of any active clinic/branch via a location picker.
   // Non-admins are ALWAYS locked to their own clinicId (the picker is hidden), so
   // their behaviour is unchanged. Edit mode never offers the picker.
   const isAdmin = currentUser?.role === 'admin'
-  const adminPicker = isAdmin && !isEdit
+  const adminPicker = isAdmin && !isEdit && !operateAs   // operate-as fixes the location → no picker
   const [adminLocations, setAdminLocations] = useState([])  // [{ code, name, kind }]
   const [adminLocId, setAdminLocId] = useState(null)        // a location CODE
   useEffect(() => {
@@ -82,10 +85,15 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
   // P3G/P3J — registering location/identity. Edit: from the existing case (never
   // changes). Create + admin: the picked location (code). Create + non-admin: own clinic.
-  const regAtId = isEdit ? (editCase.registeredAtId || clinicId) : (isAdmin ? (adminLocId || '') : clinicId)
-  const regAtKind = isEdit ? (editCase.registeredAtKind || 'external') : (isAdmin ? (selAdminLoc?.kind || 'external') : 'external')
+  // P3K — Operate-As fixes the registration location to the operated clinic/branch
+  // (no picker). Edit keeps the case's own location. Otherwise admin picks; a real
+  // clinic user is always locked to their own clinicId.
+  const regAtId = isEdit ? (editCase.registeredAtId || clinicId)
+    : (operateAs ? operateAs.code : (isAdmin ? (adminLocId || '') : clinicId))
+  const regAtKind = isEdit ? (editCase.registeredAtKind || 'external')
+    : (operateAs ? operateAs.kind : (isAdmin ? (selAdminLoc?.kind || 'external') : 'external'))
   const clinicName = isEdit ? (editCase.registeredAtName || getClinicName(regAtId))
-    : (isAdmin ? (selAdminLoc?.name || '—') : getClinicName(clinicId))
+    : (operateAs ? operateAs.name : (isAdmin ? (selAdminLoc?.name || '—') : getClinicName(clinicId)))
   const { actions } = useDemoState()
 
   // P2C.R3 — live preview of the OUR Ref that will be assigned on submit.
@@ -193,6 +201,18 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const showTransferBlock  = form.route !== 'direct'
   const isOtherDestination = form.route === 'other'
 
+  // Phase B — transfer routes follow the effective registration location; a
+  // location can never transfer to itself (operating as Sheraton hides "Transfer
+  // to Sheraton"; as Al-Kawther hides "Transfer to Al-Kawther"). External clinics
+  // keep both branch options.
+  const routeOptions = [...P2C_ROUTES_EXTERNAL, { code: 'other', label: 'Transfer to Other Destination' }]
+    .filter((r) => ROUTE_TARGET[r.code] !== regAtId)
+  useEffect(() => {
+    // If the selected route just became a self-transfer (location changed), reset it.
+    if (ROUTE_TARGET[form.route] && ROUTE_TARGET[form.route] === regAtId) update('route', 'direct')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regAtId])
+
   // Encounter visibility (independent)
   const isSingleVisit  = form.encounterPattern === 'outpatient_single'
   const isMultiSession = form.encounterPattern === 'outpatient_multi'
@@ -263,7 +283,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         financialType: form.financialType,
         billingFacility: form.financialType === 'Insurance' ? form.billingFacility : null,
         encounterPattern: form.encounterPattern,
-        visitDate: form.visitDate, visitTime: form.visitTime,
+        // Phase A — the case visit date/time is the Visit Check-In the user actually
+        // edits (form.visitDate has no UI input). Without this, editing the check-in
+        // date silently did nothing.
+        visitDate: form.visitCheckInDate || form.visitDate, visitTime: form.visitCheckInTime || form.visitTime,
         insurance: { company: form.insuranceCompany, ref: form.insuranceRef, email: form.insuranceEmail, phone: form.insurancePhone },
         hasPatientExcess: form.financialType === 'Insurance' && form.hasExcess === 'Yes',
         // P3K — Free reason/approver now persists on edit (was create-only).
@@ -296,8 +319,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
     }
 
     const nowIso = new Date().toISOString()
-    const visitDateIso = new Date(`${form.visitDate}T${form.visitTime || '10:00'}:00`).toISOString()
-    const checkInIso   = new Date(`${form.visitCheckInDate || form.visitDate}T${form.visitCheckInTime || form.visitTime || '10:00'}:00`).toISOString()
+    // Phase A — the case visit date/time IS the Visit Check-In the user entered
+    // (form.visitDate has no input of its own). Keeps Case Detail "Check-In" correct.
+    const visitDateIso = new Date(`${form.visitCheckInDate || form.visitDate}T${form.visitCheckInTime || form.visitTime || '10:00'}:00`).toISOString()
+    const checkInIso   = visitDateIso
 
     const newCase = {
       id: `r3_${Date.now()}`,
@@ -634,7 +659,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
               <SectionHead eyebrow="Section 5" title="Patient Route"
                 description="Where the patient goes — separate from how they pay." />
               <div className="space-y-2">
-                {[...P2C_ROUTES_EXTERNAL, { code: 'other', label: 'Transfer to Other Destination' }].map((r) => (
+                {routeOptions.map((r) => (
                   <RadioRow key={r.code} label={r.label}
                     active={form.route === r.code} onClick={() => update('route', r.code)}
                     badge={r.code !== 'direct' ? 'Transfer' : null} />

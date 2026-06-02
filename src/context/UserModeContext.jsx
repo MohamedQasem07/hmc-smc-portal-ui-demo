@@ -74,6 +74,13 @@ function initialSession() {
   } catch { return null }
 }
 
+const OPERATE_AS_KEY = 'portal_operate_as'
+function initialOperateAs() {
+  const raw = readStorage(OPERATE_AS_KEY)
+  if (!raw) return null
+  try { const p = JSON.parse(raw); return p && p.code ? p : null } catch { return null }
+}
+
 export function UserModeProvider({ children }) {
   const [demoRole, setDemoRoleState] = useState(initialDemoRole)
   const [clinicId, setClinicIdState] = useState(initialClinicId)
@@ -87,6 +94,19 @@ export function UserModeProvider({ children }) {
   // forces a clean re-login instead of letting reads silently return empty.
   const [sessionExpired, setSessionExpired] = useState(false)
   const lastUidRef = useRef(null)
+
+  // Admin Operate-As — admin enters a clinic/branch workspace scoped to that
+  // location while staying the real admin (operatingMode = admin_override).
+  // Persisted so a refresh keeps the operate-as scope. Only honoured for admins.
+  const [operateAs, setOperateAsState] = useState(initialOperateAs)
+  const setOperateAs = (loc) => {
+    setOperateAsState(loc || null)
+    try {
+      if (loc) window.sessionStorage.setItem(OPERATE_AS_KEY, JSON.stringify(loc))
+      else window.sessionStorage.removeItem(OPERATE_AS_KEY)
+    } catch { /* ignore */ }
+  }
+  const clearOperateAs = () => setOperateAs(null)
 
   const setDemoRole = (next, nextClinic) => {
     setDemoRoleState(next)
@@ -169,6 +189,7 @@ export function UserModeProvider({ children }) {
   }
 
   async function signOut() {
+    setOperateAs(null)   // never carry an operate-as scope across sign-out
     if (IS_SUPABASE) {
       try { await sbSignOut() } catch { /* ignore */ }
       setCurrentUser(null)
@@ -181,6 +202,11 @@ export function UserModeProvider({ children }) {
   const currentClinicScope = scopeForUser(currentUser)
   const isSignedIn = !!currentUser
 
+  // Operate-As is honoured ONLY for admins; the effective clinic scope that
+  // clinic pages read (clinicId) becomes the operate-as location when active.
+  const activeOperateAs = currentUser?.role === 'admin' ? operateAs : null
+  const effectiveClinicId = activeOperateAs ? activeOperateAs.code : clinicId
+
   // Legacy compatibility
   const role = legacyMirror(demoRole)
   const setRole = (legacyNext) => {
@@ -192,8 +218,10 @@ export function UserModeProvider({ children }) {
   return (
     <UserModeContext.Provider value={{
       role, user, setRole,
-      demoRole, clinicId, demoUser,
+      demoRole, clinicId: effectiveClinicId, demoUser,
       setDemoRole, setClinicId,
+      operateAs: activeOperateAs, setOperateAs, clearOperateAs,
+      operatingMode: activeOperateAs ? 'admin_override' : null,
       currentUser, currentClinicScope, isSignedIn, authReady, recoveryMode, sessionExpired,
       signIn, signOut,
     }}>

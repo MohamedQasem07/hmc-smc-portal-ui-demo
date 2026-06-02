@@ -33,7 +33,7 @@ function durationLabel(s) {
   return diffHM(s.startAt, s.endAt)
 }
 
-export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null, clinicName = '' }) {
+export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null, clinicName = '', restrictToCode = null }) {
   const isAdmin = mode === 'admin'
   const [dateYmd, setDateYmd] = useState(() => todayYMD())
   const [data, setData] = useState({ shifts: [], duties: [] })
@@ -89,18 +89,22 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
 
   // For admin, fetchAssignableStaff returns assignable staff for EVERY clinic —
   // scope to the picked clinic so the pickers only offer staff the RPC will accept.
-  const scopedStaff = useMemo(
-    () => (isAdmin ? staff.filter((s) => s.locationCode === adminRecordCode) : staff),
-    [isAdmin, staff, adminRecordCode],
-  )
+  const scopedStaff = useMemo(() => {
+    let s = isAdmin ? staff.filter((x) => x.locationCode === adminRecordCode) : staff
+    if (restrictToCode) s = s.filter((x) => x.locationCode === restrictToCode)   // operate-as scope
+    return s
+  }, [isAdmin, staff, adminRecordCode, restrictToCode])
   const nurses = useMemo(() => scopedStaff.filter((s) => s.role === 'nurse'), [scopedStaff])
   const doctors = useMemo(() => scopedStaff.filter((s) => s.role === 'doctor'), [scopedStaff])
+  // Operate-As: narrow the (admin-wide) shift/duty reads to the operated location.
+  const visibleShifts = useMemo(() => (restrictToCode ? data.shifts.filter((s) => s.locationCode === restrictToCode) : data.shifts), [data.shifts, restrictToCode])
+  const visibleDuties = useMemo(() => (restrictToCode ? data.duties.filter((d) => d.locationCode === restrictToCode) : data.duties), [data.duties, restrictToCode])
   const dateLabel = fmtDMY(parseYMD(dateYmd))
   const isToday = dateYmd === todayYMD()
 
   // The location in record scope (clinic user = own; admin = picked clinic).
   const ownLocationId = locationId || nurses[0]?.locationId || doctors[0]?.locationId || null
-  const activeNurseIds = new Set(data.shifts.filter((s) => s.status === 'active').map((s) => s.staffId))
+  const activeNurseIds = new Set(visibleShifts.filter((s) => s.status === 'active').map((s) => s.staffId))
   const availableNurses = nurses.filter((n) => !activeNurseIds.has(n.staffId))
 
   async function doRecordNurse() {
@@ -267,8 +271,8 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
           {/* Nurse table */}
           <section>
             <SectionHead eyebrow="Nurse Shifts" title={`Nurse Attendance — ${dateLabel}`}
-              description={`${data.shifts.filter((s) => s.status === 'active').length} active · ${data.shifts.filter((s) => s.status !== 'active').length} closed.`} />
-            <ShiftTable shifts={data.shifts} loading={loading} dateLabel={dateLabel} onEnd={doEndShift} busy={busy} showAction />
+              description={`${visibleShifts.filter((s) => s.status === 'active').length} active · ${visibleShifts.filter((s) => s.status !== 'active').length} closed.`} />
+            <ShiftTable shifts={visibleShifts} loading={loading} dateLabel={dateLabel} onEnd={doEndShift} busy={busy} showAction />
           </section>
 
           {/* Doctor on duty */}
@@ -299,7 +303,7 @@ export default function LiveAttendancePanel({ mode = 'clinic', clinicCode = null
                 </div>
               </div>
             )}
-            <DutyTable duties={data.duties} loading={loading} dateLabel={dateLabel} />
+            <DutyTable duties={visibleDuties} loading={loading} dateLabel={dateLabel} />
           </section>
         </>
       )}

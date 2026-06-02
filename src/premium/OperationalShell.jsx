@@ -39,6 +39,7 @@ export function OperationalShell({
       <div className="flex">
         <DesktopRail role={role} active={active} identityName={identityName} identitySub={identitySub} />
         <main className="flex-1 min-w-0 pb-24 md:pb-0">
+          <OperateAsBanner />
           {children}
         </main>
       </div>
@@ -78,6 +79,33 @@ function navItemsFor(role) {
 export function receptionRoute(role, leaf) {
   const branch = role === 'reception_kawther' ? 'al-kawther' : 'sheraton'
   return `/reception/${branch}/${leaf}`
+}
+
+// ---------------------------------------------------------------------------
+// Admin Operate-As banner — persistent strip shown on every clinic/reception
+// page while an admin is operating on behalf of a location. Makes it obvious
+// the admin is NOT the real nurse/reception, and offers a one-click return.
+function OperateAsBanner() {
+  const { operateAs, clearOperateAs } = useUserMode()
+  const navigate = useNavigate()
+  if (!operateAs) return null
+  function returnToAdmin() { clearOperateAs(); navigate('/admin-dashboard', { replace: true }) }
+  return (
+    <div className="sticky top-14 z-20 px-4 md:px-7 py-2 flex items-center justify-between gap-3 flex-wrap"
+      style={{ background: 'linear-gradient(90deg, #B14242 0%, #8F2F2F 100%)', borderBottom: '1px solid rgba(255,255,255,0.18)' }}>
+      <div className="flex items-center gap-2 min-w-0 text-white">
+        <ShieldCheck className="w-4 h-4 shrink-0" />
+        <span className="text-[12px] sm:text-[13px] font-bold truncate">
+          Operating as {operateAs.name} · Admin Override
+        </span>
+      </div>
+      <button onClick={returnToAdmin}
+        className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-[11px] font-bold shrink-0 transition-colors"
+        style={{ background: 'rgba(255,255,255,0.16)', border: '1px solid rgba(255,255,255,0.35)', color: 'white' }}>
+        <ArrowLeft className="w-3.5 h-3.5" /> Return to Admin Workspace
+      </button>
+    </div>
+  )
 }
 
 // ---------------------------------------------------------------------------

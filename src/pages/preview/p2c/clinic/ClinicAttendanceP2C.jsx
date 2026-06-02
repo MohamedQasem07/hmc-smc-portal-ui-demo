@@ -41,15 +41,18 @@ export default function ClinicAttendanceP2C() {
 }
 
 function SupabaseAttendance() {
-  const { clinicId, currentUser } = useUserMode()
+  const { clinicId, currentUser, operateAs } = useUserMode()
   const isAdmin = currentUser?.role === 'admin'
+  // Real admin → all-clinics overview. Admin operate-as → scoped to that one clinic.
+  const isAdminOverview = isAdmin && !operateAs
   const clinicName = getClinicName(clinicId)
   return (
     <OperationalShell role="clinic_nurse" active="attendance"
-      identityName={isAdmin ? 'All Clinics' : clinicName}
-      identitySub={isAdmin ? 'Admin Overview' : 'External Clinic Workspace'}>
+      identityName={isAdminOverview ? 'All Clinics' : clinicName}
+      identitySub={isAdminOverview ? 'Admin Overview' : 'External Clinic Workspace'}>
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto">
-        <LiveAttendancePanel mode={isAdmin ? 'admin' : 'clinic'} clinicCode={clinicId} clinicName={clinicName} />
+        <LiveAttendancePanel mode={isAdminOverview ? 'admin' : 'clinic'} clinicCode={clinicId} clinicName={clinicName}
+          restrictToCode={operateAs ? clinicId : null} />
       </div>
     </OperationalShell>
   )
