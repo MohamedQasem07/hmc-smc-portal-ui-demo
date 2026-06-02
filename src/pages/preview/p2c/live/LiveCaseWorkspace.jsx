@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { SectionHead, FacilityBadge, FinTypePill, RoutePill, P2CTimeline } from '../../../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../../../premium/primitives'
+import { NeedsAttentionPanel } from '../../../../premium/CaseWarnings'
 import { useCases, useFindCase, useDemoState } from '../../../../context/DemoStateContext'
 import { useUserMode } from '../../../../context/UserModeContext'
 import { useLiveRooms } from '../../../../lib/useLiveRooms'
@@ -16,6 +17,7 @@ import {
   fetchCaseFinancials, fetchRoomStayHistory, adminDeleteCase,
 } from '../../../../lib/api/portalData'
 import { escalateIfAuthError, sbEnsureSession } from '../../../../lib/api/auth'
+import { computeCaseWarnings, normalizeCaseFinancials, SECTION } from '../../../../lib/caseWarnings'
 import LiveSpecialistVisits from './LiveSpecialistVisits'
 import LiveCaseServices from './LiveCaseServices'
 import ClinicNewCaseP2C from '../clinic/ClinicNewCaseP2C'
@@ -167,6 +169,23 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
   // via updateCaseRegistration. Open it with a clean banner state.
   function openEditor() { setOkMsg(null); setError(null); setEditReg(true) }
 
+  // Pilot Supervision — incompleteness / mistake warnings for this case. Same
+  // pure rules as the list chips + admin queues; `fin` is the live financial read,
+  // so the money rules (cash/excess outstanding) are exact here.
+  const warnings = useMemo(
+    () => computeCaseWarnings(c, normalizeCaseFinancials(fin)),
+    [c, fin],
+  )
+  // Quick-action target for a Needs-Attention item: registration → open the Full
+  // Case Editor; money / visit / transfer → smooth-scroll to that section.
+  function gotoWarningSection(section) {
+    if (section === SECTION.REGISTRATION) { openEditor(); return }
+    const id = section === SECTION.FINANCIAL ? 'case-financial'
+      : section === SECTION.TRANSFER ? 'case-transfer' : 'case-visit'
+    const el = typeof document !== 'undefined' ? document.getElementById(id) : null
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   async function onAssignRoom(roomId) {
     if (!roomId) return
     await run(async () => { await assignRoom(c.id, roomId); await reloadRooms() }, 'Room updated.')
@@ -271,6 +290,10 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         </div>
       )}
 
+      {/* Pilot Supervision — Needs Attention (incomplete / likely-wrong fields).
+          Renders only when something needs review; each item links to the fix. */}
+      <NeedsAttentionPanel warnings={warnings} onAction={(section) => gotoWarningSection(section)} busy={busy} />
+
       {/* ===== Premium identity hero ===== */}
       <section className="p-mesh p-grid-overlay relative overflow-hidden p-rise px-5 sm:px-7 py-5 sm:py-6" style={{ borderRadius: 'var(--p-radius-hero)' }}>
         <div className="relative z-10">
@@ -330,7 +353,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
         <div className="xl:col-span-7 space-y-5">
 
           {/* Visit / discharge */}
-          <section className="p-card p-5 space-y-4">
+          <section id="case-visit" className="p-card p-5 space-y-4 scroll-mt-4">
             <SectionHead eyebrow="Encounter" title="Visit & Discharge"
               description="Check-in, room, and discharge for this case." />
             <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
@@ -430,7 +453,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 
           {/* Transfer info */}
           {c.transfer && (
-            <section className="p-card p-5">
+            <section id="case-transfer" className="p-card p-5 scroll-mt-4">
               <div className="rounded-2xl p-4 space-y-2" style={{ background: 'var(--p-transfer-soft)', border: '1px solid #D7CFF2' }}>
                 <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em]" style={{ color: '#5443A8' }}>
                   <Send className="w-3.5 h-3.5" /> Transfer
@@ -460,7 +483,7 @@ export default function LiveCaseWorkspace({ caseId, backTo = '/', backLabel = 'B
 
         {/* RIGHT — financial (surfaced first on mobile: the figure cashier needs at a glance) */}
         <div className="xl:col-span-5 space-y-5 order-first xl:order-none">
-          <section className="p-card p-5 space-y-4">
+          <section id="case-financial" className="p-card p-5 space-y-4 scroll-mt-4">
             <SectionHead eyebrow="Financial" title="Collection Summary"
               description="Read-only summary. Invoice, collections and excess are edited in the Full Case Editor." />
             <FinancialPanel c={c} fin={fin} finError={finError} />

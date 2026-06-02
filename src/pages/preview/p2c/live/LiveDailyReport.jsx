@@ -66,6 +66,21 @@ export default function LiveDailyReport({ scopeNote, filterLocationCode = null }
     return o
   }, [cases])
 
+  // Soft consistency checks — computed from the already-loaded cases + collections
+  // (no extra fetch, no FX conversion). Non-blocking: a heads-up, not an error.
+  const consistency = useMemo(() => {
+    const notes = []
+    const cashCases = cases.filter((c) => c.financialType === 'Cash')
+    const cashCols = collections.filter((c) => c.purpose === 'cash_case_payment')
+    if (cashCases.length > 0 && cashCols.length === 0) {
+      notes.push(`${cashCases.length} cash case${cashCases.length !== 1 ? 's' : ''} registered on this date, but no cash collection is recorded yet.`)
+    }
+    if (finCounts.Pending > 0) {
+      notes.push(`${finCounts.Pending} case${finCounts.Pending !== 1 ? 's' : ''} still Pending financial classification.`)
+    }
+    return notes
+  }, [cases, collections, finCounts])
+
   return (
     <section className="space-y-5">
       <SectionHead
@@ -109,6 +124,18 @@ export default function LiveDailyReport({ scopeNote, filterLocationCode = null }
         <Kpi label="Free" value={finCounts['Free / Complimentary']} tone="gold" />
         <Kpi label="Collections" value={collections.length} tone="cash" />
       </div>
+
+      {/* Soft consistency warnings (non-blocking; no FX conversion). */}
+      {!loading && consistency.length > 0 && (
+        <div className="rounded-xl px-3 py-2.5 flex items-start gap-2 text-[12px]"
+          style={{ background: 'var(--p-pending-soft)', color: '#7A4F1F', border: '1px solid #F0C97A' }}>
+          <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
+          <div className="space-y-0.5">
+            <div className="font-semibold">Review for {date}:</div>
+            {consistency.map((n, i) => <div key={i}>• {n}</div>)}
+          </div>
+        </div>
+      )}
 
       {/* Collections by channel + currency */}
       <div>

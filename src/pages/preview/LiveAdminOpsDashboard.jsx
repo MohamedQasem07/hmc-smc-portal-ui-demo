@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { AdminShell } from '../../premium/AdminShell'
 import { PremiumKpi, StatusPill, MeshCorner, Avatar } from '../../premium/primitives'
+import { ReviewQueues } from '../../premium/ReviewQueues'
 import { Card } from '../../components/ui/Card'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { SectionHeader } from '../../components/ui/SectionHeader'
@@ -157,6 +158,13 @@ export function LiveAdminOpsDashboard() {
             <span>No cases recorded for <span className="font-semibold">{monthName}</span> yet — every panel below is ready and will fill in as clinics register patients.</span>
           </div>
         )}
+
+        {/* ===================== REVIEW QUEUES (Pilot Supervision) ===================== */}
+        <section className="space-y-2.5">
+          <SectionAccent icon={ShieldAlert} label="Needs Review" color="#B14242"
+            trailing="Incomplete or likely-wrong cases — click to correct" />
+          <ReviewQueues cases={cases} />
+        </section>
 
         {/* ===================== MONTHLY ACTIVITY CHART ===================== */}
         <section className="space-y-2.5">

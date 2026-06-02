@@ -69,7 +69,7 @@ export function portalRowToCase(row, maps) {
     routeLabel: ROUTE_FROM_PORTAL[row.route] === 'direct' || !row.route ? `Direct at ${loc.name || ''}` : `Transfer`,
     financialType: FIN_FROM_PORTAL[row.financial_type] || 'Pending',
     billingFacility: row.billing_facility_id ? (maps.facCodeById[row.billing_facility_id] || null) : null,
-    insurance: intake ? { company: one(intake.company)?.name || null, ref: intake.insurance_reference_number || null } : null,
+    insurance: intake ? { company: one(intake.company)?.name || null, ref: intake.insurance_reference_number || null, hasExcess: !!intake.has_patient_excess } : null,
     operationalStatus: OPSTATUS_FROM_PORTAL[row.operational_status] || 'Open',
     encounterPattern: row.encounter_pattern,
     treatmentMode: row.treatment_mode || null,
@@ -94,6 +94,7 @@ export function portalRowToCase(row, maps) {
     centerRoomNumber: one(row.center_room)?.room_code || null,
     centerRoomName: one(row.center_room)?.room_name || null,
     closedAt: row.closed_at || null,
+    createdAt: row.created_at || null,
     visitTime: row.visit_time || null,
     freeReason: row.free_reason || null,
     freeApprovedBy: row.free_approved_by || null,
@@ -144,11 +145,11 @@ const CASE_SELECT = `
   id, our_ref, visit_date, visit_time, financial_type, operational_status, encounter_pattern, route,
   treatment_mode, registered_location_id, current_location_id, billing_facility_id, center_room_id,
   hotel_or_location, hotel_room_number, short_clinical_note,
-  free_reason, free_approved_by, free_approved_at, free_approval_notes, closed_at,
+  free_reason, free_approved_by, free_approved_at, free_approval_notes, closed_at, created_at,
   patient:patient_id ( id, first_name, last_name, date_of_birth, gender, nationality, phone_country_code, phone_number, email, postal_code ),
   center_room:center_room_id ( id, room_code, room_name ),
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
-  intake:portal_insurance_intakes ( insurance_reference_number, company:insurance_company_id ( name ) ),
+  intake:portal_insurance_intakes ( insurance_reference_number, has_patient_excess, company:insurance_company_id ( name ) ),
   prep:portal_insurance_billing_preparations ( invoice_currency, service_charge_pct, billing_preparation_status,
     local_assistance_company_id, local_assistance_reference_number,
     onedrive_folder_path, missing_data_note, transportation_fee, patient_excess_amount, admin_notes, completed_at ),
@@ -1245,6 +1246,51 @@ export async function fetchCaseFinancials(caseId) {
     }
   }
   return { charges: charges || [], collections: cols || [], cashOutstanding }
+}
+
+/** Pilot Supervision — BULK financial summary for every case the user may see,
+ *  in ONE pair of RLS-scoped reads (no per-case round trips). Powers the
+ *  case-list warning chips + Admin review queues. RLS does the scoping:
+ *  portal_case_charges SELECT = portal_can_access_case(case_id); portal_collections
+ *  SELECT = admin OR has_location OR can_access_case — so a clinic user only ever
+ *  gets their own cases' rows, an admin gets all. Collections are matched to the
+ *  charge's invoice currency (same convention as fetchCaseFinancials). Returns
+ *  { [caseId]: { cashInvoice, cashCurrency, cashCollected, excessExpected,
+ *                excessCurrency, excessCollected } }. */
+export async function fetchCaseFinancialIndex() {
+  const db = await getSupabaseClient()
+  const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
+    db.from('portal_case_charges').select('case_id, charge_type, amount, currency'),
+    db.from('portal_collections').select('case_id, collection_purpose, invoice_currency, foreign_amount_covered'),
+  ])
+  if (e1) throw e1
+  if (e2) throw e2
+  const byCase = {}
+  const ensure = (id) => (byCase[id] ||= {
+    cashInvoice: null, cashCurrency: null, cashCollected: 0,
+    excessExpected: null, excessCurrency: null, excessCollected: 0,
+    _cashCol: {}, _exCol: {},
+  })
+  for (const ch of (charges || [])) {
+    const e = ensure(ch.case_id)
+    if (ch.charge_type === 'cash_case_amount') { e.cashInvoice = Number(ch.amount); e.cashCurrency = ch.currency }
+    else if (ch.charge_type === 'patient_excess') { e.excessExpected = Number(ch.amount); e.excessCurrency = ch.currency }
+  }
+  for (const col of (cols || [])) {
+    const e = ensure(col.case_id)
+    const amt = Number(col.foreign_amount_covered) || 0
+    const cur = col.invoice_currency || ''
+    if (col.collection_purpose === 'cash_case_payment') e._cashCol[cur] = (e._cashCol[cur] || 0) + amt
+    else if (col.collection_purpose === 'patient_excess') e._exCol[cur] = (e._exCol[cur] || 0) + amt
+  }
+  const sumAll = (bag) => Object.values(bag).reduce((s, v) => s + v, 0)
+  for (const id of Object.keys(byCase)) {
+    const e = byCase[id]
+    e.cashCollected = e.cashCurrency ? (e._cashCol[e.cashCurrency] || 0) : sumAll(e._cashCol)
+    e.excessCollected = e.excessCurrency ? (e._exCol[e.excessCurrency] || 0) : sumAll(e._exCol)
+    delete e._cashCol; delete e._exCol
+  }
+  return byCase
 }
 
 /** P3H — Room stay history for a case (READ-ONLY display in Case Detail). Every

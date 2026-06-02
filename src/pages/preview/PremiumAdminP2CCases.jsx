@@ -8,6 +8,8 @@ import {
 import { AdminShell } from '../../premium/AdminShell'
 import { FacilityBadge, FinTypePill, RoutePill, SectionHead, DemoBanner } from '../../premium/p2cPrimitives'
 import { StatusPill, Avatar } from '../../premium/primitives'
+import { CaseWarningChips } from '../../premium/CaseWarnings'
+import { useCaseWarnings } from '../../lib/useCaseWarnings'
 import {
   EXTERNAL_CLINICS, RECEIVING_BRANCHES,
 } from '../../data/p2c'
@@ -43,6 +45,8 @@ export default function PremiumAdminP2CCases() {
   const [transferFilter, setTransferFilter] = useState('all')
 
   const allCases = useCases()
+  // Pilot Supervision — per-case incompleteness/mistake chips (admin = global scope).
+  const { warningsFor } = useCaseWarnings()
   // P3J — admin receives an awaiting transfer directly from this overview (in place),
   // for branches whose own receptionist is not set up yet. portal_receive_transfer
   // is admin-aware; origin is preserved (the case is not counted as a direct case).
@@ -206,9 +210,10 @@ export default function PremiumAdminP2CCases() {
                         <td className="px-3 py-2.5">
                           <div className="flex items-center gap-2">
                             <Avatar name={c.patient.name} size={24} tone="navy" />
-                            <div>
+                            <div className="min-w-0">
                               <div className="font-semibold" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</div>
-                              <div className="text-[10px]" style={{ color: 'var(--p-ink-400)' }}>{c.patient.nationality} · {c.patient.age}y</div>
+                              <div className="text-[10px]" style={{ color: 'var(--p-ink-400)' }}>{[c.patient.nationality, c.patient.age ? `${c.patient.age}y` : null].filter(Boolean).join(' · ')}</div>
+                              <CaseWarningChips warnings={warningsFor(c)} max={2} className="mt-1" />
                             </div>
                           </div>
                         </td>
@@ -289,6 +294,7 @@ export default function PremiumAdminP2CCases() {
                         {c.operationalStatus}
                       </StatusPill>
                     </div>
+                    <CaseWarningChips warnings={warningsFor(c)} max={3} />
                     {c.transfer && (
                       <div className="flex items-center gap-1.5 text-[11px]" style={{ color: c.transfer.receivedAt ? '#0A8F62' : '#A1672A' }}>
                         {c.transfer.receivedAt

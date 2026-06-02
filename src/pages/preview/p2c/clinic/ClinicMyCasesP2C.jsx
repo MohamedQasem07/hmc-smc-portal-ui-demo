@@ -7,6 +7,8 @@ import {
 import { OperationalShell, IdentityHeader } from '../../../../premium/OperationalShell'
 import { SectionHead, DemoBanner, FacilityBadge, FinTypePill, RoutePill } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
+import { CaseWarningChips } from '../../../../premium/CaseWarnings'
+import { useCaseWarnings } from '../../../../lib/useCaseWarnings'
 import { useUserMode } from '../../../../context/UserModeContext'
 import { useCasesForClinic } from '../../../../context/DemoStateContext'
 import { getClinicName } from '../../../../data/p2c'
@@ -34,6 +36,9 @@ export default function ClinicMyCasesP2C() {
   const { clinicId } = useUserMode()
   const clinicName = getClinicName(clinicId)
   const all = useCasesForClinic(clinicId)
+  // Pilot Supervision — incompleteness chips, scoped to this clinic (RLS + the
+  // useCasesForClinic filter); an operate-as admin sees the same clinic scope.
+  const { warningsFor } = useCaseWarnings()
 
   const [filter, setFilter] = useState('All')
   const [query, setQuery] = useState('')
@@ -144,7 +149,10 @@ export default function ClinicMyCasesP2C() {
                         <div className="flex items-center gap-1.5 text-xs"><Clock className="w-3 h-3" style={{ color: 'var(--p-ink-400)' }} /> {fmtRelative(c.visitDate)}</div>
                       </td>
                       <td className="px-3 py-3 font-mono text-[11px] whitespace-nowrap" style={{ color: 'var(--p-ink-500)' }}>{c.ourRef}</td>
-                      <td className="px-3 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</td>
+                      <td className="px-3 py-3">
+                        <div className="font-semibold whitespace-nowrap" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</div>
+                        <CaseWarningChips warnings={warningsFor(c)} max={2} className="mt-1" />
+                      </td>
                       <td className="px-3 py-3 whitespace-nowrap" style={{ color: 'var(--p-ink-700)' }}>{c.patient.nationality || '—'}</td>
                       <td className="px-3 py-3 whitespace-nowrap" style={{ color: 'var(--p-ink-700)' }}>
                         {c.patient.hotel ? (
@@ -217,6 +225,7 @@ export default function ClinicMyCasesP2C() {
                     </span>
                   )}
                 </div>
+                <CaseWarningChips warnings={warningsFor(c)} max={3} className="mt-2" />
               </Link>
             ))
           )}

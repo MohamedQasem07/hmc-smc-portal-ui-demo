@@ -9,6 +9,8 @@ import {
   SectionHead, DemoBanner, FacilityBadge, FinTypePill, RoutePill,
 } from '../../../../premium/p2cPrimitives'
 import { StatusPill } from '../../../../premium/primitives'
+import { CaseWarningChips } from '../../../../premium/CaseWarnings'
+import { useCaseWarnings } from '../../../../lib/useCaseWarnings'
 import { useCasesForBranch } from '../../../../context/DemoStateContext'
 import {
   R1_FINANCIAL_TYPES, R1_TODAY_LABEL, encounterMeta, encounterSummary,
@@ -35,6 +37,9 @@ export default function ReceptionBranchCasesP2C() {
   const { branchSlug } = useParams()
   const { id: branchId, name: branchName, role } = branchConfig(branchSlug)
   const all = useCasesForBranch(branchId)
+  // Pilot Supervision — incompleteness chips, scoped to this branch (RLS + the
+  // useCasesForBranch filter); an operate-as admin sees the same branch scope.
+  const { warningsFor } = useCaseWarnings()
 
   const [filter, setFilter] = useState('All')
   const [enc, setEnc] = useState('All')
@@ -114,7 +119,10 @@ export default function ReceptionBranchCasesP2C() {
                       <span className="inline-flex items-center gap-1.5 text-xs"><Clock className="w-3 h-3" style={{ color: 'var(--p-ink-400)' }} /> {fmtRelative(c.visitDate)}</span>
                     </td>
                     <td className="px-3 py-3 font-mono text-[11px] whitespace-nowrap" style={{ color: 'var(--p-ink-500)' }}>{c.ourRef}</td>
-                    <td className="px-3 py-3 font-semibold whitespace-nowrap" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</td>
+                    <td className="px-3 py-3">
+                      <div className="font-semibold whitespace-nowrap" style={{ color: 'var(--p-ink-900)' }}>{c.patient.name}</div>
+                      <CaseWarningChips warnings={warningsFor(c)} max={2} className="mt-1" />
+                    </td>
                     <td className="px-3 py-3 whitespace-nowrap" style={{ color: 'var(--p-ink-700)' }}>{c.registeredAtName}</td>
                     <td className="px-3 py-3 whitespace-nowrap" style={{ color: 'var(--p-ink-700)' }}>
                       <span className="inline-flex items-center gap-1"><Hotel className="w-3 h-3" style={{ color: 'var(--p-ink-400)' }} />
@@ -174,6 +182,7 @@ export default function ReceptionBranchCasesP2C() {
                 <EncounterCell c={c} />
                 <TreatmentCell c={c} />
               </div>
+              <CaseWarningChips warnings={warningsFor(c)} max={3} className="mt-2" />
             </Link>
           ))}
         </section>
