@@ -1258,21 +1258,28 @@ export async function fetchCaseFinancials(caseId) {
   let cashOutstanding = null
   if (cashCharge) {
     const cashCols = active.filter((c) => c.collection_purpose === 'cash_case_payment')
+    // COVERED toward the invoice = foreign_amount_covered of payments denominated in
+    // the invoice currency (foreign_amount_covered is always in the payment's invoice
+    // currency). A 80 EUR cash + 120 EUR-via-visa pair covers 200 EUR → outstanding 0.
+    const covered = cashCols
+      .filter((c) => c.invoice_currency === cashCharge.currency)
+      .reduce((s, c) => s + (Number(c.foreign_amount_covered) || 0), 0)
+    // Settlement breakdown (treasury reality) for display.
     const collectedByCurrency = {}
     for (const c of cashCols) {
       const cur = c.actual_currency || c.invoice_currency || cashCharge.currency
       collectedByCurrency[cur] = (collectedByCurrency[cur] || 0) + (Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)
     }
     const invoice = Number(cashCharge.amount) || 0
-    const collected = Number(collectedByCurrency[cashCharge.currency] || 0)   // same-currency only
-    const otherCurrencies = Object.keys(collectedByCurrency).filter((cur) => cur !== cashCharge.currency)
     cashOutstanding = {
-      currency: cashCharge.currency, invoice, collected,
-      remaining: Number((invoice - collected).toFixed(2)),
+      currency: cashCharge.currency, invoice,
+      collected: Number(covered.toFixed(2)),
+      remaining: Number((invoice - covered).toFixed(2)),
       collectedByCurrency,
       hasAnyCollection: cashCols.length > 0,
-      crossCurrency: collected <= 0 && otherCurrencies.length > 0,   // paid only in a non-invoice currency
-      otherCurrencies,
+      // a payment exists but NONE is denominated in the invoice currency → can't auto-net
+      crossCurrency: cashCols.length > 0 && covered <= 0,
+      otherCurrencies: Object.keys(collectedByCurrency).filter((cur) => cur !== cashCharge.currency),
     }
   }
   return { charges: charges || [], collections: active, cancelledCollections, cashOutstanding, collectorNames }
@@ -1299,62 +1306,125 @@ export async function fetchCaseFinancialIndex() {
   const ensure = (id) => (byCase[id] ||= {
     cashInvoice: null, cashCurrency: null, cashCollected: 0,
     excessExpected: null, excessCurrency: null, excessCollected: 0,
-    _cashCol: {}, _exCol: {},
+    _cashCov: 0, _exCov: 0, _cashSettle: {}, _exSettle: {},
   })
   for (const ch of (charges || [])) {
     const e = ensure(ch.case_id)
     if (ch.charge_type === 'cash_case_amount') { e.cashInvoice = Number(ch.amount); e.cashCurrency = ch.currency }
     else if (ch.charge_type === 'patient_excess') { e.excessExpected = Number(ch.amount); e.excessCurrency = ch.currency }
   }
-  // Bucket by SETTLEMENT currency (actual_currency) — never silently drop a real
-  // payment recorded in a currency other than the invoice.
+  // COVERED toward the charge = foreign_amount_covered in the charge currency.
+  // SETTLEMENT breakdown = actual amount by actual currency (treasury reality).
   for (const col of (cols || [])) {
     const e = ensure(col.case_id)
-    const amt = Number(col.actual_collected_amount ?? col.foreign_amount_covered) || 0
-    const cur = col.actual_currency || col.invoice_currency || ''
-    if (col.collection_purpose === 'cash_case_payment') e._cashCol[cur] = (e._cashCol[cur] || 0) + amt
-    else if (col.collection_purpose === 'patient_excess') e._exCol[cur] = (e._exCol[cur] || 0) + amt
+    const foreign = Number(col.foreign_amount_covered) || 0
+    const settle = Number(col.actual_collected_amount ?? col.foreign_amount_covered) || 0
+    const settleCur = col.actual_currency || col.invoice_currency || ''
+    if (col.collection_purpose === 'cash_case_payment') {
+      if (e.cashCurrency && col.invoice_currency === e.cashCurrency) e._cashCov += foreign
+      e._cashSettle[settleCur] = (e._cashSettle[settleCur] || 0) + settle
+    } else if (col.collection_purpose === 'patient_excess') {
+      if (e.excessCurrency && col.invoice_currency === e.excessCurrency) e._exCov += foreign
+      e._exSettle[settleCur] = (e._exSettle[settleCur] || 0) + settle
+    }
   }
   for (const id of Object.keys(byCase)) {
     const e = byCase[id]
-    // same-currency collected (for outstanding) + full per-currency map + flags
-    e.cashCollectedByCurrency = { ...e._cashCol }
-    e.excessCollectedByCurrency = { ...e._exCol }
-    e.cashCollected = Number(e.cashCurrency ? (e._cashCol[e.cashCurrency] || 0) : 0)
-    e.excessCollected = Number(e.excessCurrency ? (e._exCol[e.excessCurrency] || 0) : 0)
-    e.cashHasAnyCollection = Object.keys(e._cashCol).length > 0
-    e.excessHasAnyCollection = Object.keys(e._exCol).length > 0
-    e.cashCrossCurrency = e.cashHasAnyCollection && !(e.cashCollected > 0)
-    e.excessCrossCurrency = e.excessHasAnyCollection && !(e.excessCollected > 0)
-    delete e._cashCol; delete e._exCol
+    e.cashCollected = Number(e._cashCov.toFixed(2))                 // covered toward the invoice
+    e.excessCollected = Number(e._exCov.toFixed(2))
+    e.cashCollectedByCurrency = { ...e._cashSettle }                // settlement breakdown
+    e.excessCollectedByCurrency = { ...e._exSettle }
+    e.cashHasAnyCollection = Object.keys(e._cashSettle).length > 0
+    e.excessHasAnyCollection = Object.keys(e._exSettle).length > 0
+    e.cashCrossCurrency = e.cashHasAnyCollection && e._cashCov <= 0
+    e.excessCrossCurrency = e.excessHasAnyCollection && e._exCov <= 0
+    delete e._cashCov; delete e._exCov; delete e._cashSettle; delete e._exSettle
   }
   return byCase
 }
 
-/** ADMIN-ONLY safe correction of a wrong/misclassified collection (migration 032).
- *  Calls the atomic SECURITY DEFINER RPC portal_admin_correct_collection, which
- *  reverses the old treasury movement(s), marks the old collection 'cancelled',
- *  inserts the corrected collection + its movement, and writes a before/after audit
- *  — all in one transaction. SETTLED-AMOUNT-CENTRIC: the real paid amount is
- *  preserved (no FX re-conversion) unless the admin enters a different amount. The
- *  frontend NEVER touches treasury rows directly. Throws on any rule/denied/config
- *  error (never a silent partial). patch: { method:'cash'|'visa_card', amount?,
- *  currency?, fxRate? }. */
-export async function correctCollection(collectionId, patch = {}, reason) {
+/** Map a PaymentLines row → the full-line correction/record params. */
+function lineToRpcCollection(line) {
+  const isVisa = /visa|card/i.test(line.method || '')
+  const method = isVisa ? 'visa_card' : 'cash'
+  const invoiceCurrency = line.fxRefCurrency || line.currency || 'EUR'
+  const actualCurrency = isVisa ? 'EGP' : (line.actualCurrency || invoiceCurrency)
+  const foreign = Number(line.fxRefAmount ?? line.amount)
+  const fxRate = (line.fxRate != null && line.fxRate !== '') ? Number(line.fxRate) : null
+  return { method, invoiceCurrency, actualCurrency, foreign, fxRate }
+}
+
+/** ADMIN-ONLY FULL-LINE correction of a recorded collection (migration 033).
+ *  Atomic reverse-and-replace: reverses the old movement(s), cancels the old
+ *  collection, and re-records a corrected collection + movement that PERSISTS the
+ *  new method / payment-currency / foreign-amount / FX, recomputing the settlement
+ *  exactly like portal_record_collection (visa → foreign×FX EGP; same-cur cash →
+ *  foreign; cross-cur cash → foreign×FX). Writes a before/after audit + reason. The
+ *  frontend NEVER touches treasury directly. `line` is a PaymentLines row. */
+export async function correctCollection(collectionId, line = {}, reason) {
   if (!collectionId) throw new Error('No collection id')
   if (!reason || !String(reason).trim()) throw new Error('A correction reason is required.')
   const db = await getSupabaseClient()
-  const method = /visa|card/i.test(patch.method || '') ? 'visa_card' : 'cash'
+  const p = lineToRpcCollection(line)
+  if (!(p.foreign > 0)) throw new Error('Enter a valid payment amount.')
   const { data, error } = await db.rpc('portal_admin_correct_collection', {
     p_collection_id: collectionId,
-    p_new_payment_method: method,
-    p_new_actual_amount: (patch.amount != null && patch.amount !== '') ? Number(patch.amount) : null,
-    p_new_actual_currency: patch.currency || null,
-    p_new_fx_rate: (patch.fxRate != null && patch.fxRate !== '') ? Number(patch.fxRate) : null,
+    p_new_payment_method: p.method,
+    p_new_invoice_currency: p.invoiceCurrency,
+    p_new_foreign_amount: p.foreign,
+    p_new_actual_currency: p.actualCurrency,
+    p_new_fx_rate: p.fxRate,
     p_reason: String(reason).trim(),
   })
   if (error) throw error
   return data
+}
+
+/** True when a recorded payment row is unchanged vs its loaded snapshot (_orig). */
+function paymentLineUnchanged(line) {
+  const o = line._orig
+  if (!o) return false
+  const key = (l) => [
+    /visa|card/i.test(l.method || '') ? 'visa_card' : 'cash',
+    l.fxRefCurrency || '', String(Number(l.fxRefAmount ?? l.amount) || 0),
+    l.actualCurrency || '', (l.fxRate === '' || l.fxRate == null) ? '' : String(Number(l.fxRate)),
+  ].join('|')
+  return key(line) === key(o)
+}
+
+/** Unified Save for the ONE payment table (Full Case Editor). Diffs each row:
+ *   - NEW row (no _collectionId) with a valid amount → portal_record_collection.
+ *   - RECORDED row, unchanged → no-op.
+ *   - RECORDED row, changed → portal_admin_correct_collection (reason required).
+ *   - RECORDED row zeroed/blank → blocked (recorded rows can't be deleted in v1).
+ *  Blank NEW rows are skipped. Never double-counts; idempotent with no changes. */
+export async function saveCaseCollections(caseId, lines, { locationCode = null, purpose = 'cash_case_payment' } = {}) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  let locId = null
+  if (locationCode) { try { locId = await locationIdForCode(locationCode) } catch { locId = null } }
+  let recorded = 0, corrected = 0
+  for (const line of (lines || [])) {
+    const foreign = Number(line.fxRefAmount ?? line.amount)
+    const isRecorded = line._status === 'recorded' && line._collectionId
+    if (!isRecorded) {
+      if (!(foreign > 0)) continue   // blank new row → skip (new-lines-only)
+      const res = await recordCollection(db, caseId, line, purpose, locId)
+      if (res === null) throw new Error('A new payment line is incomplete — Visa / Card needs an FX rate. Fix or remove it before saving.')
+      recorded++
+    } else {
+      if (!(foreign > 0)) {
+        throw new Error('Recorded payments can’t be deleted or zeroed in this version. To correct one, change its amount / method / currency and save with a correction reason.')
+      }
+      if (paymentLineUnchanged(line)) continue   // unchanged recorded row → no action
+      if (!line._reason || !String(line._reason).trim()) {
+        throw new Error('Enter a correction reason for the changed payment row before saving.')
+      }
+      await correctCollection(line._collectionId, line, line._reason)
+      corrected++
+    }
+  }
+  return { recorded, corrected }
 }
 
 /** P3H — Room stay history for a case (READ-ONLY display in Case Detail). Every

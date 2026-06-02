@@ -49,7 +49,10 @@ export function normalizeCaseFinancials(raw) {
   const cols = raw.collections || []
   const cashCharge = charges.find((c) => c.charge_type === 'cash_case_amount')
   const excessCharge = charges.find((c) => c.charge_type === 'patient_excess')
-  const byCur = (purpose) => {
+  const cashCur = cashCharge?.currency || null
+  const exCur = excessCharge?.currency || null
+  // Settlement breakdown (treasury reality) by actual currency.
+  const settleByCur = (purpose) => {
     const m = {}
     for (const c of cols) {
       if (c.collection_purpose !== purpose) continue
@@ -58,23 +61,27 @@ export function normalizeCaseFinancials(raw) {
     }
     return m
   }
-  const cashByCur = byCur('cash_case_payment')
-  const exByCur = byCur('patient_excess')
-  const cashCur = cashCharge?.currency || null
-  const exCur = excessCharge?.currency || null
+  // Covered toward the charge = foreign_amount_covered of payments in the charge currency.
+  const covered = (purpose, cur) => cols
+    .filter((c) => c.collection_purpose === purpose && cur && c.invoice_currency === cur)
+    .reduce((s, c) => s + (Number(c.foreign_amount_covered) || 0), 0)
+  const cashByCur = settleByCur('cash_case_payment')
+  const exByCur = settleByCur('patient_excess')
+  const cashCov = covered('cash_case_payment', cashCur)
+  const exCov = covered('patient_excess', exCur)
   return {
     cashInvoice: cashCharge ? Number(cashCharge.amount) : null,
     cashCurrency: cashCur,
-    cashCollected: cashCur ? (cashByCur[cashCur] || 0) : Object.values(cashByCur).reduce((s, v) => s + v, 0),
-    cashCollectedByCurrency: cashByCur,
+    cashCollected: cashCov,                            // covered toward the invoice
+    cashCollectedByCurrency: cashByCur,                // settlement breakdown
     cashHasAnyCollection: Object.keys(cashByCur).length > 0,
-    cashCrossCurrency: Object.keys(cashByCur).length > 0 && !((cashCur ? cashByCur[cashCur] : 0) > 0),
+    cashCrossCurrency: Object.keys(cashByCur).length > 0 && cashCov <= 0,
     excessExpected: excessCharge ? Number(excessCharge.amount) : null,
     excessCurrency: exCur,
-    excessCollected: exCur ? (exByCur[exCur] || 0) : Object.values(exByCur).reduce((s, v) => s + v, 0),
+    excessCollected: exCov,
     excessCollectedByCurrency: exByCur,
     excessHasAnyCollection: Object.keys(exByCur).length > 0,
-    excessCrossCurrency: Object.keys(exByCur).length > 0 && !((exCur ? exByCur[exCur] : 0) > 0),
+    excessCrossCurrency: Object.keys(exByCur).length > 0 && exCov <= 0,
   }
 }
 

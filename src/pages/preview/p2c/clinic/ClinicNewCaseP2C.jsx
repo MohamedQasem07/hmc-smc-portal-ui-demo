@@ -24,7 +24,7 @@ import { cn } from '../../../../lib/cn'
 import { useNationalityOptions } from '../../../../lib/useNationalityOptions'
 import { useLiveInsurers } from '../../../../lib/useLiveInsurers'
 import { IS_SUPABASE } from '../../../../lib/api/config'
-import { updateCaseRegistration, upsertCashInvoiceCharge, upsertExcessCharge, recordCaseCollections, fetchCaseFinancials, fetchLocations, correctCollection } from '../../../../lib/api/portalData'
+import { updateCaseRegistration, upsertCashInvoiceCharge, upsertExcessCharge, saveCaseCollections, fetchCaseFinancials, fetchLocations } from '../../../../lib/api/portalData'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Full New Case (with Encounter Pattern + demo state)
@@ -54,6 +54,30 @@ const STEPS = [
 
 // Phase B — which destination a transfer route targets (for location-aware filtering).
 const ROUTE_TARGET = { to_al_kawther: 'al_kawther', to_sheraton: 'sheraton' }
+
+// P3P — map a recorded collection into a PaymentLines row for the unified table.
+// Carries hidden metadata so Save can diff: _collectionId, _status, _orig snapshot.
+function collectionToLine(c, typeLabel) {
+  const isVisa = c.payment_method === 'visa_card'
+  const fxRefAmount = c.foreign_amount_covered != null ? String(c.foreign_amount_covered) : ''
+  const actualAmount = c.actual_collected_amount != null ? Number(c.actual_collected_amount) : ''
+  const line = {
+    id: `pl_rec_${c.id}`,
+    type: typeLabel,
+    method: isVisa ? 'Visa / Card' : 'Cash',
+    fxRefCurrency: c.invoice_currency || 'EUR',
+    fxRefAmount,
+    fxRate: c.fx_rate != null ? String(c.fx_rate) : '',
+    actualCurrency: c.actual_currency || c.invoice_currency || 'EUR',
+    actualAmount,
+    amount: actualAmount, currency: c.actual_currency || c.invoice_currency || 'EUR',
+    note: '',
+    _collectionId: c.id, _status: 'recorded',
+    _collectedBy: c.collected_by, _collectedAt: c.collected_at, _reason: '',
+  }
+  line._orig = { method: line.method, fxRefCurrency: line.fxRefCurrency, fxRefAmount: line.fxRefAmount, fxRate: line.fxRate, actualCurrency: line.actualCurrency }
+  return line
+}
 
 export default function ClinicNewCaseP2C({ embedded = false, editCase = null, onDone, adminCorrection = false } = {}) {
   const navigate = useNavigate()
@@ -167,6 +191,13 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
     fetchCaseFinancials(editCase.id).then((f) => {
       if (!alive) return
       setExistingFin(f)
+      // P3P — seed the ONE payment table with the recorded collections as rows
+      // (editable for admin, read-only for others). New rows are added in the same
+      // table. Blank initial row stays only when there are no recorded payments.
+      const cashRec = (f?.collections || []).filter((c) => c.collection_purpose === 'cash_case_payment').map((c) => collectionToLine(c, 'Invoice Payment'))
+      if (cashRec.length) setPaymentLines(cashRec)
+      const exRec = (f?.collections || []).filter((c) => c.collection_purpose === 'patient_excess').map((c) => collectionToLine(c, 'Patient Excess'))
+      if (exRec.length) setExcessLines(exRec)
       const exCharge = (f?.charges || []).find((c) => c.charge_type === 'patient_excess')
       if (exCharge) {
         setForm((p) => ({
@@ -255,35 +286,10 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const cashTotals = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
-  // P3K — already-recorded ACTIVE collections (edit mode) split by purpose, shown read-only.
-  const existingCashCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'cash_case_payment')
-  const existingExcessCollections = (existingFin?.collections || []).filter((c) => c.collection_purpose === 'patient_excess')
-  // P3O — corrected/voided collections (status='cancelled') for the admin-only history block.
+  // P3P — corrected/voided collections (status='cancelled') for the admin-only
+  // "Corrected history" strip. Active recorded payments now live IN the payment table.
   const cancelledCash = (existingFin?.cancelledCollections || []).filter((c) => c.collection_purpose === 'cash_case_payment')
   const cancelledExcess = (existingFin?.cancelledCollections || []).filter((c) => c.collection_purpose === 'patient_excess')
-
-  // P3O — ADMIN-ONLY "Correct collection" (reverse-and-replace). Normal users never
-  // see the button (isAdmin declared above); the RPC + RLS double-guard non-admins.
-  const [correctTarget, setCorrectTarget] = useState(null)   // the collection being corrected
-  const [correctBusy, setCorrectBusy] = useState(false)
-  const [correctErr, setCorrectErr] = useState(null)
-  const [correctOk, setCorrectOk] = useState(null)
-  async function reloadExistingFin() {
-    if (!editCase?.id) return
-    try { setExistingFin(await fetchCaseFinancials(editCase.id)) } catch { /* keep prior */ }
-  }
-  async function submitCorrection(patch, reason) {
-    if (!correctTarget) return
-    setCorrectBusy(true); setCorrectErr(null); setCorrectOk(null)
-    try {
-      await correctCollection(correctTarget.id, patch, reason)
-      setCorrectTarget(null)
-      await reloadExistingFin()
-      setCorrectOk('Collection corrected. The old entry was reversed and moved to corrected history.')
-    } catch (e) {
-      setCorrectErr(e?.message || 'Correction failed. Nothing was changed.')
-    } finally { setCorrectBusy(false) }
-  }
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -330,13 +336,13 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         if (Number(form.invoiceAmount) > 0) {
           await upsertCashInvoiceCharge(editCase.id, Number(form.invoiceAmount), form.invoiceCurrency || 'EUR')
         }
-        await recordCaseCollections(editCase.id, paymentLines, { locationCode: locCode, purpose: 'cash_case_payment' })
+        await saveCaseCollections(editCase.id, paymentLines, { locationCode: locCode, purpose: 'cash_case_payment' })
       }
       if (form.financialType === 'Insurance' && form.hasExcess === 'Yes') {
         if (Number(form.excessAmount) > 0) {
           await upsertExcessCharge(editCase.id, Number(form.excessAmount), form.excessCurrency || 'EUR')
         }
-        await recordCaseCollections(editCase.id, excessLines, { locationCode: locCode, purpose: 'patient_excess' })
+        await saveCaseCollections(editCase.id, excessLines, { locationCode: locCode, purpose: 'patient_excess' })
       }
 
       if (onDone) { onDone(); return }
@@ -885,25 +891,22 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                         </Field>
                       </FieldGrid>
 
-                      {isEdit && existingExcessCollections.length > 0 && (
-                        <ExistingCollectionsList collections={existingExcessCollections} title="Already-recorded excess (locked)"
-                          collectorNames={existingFin?.collectorNames} chargeCurrency={form.excessCurrency}
-                          canCorrect={isAdmin} onCorrect={(c) => { setCorrectErr(null); setCorrectOk(null); setCorrectTarget(c) }} />
-                      )}
-                      {isEdit && isAdmin && cancelledExcess.length > 0 && (
-                        <CancelledHistoryList collections={cancelledExcess} collectorNames={existingFin?.collectorNames} />
-                      )}
-
                       <PaymentLinesPanel
                         lines={excessLines}
                         setLines={setExcessLines}
                         typeLabel="Patient Excess"
-                        title={isEdit ? 'Add Excess Collected Now' : 'Excess Collection Lines'}
+                        title={isEdit ? 'Excess Payments' : 'Excess Collection Lines'}
                         helperText={isEdit
-                          ? 'Money collected now. Already-recorded excess is locked above; saving with no new line records nothing.'
+                          ? (isAdmin
+                            ? 'Recorded excess loads here. Edit a row to correct it (reason required) or add a new line. Recorded rows can’t be deleted.'
+                            : 'Recorded excess is read-only. You can add new excess lines below.')
                           : 'Cash → any currency. Visa / Card → always EGP. FX rate is editable per line — there is no fixed rate.'}
                         invoiceCurrency={form.excessCurrency}
+                        canEditRecorded={isEdit && isAdmin}
                       />
+                      {isEdit && isAdmin && cancelledExcess.length > 0 && (
+                        <CancelledHistoryList collections={cancelledExcess} collectorNames={existingFin?.collectorNames} />
+                      )}
 
                       {isEdit ? (
                         <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>Excess collected / outstanding totals update on the case summary after you save.</p>
@@ -947,24 +950,20 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
                 {isEdit ? (
                   <>
-                    {existingCashCollections.length > 0 && (
-                      <ExistingCollectionsList collections={existingCashCollections} title="Already-recorded payments (locked)"
-                        collectorNames={existingFin?.collectorNames} chargeCurrency={form.invoiceCurrency}
-                        canCorrect={isAdmin} onCorrect={(c) => { setCorrectErr(null); setCorrectOk(null); setCorrectTarget(c) }} />
-                    )}
-                    {isAdmin && cancelledCash.length > 0 && (
-                      <CancelledHistoryList collections={cancelledCash} collectorNames={existingFin?.collectorNames} />
-                    )}
-                    {correctOk && <Inline tone="ok" icon={CheckCircle2}>{correctOk}</Inline>}
-                    {correctErr && <Inline tone="reject" icon={AlertTriangle}>{correctErr}</Inline>}
                     <PaymentLinesPanel
                       lines={paymentLines}
                       setLines={setPaymentLines}
                       typeLabel="Invoice Payment"
-                      title="Add Payment Collected Now"
-                      helperText="Money collected now. Already-recorded payments are locked above; saving with no new line records nothing."
+                      title="Payments"
+                      helperText={isAdmin
+                        ? 'The nurse-recorded payments load here. Edit a row to correct it (a reason is required), or add a new line below. Recorded rows can’t be deleted.'
+                        : 'Recorded payments are read-only. You can add new payment lines below.'}
                       invoiceCurrency={form.invoiceCurrency}
+                      canEditRecorded={isAdmin}
                     />
+                    {isAdmin && cancelledCash.length > 0 && (
+                      <CancelledHistoryList collections={cancelledCash} collectorNames={existingFin?.collectorNames} />
+                    )}
                     <p className="text-[11px]" style={{ color: 'var(--p-ink-500)' }}>Collected / outstanding totals update on the case summary after you save.</p>
                   </>
                 ) : (
@@ -1064,21 +1063,13 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
       </div>
   )
 
-  // P3O — admin-only collection-correction modal (reverse-and-replace). Rendered in
-  // both embedded + full modes so it overlays wherever the editor lives.
-  const correctModal = (isAdmin && correctTarget) ? (
-    <CollectionCorrectModal collection={correctTarget} busy={correctBusy} error={correctErr}
-      onCancel={() => { setCorrectTarget(null); setCorrectErr(null) }}
-      onSubmit={submitCorrection} />
-  ) : null
-
   // P3G — embedded edit mode renders only the form body; the parent Case Detail
   // already supplies the role-correct shell (Admin / Operational). Create mode
   // keeps its own OperationalShell wrapper (unchanged).
-  return embedded ? (<>{body}{correctModal}</>) : (
+  return embedded ? body : (
     <OperationalShell role="clinic_nurse" active="new-case"
       identityName={clinicName} identitySub="External Clinic Workspace">
-      {body}{correctModal}
+      {body}
     </OperationalShell>
   )
 }

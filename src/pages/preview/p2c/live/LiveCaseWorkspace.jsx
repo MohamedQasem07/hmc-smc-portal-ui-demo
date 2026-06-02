@@ -614,9 +614,11 @@ function FinancialPanel({ c, fin, finError }) {
               <div className="flex justify-between items-start gap-3">
                 <span style={{ color: 'var(--p-ink-600)' }}>Collected</span>
                 <span className="text-right">
-                  {out.hasAnyCollection
-                    ? collectedEntries.map(([cur, val]) => <div key={cur} className="font-bold p-numeric">{fmtAmt(val)} {cur}</div>)
-                    : <span className="font-bold p-numeric">{fmtAmt(0)} {out.currency}</span>}
+                  {!out.hasAnyCollection
+                    ? <span className="font-bold p-numeric">{fmtAmt(0)} {out.currency}</span>
+                    : cross
+                      ? collectedEntries.map(([cur, val]) => <div key={cur} className="font-bold p-numeric">{fmtAmt(val)} {cur}</div>)
+                      : <span className="font-bold p-numeric">{fmtAmt(out.collected)} {out.currency}</span>}
                 </span>
               </div>
               {!cross && (
@@ -642,7 +644,10 @@ function FinancialPanel({ c, fin, finError }) {
                   {nameFor(x.collected_by) ? ` · ${nameFor(x.collected_by)}` : ''}
                 </span>
                 <span className="font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
-                  {fmtAmt(Number(x.actual_collected_amount ?? x.foreign_amount_covered) || 0)} {x.actual_currency || x.invoice_currency || ''}
+                  {fmtAmt(Number(x.foreign_amount_covered) || 0)} {x.invoice_currency || ''}
+                  {x.actual_currency && x.actual_currency !== x.invoice_currency
+                    ? <span className="font-normal" style={{ color: 'var(--p-ink-500)' }}> → {fmtAmt(Number(x.actual_collected_amount ?? x.foreign_amount_covered) || 0)} {x.actual_currency}</span>
+                    : null}
                 </span>
               </div>
             ))}

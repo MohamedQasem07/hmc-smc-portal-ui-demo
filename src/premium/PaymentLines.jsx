@@ -1,6 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
-  Plus, Trash2, CreditCard, Wallet, ChevronDown, Lock, Info,
+  Plus, Trash2, CreditCard, Wallet, ChevronDown, Lock, Info, AlertTriangle, Pencil,
 } from 'lucide-react'
 import { R1_PAYMENT_METHODS, R1_CURRENCIES } from '../data/p2cR1'
 import { cn } from '../lib/cn'
@@ -68,6 +68,18 @@ export function lineUsesFx(line) {
   return false
 }
 
+/** P3P — true when a loaded RECORDED row differs from its snapshot (_orig). */
+export function paymentLineChanged(line) {
+  const o = line._orig
+  if (!o) return false
+  const k = (l) => [
+    /visa|card/i.test(l.method || '') ? 'visa_card' : 'cash',
+    l.fxRefCurrency || '', String(Number(l.fxRefAmount ?? l.amount) || 0),
+    l.actualCurrency || '', (l.fxRate === '' || l.fxRate == null) ? '' : String(Number(l.fxRate)),
+  ].join('|')
+  return k(line) !== k(o)
+}
+
 /** Sum amounts by ACTUAL currency. */
 export function totalsByActualCurrency(lines) {
   const out = {}
@@ -115,8 +127,9 @@ function deriveLine(next) {
 
 export function PaymentLinesPanel({
   lines, setLines, typeLabel, title, helperText,
-  invoiceCurrency = 'EUR',
+  invoiceCurrency = 'EUR', canEditRecorded = false,
 }) {
+  const [removeMsg, setRemoveMsg] = useState(null)
   function update(idx, patch) {
     setLines((p) => p.map((l, i) => {
       if (i !== idx) return l
@@ -137,8 +150,16 @@ export function PaymentLinesPanel({
       return deriveLine(merged)
     }))
   }
-  function add()        { setLines((p) => [...p, blankLine(typeLabel, invoiceCurrency)]) }
-  function remove(idx)  { setLines((p) => p.length === 1 ? [blankLine(typeLabel, invoiceCurrency)] : p.filter((_, i) => i !== idx)) }
+  function add()        { setRemoveMsg(null); setLines((p) => [...p, blankLine(typeLabel, invoiceCurrency)]) }
+  function remove(idx)  {
+    const l = lines[idx]
+    if (l && l._status === 'recorded') {
+      setRemoveMsg('Recorded payments can’t be deleted in this version. To correct one, change its amount / method / currency and save with a correction reason.')
+      return
+    }
+    setRemoveMsg(null)
+    setLines((p) => p.length === 1 ? [blankLine(typeLabel, invoiceCurrency)] : p.filter((_, i) => i !== idx))
+  }
 
   return (
     <div className="space-y-3">
@@ -180,11 +201,16 @@ export function PaymentLinesPanel({
             : isCash
               ? `Physical Cash — ${l.actualCurrency || '—'}`
               : `Bank Transfer`
+          // P3P — recorded rows: read-only for non-admins (locked); admins edit in
+          // place and a changed row requires a correction reason on Save.
+          const isRecorded = l._status === 'recorded'
+          const locked = isRecorded && !canEditRecorded
+          const changed = isRecorded && canEditRecorded && paymentLineChanged(l)
 
           return (
             <div key={l.id}
                  className="rounded-xl p-3 lg:p-2 grid grid-cols-1 lg:grid-cols-24 gap-2 lg:gap-2 items-center"
-                 style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+                 style={{ background: changed ? 'var(--p-pending-soft)' : 'var(--p-surface-tint)', border: '1px solid ' + (changed ? '#F0C97A' : 'var(--p-border)') }}>
 
               {/* # */}
               <div className="lg:col-span-1 flex items-center gap-2">
@@ -195,19 +221,19 @@ export function PaymentLinesPanel({
 
               {/* Method */}
               <MobileCell label="Method" className="lg:col-span-3">
-                <SelectField value={l.method} onChange={(v) => update(i, { method: v })}
+                <SelectField value={l.method} disabled={locked} onChange={(v) => update(i, { method: v })}
                   options={R1_PAYMENT_METHODS} />
               </MobileCell>
 
               {/* Foreign currency */}
               <MobileCell label="Foreign Cur." className="lg:col-span-2">
-                <SelectField value={l.fxRefCurrency} onChange={(v) => update(i, { fxRefCurrency: v })}
+                <SelectField value={l.fxRefCurrency} disabled={locked} onChange={(v) => update(i, { fxRefCurrency: v })}
                   options={R1_CURRENCIES} />
               </MobileCell>
 
               {/* Foreign amount covered */}
               <MobileCell label="Foreign Amount Covered" className="lg:col-span-3">
-                <input type="number" value={l.fxRefAmount}
+                <input type="number" value={l.fxRefAmount} disabled={locked}
                   onChange={(e) => update(i, { fxRefAmount: e.target.value })}
                   placeholder="0.00" className="p-input h-10" />
               </MobileCell>
@@ -216,16 +242,16 @@ export function PaymentLinesPanel({
               <MobileCell label="FX Rate Used" className="lg:col-span-3"
                 hint={sameCurrency ? 'Not Applicable (cash same-currency)' : 'EGP per 1 unit of foreign currency'}>
                 <input type="number" step="0.0001" value={l.fxRate}
-                  disabled={sameCurrency}
+                  disabled={sameCurrency || locked}
                   onChange={(e) => update(i, { fxRate: e.target.value })}
                   placeholder={sameCurrency ? 'N/A' : 'enter rate'}
                   className="p-input h-10"
-                  style={sameCurrency ? { background: 'var(--p-surface-deep)', color: 'var(--p-ink-400)' } : {}} />
+                  style={(sameCurrency || locked) ? { background: 'var(--p-surface-deep)', color: 'var(--p-ink-400)' } : {}} />
               </MobileCell>
 
               {/* Actual currency — editable for Cash (any), locked for Visa */}
               <MobileCell label={isVisa ? 'Actual Cur. (locked EGP)' : 'Actual Currency'} className="lg:col-span-3">
-                <SelectField value={l.actualCurrency} disabled={isVisa}
+                <SelectField value={l.actualCurrency} disabled={isVisa || locked}
                   onChange={(v) => update(i, { actualCurrency: v })}
                   options={R1_CURRENCIES} />
               </MobileCell>
@@ -251,7 +277,7 @@ export function PaymentLinesPanel({
                     </span>
                   </div>
                 ) : (
-                  <input type="number" value={l.actualAmount ?? ''}
+                  <input type="number" value={l.actualAmount ?? ''} disabled={locked}
                     onChange={(e) => update(i, { actualAmount: e.target.value })}
                     placeholder="0.00" className="p-input h-10" />
                 )}
@@ -259,22 +285,30 @@ export function PaymentLinesPanel({
 
               {/* Note */}
               <MobileCell label="Note" className="lg:col-span-5">
-                <input value={l.note || ''} onChange={(e) => update(i, { note: e.target.value })}
+                <input value={l.note || ''} disabled={locked} onChange={(e) => update(i, { note: e.target.value })}
                   placeholder="(optional)" className="p-input h-10" />
               </MobileCell>
 
-              {/* Remove */}
+              {/* Remove — recorded rows can't be deleted (shows a clear message). */}
               <div className="lg:col-span-1 flex lg:justify-end">
-                <button type="button" onClick={() => remove(i)} aria-label="Remove line"
+                <button type="button" onClick={() => remove(i)} aria-label={isRecorded ? 'Recorded — cannot delete' : 'Remove line'}
                   className="w-10 h-10 rounded-md inline-flex items-center justify-center"
-                  style={{ background: 'white', border: '1px solid var(--p-border)', color: 'var(--p-mixed)' }}>
-                  <Trash2 className="w-4 h-4" />
+                  style={{ background: 'white', border: '1px solid var(--p-border)', color: isRecorded ? 'var(--p-ink-400)' : 'var(--p-mixed)' }}>
+                  {isRecorded ? <Lock className="w-4 h-4" /> : <Trash2 className="w-4 h-4" />}
                 </button>
               </div>
 
               {/* Per-line advisory + treasury channel chip */}
               <div className="lg:col-span-24 text-[11px] flex items-center gap-2 flex-wrap"
                    style={{ color: 'var(--p-ink-500)' }}>
+                {isRecorded && (
+                  <span className="inline-flex items-center gap-1 px-2 h-5 rounded-full text-[10px] font-bold"
+                    style={changed
+                      ? { background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }
+                      : { background: 'var(--p-cash-soft)', color: '#0A8F62', border: '1px solid #A8E6C7' }}>
+                    {changed ? <><Pencil className="w-2.5 h-2.5" /> Edited — needs reason</> : <><Lock className="w-2.5 h-2.5" /> Recorded</>}
+                  </span>
+                )}
                 {IS_SUPABASE && isVisa && Number(l.fxRefAmount) > 0 && (!l.fxRate || Number(l.fxRate) <= 0) && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold w-full lg:w-auto"
                         style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
@@ -298,10 +332,27 @@ export function PaymentLinesPanel({
                   Channel: {channel}
                 </span>
               </div>
+
+              {/* P3P — a changed recorded row requires a correction reason (audited). */}
+              {changed && (
+                <div className="lg:col-span-24">
+                  <input value={l._reason || ''} onChange={(e) => update(i, { _reason: e.target.value })}
+                    placeholder="Correction reason (required) — why is this row being changed?"
+                    className="p-input h-10"
+                    style={{ borderColor: (l._reason && String(l._reason).trim()) ? 'var(--p-border)' : '#F0C97A' }} />
+                </div>
+              )}
             </div>
           )
         })}
       </div>
+
+      {removeMsg && (
+        <div className="rounded-xl px-3 py-2 flex items-start gap-2 text-[12px]"
+          style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+          <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" /><span>{removeMsg}</span>
+        </div>
+      )}
     </div>
   )
 }
