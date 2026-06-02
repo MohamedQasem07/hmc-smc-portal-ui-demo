@@ -594,9 +594,13 @@ function FinancialPanel({ c, fin, finError }) {
 
   if (c.financialType === 'Cash') {
     const out = fin?.cashOutstanding
+    const cross = !!out?.crossCurrency
     const remaining = out ? out.remaining : null
-    const under = remaining !== null && remaining > 0.005
-    const over = remaining !== null && remaining < -0.005
+    const under = !cross && remaining !== null && remaining > 0.005
+    const over = !cross && remaining !== null && remaining < -0.005
+    const collectedEntries = out ? Object.entries(out.collectedByCurrency || {}) : []
+    const cashRows = (fin?.collections || []).filter((x) => x.collection_purpose === 'cash_case_payment')
+    const nameFor = (uid) => (fin?.collectorNames && fin.collectorNames[uid]) || null
     return (
       <div className="space-y-3">
         {finErrorBanner}
@@ -607,16 +611,51 @@ function FinancialPanel({ c, fin, finError }) {
           {out ? (
             <div className="text-[13px] space-y-1">
               <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Invoice</span><span className="font-bold p-numeric">{fmtAmt(out.invoice)} {out.currency}</span></div>
-              <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Collected</span><span className="font-bold p-numeric">{fmtAmt(out.collected)} {out.currency}</span></div>
-              <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Outstanding</span>
-                <span className="font-bold p-numeric" style={{ color: under ? '#B14242' : '#0A8F62' }}>{fmtAmt(out.remaining)} {out.currency}</span>
+              <div className="flex justify-between items-start gap-3">
+                <span style={{ color: 'var(--p-ink-600)' }}>Collected</span>
+                <span className="text-right">
+                  {out.hasAnyCollection
+                    ? collectedEntries.map(([cur, val]) => <div key={cur} className="font-bold p-numeric">{fmtAmt(val)} {cur}</div>)
+                    : <span className="font-bold p-numeric">{fmtAmt(0)} {out.currency}</span>}
+                </span>
               </div>
+              {!cross && (
+                <div className="flex justify-between"><span style={{ color: 'var(--p-ink-600)' }}>Outstanding</span>
+                  <span className="font-bold p-numeric" style={{ color: under ? '#B14242' : '#0A8F62' }}>{fmtAmt(out.remaining)} {out.currency}</span>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-[12px]" style={{ color: 'var(--p-ink-500)' }}>No cash invoice recorded yet — open the Full Case Editor to add it.</div>
           )}
         </div>
 
+        {/* Recorded payments — read from the SAME case-linked collections as Treasury / Timeline. */}
+        {cashRows.length > 0 && (
+          <div className="rounded-xl p-3 space-y-1.5" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
+            <div className="text-[10px] uppercase tracking-[0.12em] font-bold" style={{ color: 'var(--p-ink-500)' }}>Recorded payments</div>
+            {cashRows.map((x, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 text-[12px]">
+                <span style={{ color: 'var(--p-ink-600)' }}>
+                  {(x.payment_method || 'cash').replace(/_/g, ' ')}
+                  {x.collected_at ? ` · ${fmtDate(x.collected_at, { withTime: true })}` : ''}
+                  {nameFor(x.collected_by) ? ` · ${nameFor(x.collected_by)}` : ''}
+                </span>
+                <span className="font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
+                  {fmtAmt(Number(x.actual_collected_amount ?? x.foreign_amount_covered) || 0)} {x.actual_currency || x.invoice_currency || ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {cross && (
+          <div className="rounded-xl px-3 py-2 text-[12px] flex items-start gap-2"
+            style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+            <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+            <span><strong>Collection exists in {out.otherCurrencies.join(', ')}; invoice is {out.currency}.</strong> Outstanding can't be auto-calculated across currencies without an FX rate — verify the FX / method.</span>
+          </div>
+        )}
         {under && (
           <div className="rounded-xl px-3 py-2 text-[12px] flex items-start gap-2"
             style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>

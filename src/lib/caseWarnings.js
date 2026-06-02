@@ -38,8 +38,10 @@ const fmtAmt = (n) => {
 }
 
 /** Convert the raw fetchCaseFinancials({charges,collections}) result into the
- *  normalized shape the rules use. Collections are matched to the charge's
- *  invoice currency (same rule as fetchCaseFinancials / fetchCaseFinancialIndex).
+ *  normalized shape the rules use. Collections are summed by SETTLEMENT currency
+ *  (actual_currency) so a real payment is never dropped for being in a currency
+ *  other than the invoice; `*Collected` stays same-currency (for outstanding) and
+ *  `*CrossCurrency` flags a payment recorded only in another currency.
  *  Returns null when there is no financial data at all. */
 export function normalizeCaseFinancials(raw) {
   if (!raw) return null
@@ -47,17 +49,38 @@ export function normalizeCaseFinancials(raw) {
   const cols = raw.collections || []
   const cashCharge = charges.find((c) => c.charge_type === 'cash_case_amount')
   const excessCharge = charges.find((c) => c.charge_type === 'patient_excess')
-  const sum = (purpose, cur) => cols
-    .filter((c) => c.collection_purpose === purpose && (!cur || c.invoice_currency === cur))
-    .reduce((s, c) => s + (Number(c.foreign_amount_covered) || 0), 0)
+  const byCur = (purpose) => {
+    const m = {}
+    for (const c of cols) {
+      if (c.collection_purpose !== purpose) continue
+      const cur = c.actual_currency || c.invoice_currency || ''
+      m[cur] = (m[cur] || 0) + (Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)
+    }
+    return m
+  }
+  const cashByCur = byCur('cash_case_payment')
+  const exByCur = byCur('patient_excess')
+  const cashCur = cashCharge?.currency || null
+  const exCur = excessCharge?.currency || null
   return {
     cashInvoice: cashCharge ? Number(cashCharge.amount) : null,
-    cashCurrency: cashCharge?.currency || null,
-    cashCollected: cashCharge ? sum('cash_case_payment', cashCharge.currency) : sum('cash_case_payment'),
+    cashCurrency: cashCur,
+    cashCollected: cashCur ? (cashByCur[cashCur] || 0) : Object.values(cashByCur).reduce((s, v) => s + v, 0),
+    cashCollectedByCurrency: cashByCur,
+    cashHasAnyCollection: Object.keys(cashByCur).length > 0,
+    cashCrossCurrency: Object.keys(cashByCur).length > 0 && !((cashCur ? cashByCur[cashCur] : 0) > 0),
     excessExpected: excessCharge ? Number(excessCharge.amount) : null,
-    excessCurrency: excessCharge?.currency || null,
-    excessCollected: excessCharge ? sum('patient_excess', excessCharge.currency) : sum('patient_excess'),
+    excessCurrency: exCur,
+    excessCollected: exCur ? (exByCur[exCur] || 0) : Object.values(exByCur).reduce((s, v) => s + v, 0),
+    excessCollectedByCurrency: exByCur,
+    excessHasAnyCollection: Object.keys(exByCur).length > 0,
+    excessCrossCurrency: Object.keys(exByCur).length > 0 && !((exCur ? exByCur[exCur] : 0) > 0),
   }
+}
+
+/** Human "X EGP, Y USD" string from a {currency: amount} map. */
+function fmtByCurrency(map = {}) {
+  return Object.entries(map).map(([cur, val]) => `${fmtAmt(val)} ${cur}`).join(', ')
 }
 
 /** Compute the warning list for one case.
@@ -103,16 +126,21 @@ export function computeCaseWarnings(c, fin, opts = {}) {
   // ---- Cash (warn / danger) — needs financials ---------------------------
   if (ft === 'Cash' && fin) {
     const inv = fin.cashInvoice
+    const cur = fin.cashCurrency || ''
     if (inv == null || !(Number(inv) > 0)) {
       add('cash_no_invoice', 'warn', 'No invoice amount', 'Cash case has no invoice amount recorded.', SECTION.FINANCIAL)
+    } else if (!fin.cashHasAnyCollection) {
+      // Truly nothing collected (in ANY currency).
+      add('cash_uncollected', 'danger', 'Cash not collected',
+        `Cash invoice ${fmtAmt(inv)} ${cur} recorded but nothing has been collected.`, SECTION.FINANCIAL)
+    } else if (fin.cashCrossCurrency) {
+      // A real payment exists, just in a different currency than the invoice — a
+      // verification nudge, NOT "not collected".
+      add('cash_cross_currency', 'warn', 'Cross-currency payment',
+        `Collected ${fmtByCurrency(fin.cashCollectedByCurrency)}; invoice is ${cur} — verify the FX/method (outstanding can't be auto-calculated across currencies).`, SECTION.FINANCIAL)
     } else {
-      const collected = Number(fin.cashCollected || 0)
-      const remaining = Number((inv - collected).toFixed(2))
-      const cur = fin.cashCurrency || ''
-      if (collected <= 0) {
-        add('cash_uncollected', 'danger', 'Cash not collected',
-          `Cash invoice ${fmtAmt(inv)} ${cur} recorded but nothing has been collected.`, SECTION.FINANCIAL)
-      } else if (remaining > 0.005) {
+      const remaining = Number((inv - Number(fin.cashCollected || 0)).toFixed(2))
+      if (remaining > 0.005) {
         add('cash_partial', 'danger', 'Cash outstanding',
           `${fmtAmt(remaining)} ${cur} of the ${fmtAmt(inv)} cash invoice is still outstanding.`, SECTION.FINANCIAL)
       }
@@ -135,15 +163,19 @@ export function computeCaseWarnings(c, fin, opts = {}) {
       add('excess_no_amount', 'warn', 'Excess amount?', 'Marked as patient excess but no excess amount is set.', SECTION.FINANCIAL)
     }
     if (fin && excessExpected != null && Number(excessExpected) > 0) {
-      const exCollected = Number(fin.excessCollected || 0)
-      const exRemaining = Number((excessExpected - exCollected).toFixed(2))
       const cur = fin.excessCurrency || ''
-      if (exCollected <= 0) {
+      if (!fin.excessHasAnyCollection) {
         add('excess_uncollected', 'danger', 'Excess not collected',
           `Patient excess ${fmtAmt(excessExpected)} ${cur} is expected but has not been collected.`, SECTION.FINANCIAL)
-      } else if (exRemaining > 0.005) {
-        add('excess_partial', 'danger', 'Excess outstanding',
-          `${fmtAmt(exRemaining)} ${cur} of the patient excess is still outstanding.`, SECTION.FINANCIAL)
+      } else if (fin.excessCrossCurrency) {
+        add('excess_cross_currency', 'warn', 'Excess cross-currency',
+          `Excess collected ${fmtByCurrency(fin.excessCollectedByCurrency)}; expected in ${cur} — verify the FX/method.`, SECTION.FINANCIAL)
+      } else {
+        const exRemaining = Number((excessExpected - Number(fin.excessCollected || 0)).toFixed(2))
+        if (exRemaining > 0.005) {
+          add('excess_partial', 'danger', 'Excess outstanding',
+            `${fmtAmt(exRemaining)} ${cur} of the patient excess is still outstanding.`, SECTION.FINANCIAL)
+        }
       }
     }
   }

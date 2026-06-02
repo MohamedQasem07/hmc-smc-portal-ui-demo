@@ -860,7 +860,8 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                       </FieldGrid>
 
                       {isEdit && existingExcessCollections.length > 0 && (
-                        <ExistingCollectionsList collections={existingExcessCollections} title="Already-recorded excess (locked)" />
+                        <ExistingCollectionsList collections={existingExcessCollections} title="Already-recorded excess (locked)"
+                          collectorNames={existingFin?.collectorNames} chargeCurrency={form.excessCurrency} />
                       )}
 
                       <PaymentLinesPanel
@@ -917,7 +918,8 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                 {isEdit ? (
                   <>
                     {existingCashCollections.length > 0 && (
-                      <ExistingCollectionsList collections={existingCashCollections} title="Already-recorded payments (locked)" />
+                      <ExistingCollectionsList collections={existingCashCollections} title="Already-recorded payments (locked)"
+                        collectorNames={existingFin?.collectorNames} chargeCurrency={form.invoiceCurrency} />
                     )}
                     <PaymentLinesPanel
                       lines={paymentLines}
@@ -1341,39 +1343,49 @@ function TotalsCallout({ title, totals, dueAmount, dueCurrency }) {
 
 // P3K — read-only list of already-recorded collections (the treasury ledger is
 // append-only, so past money is shown locked; only NEW lines below are saved).
-function ExistingCollectionsList({ collections, title }) {
+function ExistingCollectionsList({ collections, title, collectorNames = {}, chargeCurrency = null }) {
   const totals = {}
   for (const c of collections) {
     const cur = c.actual_currency || c.invoice_currency || 'EGP'
     totals[cur] = (totals[cur] || 0) + (Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)
   }
   const totalChips = Object.entries(totals)
+  const crossCurrency = chargeCurrency && totalChips.some(([cur]) => cur !== chargeCurrency)
   return (
     <div className="rounded-xl p-3 space-y-2" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
       <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-600)' }}>
         <Lock className="w-3 h-3" /> {title}
       </div>
-      <ul className="space-y-1">
-        {collections.map((c, i) => (
-          <li key={i} className="flex items-center justify-between text-[12px]">
-            <span style={{ color: 'var(--p-ink-600)' }}>
-              {(c.payment_method || 'cash').replace(/_/g, ' ')}{c.collected_at ? ` · ${new Date(c.collected_at).toLocaleDateString('en-GB')}` : ''}
-            </span>
-            <span className="font-bold p-numeric" style={{ color: 'var(--p-ink-900)' }}>
-              {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {c.actual_currency || c.invoice_currency || ''}
-            </span>
-          </li>
-        ))}
+      <ul className="space-y-1.5">
+        {collections.map((c, i) => {
+          const cur = c.actual_currency || c.invoice_currency || ''
+          const name = collectorNames[c.collected_by] || null
+          return (
+            <li key={i} className="rounded-lg px-2.5 py-2 flex items-start justify-between gap-3" style={{ background: 'white', border: '1px solid var(--p-border)' }}>
+              <div className="min-w-0">
+                <div className="text-[12px] font-semibold" style={{ color: 'var(--p-ink-900)' }}>
+                  {(c.payment_method || 'cash').replace(/_/g, ' ')}
+                  {c.treasury_channel ? <span className="font-normal" style={{ color: 'var(--p-ink-500)' }}> · {String(c.treasury_channel).replace(/_/g, ' ')}</span> : null}
+                </div>
+                <div className="text-[10.5px]" style={{ color: 'var(--p-ink-500)' }}>
+                  {c.collected_at ? new Date(c.collected_at).toLocaleString('en-GB') : '—'}{name ? ` · by ${name}` : ''}
+                </div>
+              </div>
+              <div className="text-[13px] font-bold p-numeric shrink-0" style={{ color: 'var(--p-ink-900)' }}>
+                {fmt(Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)} {cur}
+              </div>
+            </li>
+          )
+        })}
       </ul>
-      {totalChips.length > 0 && (
-        <div className="flex flex-wrap gap-3 pt-1.5 border-t" style={{ borderColor: 'var(--p-border)' }}>
-          {totalChips.map(([cur, val]) => (
-            <span key={cur} className="text-[11px] font-bold" style={{ color: 'var(--p-ink-700)' }}>
-              Recorded: {fmt(val)} {cur}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-1.5 border-t" style={{ borderColor: 'var(--p-border)' }}>
+        {totalChips.map(([cur, val]) => (
+          <span key={cur} className="text-[11px] font-bold" style={{ color: 'var(--p-ink-700)' }}>Recorded: {fmt(val)} {cur}</span>
+        ))}
+        {crossCurrency && (
+          <span className="text-[10.5px]" style={{ color: '#A1672A' }}>Collected in a different currency than the invoice ({chargeCurrency}) — verify FX / method.</span>
+        )}
+      </div>
     </div>
   )
 }

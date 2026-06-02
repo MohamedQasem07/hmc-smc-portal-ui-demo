@@ -1219,33 +1219,57 @@ export async function dischargeCase(caseId, { checkOutAt, sessionIds = [] } = {}
   return caseId
 }
 
-/** Case charges + collections (RLS case-scoped) → cash invoice-vs-collected outstanding.
- *  Outstanding compares the stored cash_case_amount charge against the sum of
- *  cash_case_payment collections in the SAME invoice currency (foreign_amount_covered
- *  is the invoice-currency amount for both cash and Visa lines). No cross-currency math. */
+/** Case charges + collections (RLS case-scoped) → cash invoice-vs-collected.
+ *  A real recorded payment is NEVER dropped just because it settled in a currency
+ *  other than the invoice: `collectedByCurrency` sums every cash_case_payment by the
+ *  currency that actually hit the till (actual_currency). `collected`/`remaining`
+ *  stay invoice-currency (same-currency reconciliation only — no invented FX); when
+ *  money was collected only in another currency, `crossCurrency` is true so the UI
+ *  shows "collected 17,568.20 EGP; invoice EUR — verify FX" instead of "collected 0". */
 export async function fetchCaseFinancials(caseId) {
   const db = await getSupabaseClient()
   const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
     db.from('portal_case_charges').select('id, charge_type, amount, currency, status').eq('case_id', caseId),
     db.from('portal_collections')
-      .select('collection_purpose, payment_method, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount, collected_at')
+      .select('id, collection_purpose, payment_method, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount, fx_rate, treasury_channel, status, collected_by, collected_at')
       .eq('case_id', caseId),
   ])
   if (e1) throw e1
   if (e2) throw e2
+
+  // Best-effort collector-name resolution (admin reads all profiles; a clinic user
+  // resolves at least their own). Never blocks the financial read.
+  let collectorNames = {}
+  try {
+    const { data: au } = await db.auth.getUser()
+    const myUid = au?.user?.id || null
+    const { data: profs } = await db.from('portal_user_profiles').select('user_id, display_name')
+    collectorNames = Object.fromEntries((profs || []).map((p) => [p.user_id, p.display_name]))
+    if (myUid && !collectorNames[myUid]) collectorNames[myUid] = 'You'
+  } catch { /* names are best-effort only */ }
+
   const cashCharge = (charges || []).find((c) => c.charge_type === 'cash_case_amount')
   let cashOutstanding = null
   if (cashCharge) {
-    const collected = (cols || [])
-      .filter((c) => c.collection_purpose === 'cash_case_payment' && c.invoice_currency === cashCharge.currency)
-      .reduce((s, c) => s + (Number(c.foreign_amount_covered) || 0), 0)
+    const cashCols = (cols || []).filter((c) => c.collection_purpose === 'cash_case_payment')
+    const collectedByCurrency = {}
+    for (const c of cashCols) {
+      const cur = c.actual_currency || c.invoice_currency || cashCharge.currency
+      collectedByCurrency[cur] = (collectedByCurrency[cur] || 0) + (Number(c.actual_collected_amount ?? c.foreign_amount_covered) || 0)
+    }
     const invoice = Number(cashCharge.amount) || 0
+    const collected = Number(collectedByCurrency[cashCharge.currency] || 0)   // same-currency only
+    const otherCurrencies = Object.keys(collectedByCurrency).filter((cur) => cur !== cashCharge.currency)
     cashOutstanding = {
       currency: cashCharge.currency, invoice, collected,
       remaining: Number((invoice - collected).toFixed(2)),
+      collectedByCurrency,
+      hasAnyCollection: cashCols.length > 0,
+      crossCurrency: collected <= 0 && otherCurrencies.length > 0,   // paid only in a non-invoice currency
+      otherCurrencies,
     }
   }
-  return { charges: charges || [], collections: cols || [], cashOutstanding }
+  return { charges: charges || [], collections: cols || [], cashOutstanding, collectorNames }
 }
 
 /** Pilot Supervision — BULK financial summary for every case the user may see,
@@ -1261,7 +1285,7 @@ export async function fetchCaseFinancialIndex() {
   const db = await getSupabaseClient()
   const [{ data: charges, error: e1 }, { data: cols, error: e2 }] = await Promise.all([
     db.from('portal_case_charges').select('case_id, charge_type, amount, currency'),
-    db.from('portal_collections').select('case_id, collection_purpose, invoice_currency, foreign_amount_covered'),
+    db.from('portal_collections').select('case_id, collection_purpose, invoice_currency, foreign_amount_covered, actual_currency, actual_collected_amount'),
   ])
   if (e1) throw e1
   if (e2) throw e2
@@ -1276,18 +1300,26 @@ export async function fetchCaseFinancialIndex() {
     if (ch.charge_type === 'cash_case_amount') { e.cashInvoice = Number(ch.amount); e.cashCurrency = ch.currency }
     else if (ch.charge_type === 'patient_excess') { e.excessExpected = Number(ch.amount); e.excessCurrency = ch.currency }
   }
+  // Bucket by SETTLEMENT currency (actual_currency) — never silently drop a real
+  // payment recorded in a currency other than the invoice.
   for (const col of (cols || [])) {
     const e = ensure(col.case_id)
-    const amt = Number(col.foreign_amount_covered) || 0
-    const cur = col.invoice_currency || ''
+    const amt = Number(col.actual_collected_amount ?? col.foreign_amount_covered) || 0
+    const cur = col.actual_currency || col.invoice_currency || ''
     if (col.collection_purpose === 'cash_case_payment') e._cashCol[cur] = (e._cashCol[cur] || 0) + amt
     else if (col.collection_purpose === 'patient_excess') e._exCol[cur] = (e._exCol[cur] || 0) + amt
   }
-  const sumAll = (bag) => Object.values(bag).reduce((s, v) => s + v, 0)
   for (const id of Object.keys(byCase)) {
     const e = byCase[id]
-    e.cashCollected = e.cashCurrency ? (e._cashCol[e.cashCurrency] || 0) : sumAll(e._cashCol)
-    e.excessCollected = e.excessCurrency ? (e._exCol[e.excessCurrency] || 0) : sumAll(e._exCol)
+    // same-currency collected (for outstanding) + full per-currency map + flags
+    e.cashCollectedByCurrency = { ...e._cashCol }
+    e.excessCollectedByCurrency = { ...e._exCol }
+    e.cashCollected = Number(e.cashCurrency ? (e._cashCol[e.cashCurrency] || 0) : 0)
+    e.excessCollected = Number(e.excessCurrency ? (e._exCol[e.excessCurrency] || 0) : 0)
+    e.cashHasAnyCollection = Object.keys(e._cashCol).length > 0
+    e.excessHasAnyCollection = Object.keys(e._exCol).length > 0
+    e.cashCrossCurrency = e.cashHasAnyCollection && !(e.cashCollected > 0)
+    e.excessCrossCurrency = e.excessHasAnyCollection && !(e.excessCollected > 0)
     delete e._cashCol; delete e._exCol
   }
   return byCase
