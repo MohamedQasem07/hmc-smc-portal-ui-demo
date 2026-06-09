@@ -712,6 +712,9 @@ function DischargeModal({ c, fin, roomLabel, checkoutAt, setCheckoutAt, busy, on
         </div>
         <Field label="Discharge / check-out date & time">
           <input type="datetime-local" className="p-input" value={checkoutAt} onChange={(e) => setCheckoutAt(e.target.value)} />
+          <p className="text-[11px] mt-1" style={{ color: 'var(--p-ink-400)' }}>
+            You can set a past date / time to back-date a discharge for a late-recorded case.
+          </p>
         </Field>
         <div className="text-[12px]" style={{ color: 'var(--p-ink-600)' }}>
           On confirm: the check-out time is saved, the room is released back to the board, and the case is closed (read-only). Full history is kept.

@@ -97,9 +97,11 @@ export default function ReceptionNewCaseP2C() {
   const cashTotals   = useMemo(() => totalsByActualCurrency(paymentLines), [paymentLines])
   const excessTotals = useMemo(() => totalsByActualCurrency(excessLines), [excessLines])
 
-  // P2C.R3 — travel date validation
-  const arrivalAfterToday    = form.arrivalDate   && form.arrivalDate   > TODAY_DATE
-  const departureBeforeToday = form.departureDate && form.departureDate < TODAY_DATE
+  // P2C.R3 / P3R — travel date validation relative to the VISIT date (not today),
+  // so a back-dated case (past visit) with an already-departed patient still saves.
+  const travelRefDate = form.visitCheckInDate || TODAY_DATE
+  const arrivalAfterVisit    = form.arrivalDate   && form.arrivalDate   > travelRefDate
+  const departureBeforeVisit = form.departureDate && form.departureDate < travelRefDate
 
   // Keep OUR Ref family in sync with Insurance facility selection.
   if (refContext.billingFacility !== (form.financialType === 'Insurance' ? (form.billingFacility || null) : null)) {
@@ -107,12 +109,14 @@ export default function ReceptionNewCaseP2C() {
   }
 
   const needsFacility = showInsuranceBlock && !form.billingFacility
-  const needsName     = !form.firstName.trim() || !form.lastName.trim()
+  // P3Q — only a FIRST name is required; single-name tourists (e.g. "Oksana") were
+  // wrongly blocked. Backend fills last = first for a single name.
+  const needsName     = !form.firstName.trim()
   const needsRoom     = isInpatient && !form.centerRoomNumber
   // Bundle 1 / Phase E — Free / Complimentary requires reason + approver before save.
   const needsFreeApproval = form.financialType === 'Free / Complimentary'
     && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
-  const canSubmit = !needsFacility && !needsName && !needsRoom && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval
+  const canSubmit = !needsFacility && !needsName && !needsRoom && !arrivalAfterVisit && !departureBeforeVisit && !needsFreeApproval
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -249,19 +253,19 @@ export default function ReceptionNewCaseP2C() {
               <FieldGrid cols={1}>
                 <Field label="Arrival to Egypt Date"
                   hint={form.arrivalDate ? fmtDMY(form.arrivalDate) : 'Pick the date the patient arrived in Egypt'}>
-                  <input type="date" value={form.arrivalDate} max={TODAY_DATE} onChange={(e) => update('arrivalDate', e.target.value)} className="p-input" />
-                  {arrivalAfterToday && (
+                  <input type="date" value={form.arrivalDate} max={travelRefDate} onChange={(e) => update('arrivalDate', e.target.value)} className="p-input" />
+                  {arrivalAfterVisit && (
                     <span className="text-[11px] mt-1 font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-mixed)' }}>
-                      <AlertTriangle className="w-3 h-3" /> Arrival to Egypt cannot be after today.
+                      <AlertTriangle className="w-3 h-3" /> Arrival to Egypt cannot be after the visit date.
                     </span>
                   )}
                 </Field>
                 <Field label="Departure from Egypt Date"
                   hint={form.departureDate ? fmtDMY(form.departureDate) : 'Pick the date the patient will leave Egypt'}>
-                  <input type="date" value={form.departureDate} min={TODAY_DATE} onChange={(e) => update('departureDate', e.target.value)} className="p-input" />
-                  {departureBeforeToday && (
+                  <input type="date" value={form.departureDate} min={travelRefDate} onChange={(e) => update('departureDate', e.target.value)} className="p-input" />
+                  {departureBeforeVisit && (
                     <span className="text-[11px] mt-1 font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-mixed)' }}>
-                      <AlertTriangle className="w-3 h-3" /> Departure from Egypt cannot be before today.
+                      <AlertTriangle className="w-3 h-3" /> Departure from Egypt cannot be before the visit date.
                     </span>
                   )}
                 </Field>
@@ -360,8 +364,9 @@ export default function ReceptionNewCaseP2C() {
                 ))}
               </div>
               <FieldGrid cols={2}>
-                <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}>
-                  <input type="date" value={form.visitCheckInDate} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
+                <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}
+                  hint="You can pick a past date to register a late / back-dated case (e.g. yesterday or the 1st of the month).">
+                  <input type="date" value={form.visitCheckInDate} max={TODAY_DATE} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
                 </Field>
                 <Field label={isInpatient ? 'Admission Time *' : 'Visit Check-In Time *'}>
                   <input type="time" value={form.visitCheckInTime} onChange={(e) => update('visitCheckInTime', e.target.value)} className="p-input" />

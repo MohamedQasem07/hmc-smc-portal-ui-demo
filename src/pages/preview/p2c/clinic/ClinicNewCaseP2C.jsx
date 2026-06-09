@@ -249,11 +249,15 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const isMultiSession = form.encounterPattern === 'outpatient_multi'
   const isInpatient    = form.encounterPattern === 'inpatient_admission'
 
-  // ---- P2C.R3 — travel date validation ----
-  // Egypt Arrival must not be AFTER today.
-  // Egypt Departure must not be BEFORE today.
-  const arrivalAfterToday  = form.arrivalDate   && form.arrivalDate   > TODAY_DATE
-  const departureBeforeToday = form.departureDate && form.departureDate < TODAY_DATE
+  // ---- P2C.R3 — travel date validation (relative to the VISIT date) ----
+  // P3R — Back-dated registration: a clinic that hasn't logged its cases yet may
+  // register a case with a PAST visit date (yesterday / first-of-month). Travel
+  // dates are therefore validated against the case's OWN visit date — not today —
+  // so an already-departed patient's past departure does not wrongly block Save.
+  // Arrival must not be after the visit; departure must not be before it.
+  const travelRefDate = form.visitCheckInDate || TODAY_DATE
+  const arrivalAfterVisit    = form.arrivalDate   && form.arrivalDate   > travelRefDate
+  const departureBeforeVisit = form.departureDate && form.departureDate < travelRefDate
 
   // Keep the OUR Ref family in sync with the chosen billing facility.
   if (refContext.billingFacility !== (form.financialType === 'Insurance' ? (form.billingFacility || null) : null)) {
@@ -276,22 +280,22 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
   const needsFreeApproval = showFreeBlock && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
   // P3J — an admin must pick the clinic/branch before the case can be created.
   const needsAdminLocation = adminPicker && !adminLocId
-  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval && !needsAdminLocation
+  const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterVisit && !departureBeforeVisit && !needsFreeApproval && !needsAdminLocation
   // P3Q — tell the user EXACTLY what's blocking Save (the disabled button gave no reason).
   const missingToSave = [
     needsName && 'Patient name (a first name is enough)',
     needsFacility && 'Billing facility (HMC / SMC) for the insurance case',
     needsAdminLocation && 'Pick the clinic / branch to register for',
     needsTransferDest && 'Transfer destination',
-    arrivalAfterToday && 'Egypt arrival date cannot be after today',
-    departureBeforeToday && 'Egypt departure date cannot be before today',
+    arrivalAfterVisit && 'Egypt arrival date cannot be after the visit date',
+    departureBeforeVisit && 'Egypt departure date cannot be before the visit date',
     needsFreeApproval && 'Free / Complimentary reason + approved-by',
   ].filter(Boolean)
 
   // P3I — per-step completion (non-blocking; only drives the stepper's green check).
   const stepStatus = {
     1: !needsName,
-    2: !needsTransferDest && !arrivalAfterToday && !departureBeforeToday,
+    2: !needsTransferDest && !arrivalAfterVisit && !departureBeforeVisit,
     3: !needsFacility && !needsFreeApproval,
     4: canSubmit,
   }
@@ -585,21 +589,21 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
               <FieldGrid cols={1}>
                 <Field label="Arrival to Egypt Date"
                   hint={form.arrivalDate ? fmtDMY(form.arrivalDate) : 'Pick the date the patient arrived in Egypt'}>
-                  <input type="date" value={form.arrivalDate} max={TODAY_DATE}
+                  <input type="date" value={form.arrivalDate} max={travelRefDate}
                     onChange={(e) => update('arrivalDate', e.target.value)} className="p-input" />
-                  {arrivalAfterToday && (
+                  {arrivalAfterVisit && (
                     <span className="text-[11px] mt-1 font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-mixed)' }}>
-                      <AlertTriangle className="w-3 h-3" /> Arrival to Egypt cannot be after today.
+                      <AlertTriangle className="w-3 h-3" /> Arrival to Egypt cannot be after the visit date.
                     </span>
                   )}
                 </Field>
                 <Field label="Departure from Egypt Date"
                   hint={form.departureDate ? fmtDMY(form.departureDate) : 'Pick the date the patient will leave Egypt'}>
-                  <input type="date" value={form.departureDate} min={TODAY_DATE}
+                  <input type="date" value={form.departureDate} min={travelRefDate}
                     onChange={(e) => update('departureDate', e.target.value)} className="p-input" />
-                  {departureBeforeToday && (
+                  {departureBeforeVisit && (
                     <span className="text-[11px] mt-1 font-semibold inline-flex items-center gap-1" style={{ color: 'var(--p-mixed)' }}>
-                      <AlertTriangle className="w-3 h-3" /> Departure from Egypt cannot be before today.
+                      <AlertTriangle className="w-3 h-3" /> Departure from Egypt cannot be before the visit date.
                     </span>
                   )}
                 </Field>
@@ -766,8 +770,9 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
             <div className="rounded-2xl p-4 space-y-3" style={{ background: 'var(--p-surface-tint)', border: '1px solid var(--p-border)' }}>
               <FieldGrid cols={2}>
-                <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}>
-                  <input type="date" value={form.visitCheckInDate} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
+                <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}
+                  hint="You can pick a past date to register a late / back-dated case (e.g. yesterday or the 1st of the month).">
+                  <input type="date" value={form.visitCheckInDate} max={TODAY_DATE} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
                 </Field>
                 <Field label={isInpatient ? 'Admission Time *' : 'Visit Check-In Time *'}>
                   <input type="time" value={form.visitCheckInTime} onChange={(e) => update('visitCheckInTime', e.target.value)} className="p-input" />
