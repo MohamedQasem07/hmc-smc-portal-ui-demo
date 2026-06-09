@@ -267,13 +267,26 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
 
   // Validation
   const needsFacility = showInsuranceBlock && !form.billingFacility
-  const needsName = !form.firstName.trim() || !form.lastName.trim()
+  // P3Q — only a FIRST name is required. Single-name tourists (e.g. "Oksana") were
+  // blocked because a last name was mandatory; the backend already fills last = first
+  // for a single name, so requiring both silently disabled Save for legitimate cases.
+  const needsName = !form.firstName.trim()
   const needsTransferDest = isOtherDestination && !form.transferDestination
   // Bundle 1 / Phase E — Free / Complimentary requires reason + approver before save.
   const needsFreeApproval = showFreeBlock && (!form.complimentaryReason.trim() || !form.complimentaryApprovedBy.trim())
   // P3J — an admin must pick the clinic/branch before the case can be created.
   const needsAdminLocation = adminPicker && !adminLocId
   const canSubmit = !needsFacility && !needsName && !needsTransferDest && !arrivalAfterToday && !departureBeforeToday && !needsFreeApproval && !needsAdminLocation
+  // P3Q — tell the user EXACTLY what's blocking Save (the disabled button gave no reason).
+  const missingToSave = [
+    needsName && 'Patient name (a first name is enough)',
+    needsFacility && 'Billing facility (HMC / SMC) for the insurance case',
+    needsAdminLocation && 'Pick the clinic / branch to register for',
+    needsTransferDest && 'Transfer destination',
+    arrivalAfterToday && 'Egypt arrival date cannot be after today',
+    departureBeforeToday && 'Egypt departure date cannot be before today',
+    needsFreeApproval && 'Free / Complimentary reason + approved-by',
+  ].filter(Boolean)
 
   // P3I — per-step completion (non-blocking; only drives the stepper's green check).
   const stepStatus = {
@@ -604,8 +617,8 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                 <Field label="First Name *">
                   <input required value={form.firstName} onChange={(e) => update('firstName', e.target.value)} placeholder="Demo first name" className="p-input" />
                 </Field>
-                <Field label="Last Name *">
-                  <input required value={form.lastName} onChange={(e) => update('lastName', e.target.value)} placeholder="Demo last name" className="p-input" />
+                <Field label="Last Name">
+                  <input value={form.lastName} onChange={(e) => update('lastName', e.target.value)} placeholder="(optional — leave blank for single-name patients)" className="p-input" />
                 </Field>
                 <Field label="Date of Birth">
                   <input type="date" value={form.dob} onChange={(e) => update('dob', e.target.value)} className="p-input" />
@@ -1029,6 +1042,13 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
                   style={{ background: 'var(--p-mixed-soft)', color: '#B14242', border: '1px solid #F0B5B5' }}>
                   <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                   <span className="font-semibold">{submitError}</span>
+                </div>
+              )}
+              {step === STEPS.length && !canSubmit && missingToSave.length > 0 && (
+                <div className="rounded-xl px-3 py-2 text-[12px]"
+                  style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
+                  <div className="font-bold flex items-center gap-1.5"><AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Before you can {isEdit ? 'save' : 'register'}, complete:</div>
+                  <ul className="mt-1 ml-5 list-disc space-y-0.5">{missingToSave.map((m, i) => <li key={i}>{m}</li>)}</ul>
                 </div>
               )}
               <div className="flex items-center justify-between gap-3 flex-wrap">
