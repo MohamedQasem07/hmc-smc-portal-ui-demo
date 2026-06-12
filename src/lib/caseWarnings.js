@@ -103,7 +103,10 @@ export function computeCaseWarnings(c, fin, opts = {}) {
   const add = (id, severity, label, detail, section) => w.push({ id, severity, label, detail, section })
 
   const ft = c.financialType
-  const isClosed = c.operationalStatus === 'Closed'
+  // A populated discharge timestamp (closedAt) means the visit WAS checked out — even
+  // when operational_status is still a transfer state ('received') that maps to Open.
+  // Without this, a discharged 'received' case wrongly shows "Open — not discharged".
+  const isClosed = c.operationalStatus === 'Closed' || !!c.closedAt
   const isOpen = !isClosed
   const p = c.patient || {}
   const tr = c.transfer || null
@@ -210,11 +213,14 @@ export function computeCaseWarnings(c, fin, opts = {}) {
       `Case is closed but still holds ${c.centerRoomName || c.centerRoomNumber || 'a room'} — release it.`, SECTION.VISIT)
   }
 
-  // ---- Soft: created-date vs visit-date mismatch (info) -------------------
+  // ---- Soft: visit date AFTER the registration date (info) ----------------
+  // Back-dating is supported (a clinic may register yesterday's / the 1st's case
+  // late), so a visit BEFORE the recorded date is legitimate and not flagged.
+  // Only a visit date AFTER registration is impossible → worth confirming.
   const cd = ymd(c.createdAt)
-  if (cd && vd && cd !== vd) {
-    add('created_visit_mismatch', 'info', 'Date mismatch',
-      `Recorded ${cd} but the visit date is ${vd} — confirm the visit date.`, SECTION.REGISTRATION)
+  if (cd && vd && vd > cd) {
+    add('created_visit_mismatch', 'info', 'Future visit date',
+      `Visit date ${vd} is after the registration date ${cd} — confirm the visit date.`, SECTION.REGISTRATION)
   }
 
   return w.sort((a, b) => SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity])
