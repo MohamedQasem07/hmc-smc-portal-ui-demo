@@ -41,6 +41,7 @@ export default function ClinicMyCasesP2C() {
   const { warningsFor } = useCaseWarnings()
 
   const [filter, setFilter] = useState('All')
+  const [status, setStatus] = useState('Active')   // P3U — default hides closed/finished cases so today's work isn't buried
   const [query, setQuery] = useState('')
 
   const counts = useMemo(() => {
@@ -50,10 +51,18 @@ export default function ClinicMyCasesP2C() {
     }
     return out
   }, [all])
+  const statusCounts = useMemo(() => ({
+    Active: all.filter((c) => c.operationalStatus !== 'Closed').length,
+    All: all.length,
+    Closed: all.filter((c) => c.operationalStatus === 'Closed').length,
+  }), [all])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return all.filter((c) => {
+      const closed = c.operationalStatus === 'Closed'
+      if (status === 'Active' && closed) return false
+      if (status === 'Closed' && !closed) return false
       if (filter !== 'All' && c.financialType !== filter) return false
       if (!q) return true
       const haystack = [
@@ -62,7 +71,7 @@ export default function ClinicMyCasesP2C() {
       ].filter(Boolean).join(' ').toLowerCase()
       return haystack.includes(q)
     })
-  }, [all, filter, query])
+  }, [all, filter, status, query])
 
   return (
     <OperationalShell role="clinic_nurse" active="cases"
@@ -98,6 +107,21 @@ export default function ClinicMyCasesP2C() {
         <div className="p-card p-3 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-500)' }}>
             <Filter className="w-3.5 h-3.5" /> Filter
+          </div>
+          <div className="flex gap-1.5 flex-wrap">
+            {['Active', 'All', 'Closed'].map((s) => (
+              <button key={s} type="button" onClick={() => setStatus(s)}
+                className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full text-xs font-semibold border-2 transition-colors"
+                style={{
+                  background: status === s ? 'var(--p-ink-900)' : 'white',
+                  color: status === s ? 'white' : 'var(--p-ink-700)',
+                  borderColor: status === s ? 'var(--p-ink-900)' : 'var(--p-border)',
+                }}>
+                {s}
+                <span className={cn('ml-0.5 h-4 px-1.5 rounded-full text-[10px] inline-flex items-center', status === s ? 'bg-white/20' : 'bg-[var(--p-surface-tint)]')}
+                  style={status === s ? { color: 'white' } : { color: 'var(--p-ink-500)' }}>{statusCounts[s] ?? 0}</span>
+              </button>
+            ))}
           </div>
           <div className="flex gap-1.5 flex-wrap">
             {FILTERS.map((f) => (

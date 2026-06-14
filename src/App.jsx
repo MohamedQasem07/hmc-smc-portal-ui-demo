@@ -16,6 +16,7 @@ import NotFound from './pages/NotFound'
 // prefix is kept ONLY as a backward-compatible redirect for old bookmarks.
 import './premium/theme.css'
 import { RequireRole, RequireReceptionBranch } from './premium/guards'
+import ErrorBoundary from './premium/ErrorBoundary'
 import PreviewIndex from './pages/preview/PreviewIndex'
 import PremiumLogin from './pages/preview/PremiumLogin'
 import SetPassword from './pages/preview/SetPassword'
@@ -103,6 +104,9 @@ export default function App() {
       <ToastProvider>
         <Router>
           <RecoveryWatcher />
+          {/* App-wide crash container: a render throw shows a contained, screenshotable
+              error instead of blanking the whole app + resetting to login. */}
+          <ErrorBoundary>
           <Routes>
             {/* Application entry → Login. */}
             <Route path="/" element={<Navigate to="/login" replace />} />
@@ -184,6 +188,7 @@ export default function App() {
 
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </ErrorBoundary>
         </Router>
       </ToastProvider>
       </DemoStateProvider>

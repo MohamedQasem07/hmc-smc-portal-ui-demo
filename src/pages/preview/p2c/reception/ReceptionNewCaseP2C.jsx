@@ -286,8 +286,8 @@ export default function ReceptionNewCaseP2C() {
                 <Field label="First Name *">
                   <input required value={form.firstName} onChange={(e) => update('firstName', e.target.value)} placeholder="Demo first name" className="p-input" />
                 </Field>
-                <Field label="Last Name *">
-                  <input required value={form.lastName} onChange={(e) => update('lastName', e.target.value)} placeholder="Demo last name" className="p-input" />
+                <Field label="Last Name">
+                  <input value={form.lastName} onChange={(e) => update('lastName', e.target.value)} placeholder="(optional — leave blank for single-name patients)" className="p-input" />
                 </Field>
                 <Field label="Date of Birth">
                   <input type="date" value={form.dob} onChange={(e) => update('dob', e.target.value)} className="p-input" />

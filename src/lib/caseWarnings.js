@@ -111,16 +111,21 @@ export function computeCaseWarnings(c, fin, opts = {}) {
   const p = c.patient || {}
   const tr = c.transfer || null
 
-  // ---- Contact / identity (info) -----------------------------------------
-  if (isBlank(p.phone)) add('missing_phone', 'info', 'No phone', 'Patient phone number is missing.', SECTION.REGISTRATION)
-  if (isBlank(p.email)) add('missing_email', 'info', 'No email', 'Patient email is missing.', SECTION.REGISTRATION)
-  if (isBlank(p.nationality)) add('missing_nationality', 'info', 'No nationality', 'Patient nationality is missing.', SECTION.REGISTRATION)
-
+  // ---- Contact / identity --------------------------------------------------
+  // P3U — these info-level completeness nudges used to fire on ~85% of cases
+  // (walk-in tourists rarely leave a phone/email), drowning out the real danger
+  // flags. Show them ONLY on Insurance cases, where contact + identity actually
+  // matter for the claim. A genuine DOB typo (a future date) is ALWAYS flagged.
   const dob = ymd(p.dob)
-  if (isBlank(dob)) add('missing_dob', 'info', 'No DOB', 'Date of birth is missing.', SECTION.REGISTRATION)
-  else if (dob > today) add('dob_future', 'warn', 'DOB in future', `Date of birth ${dob} is in the future — likely a typo.`, SECTION.REGISTRATION)
-  else if (dob === today) add('dob_today', 'info', 'DOB = today', `Date of birth is set to today (${dob}) — confirm it was entered correctly.`, SECTION.REGISTRATION)
-  else if (dob === PLACEHOLDER_DOB) add('dob_placeholder', 'info', 'DOB placeholder', `Date of birth is the default ${PLACEHOLDER_DOB} — confirm the real DOB.`, SECTION.REGISTRATION)
+  if (dob && dob > today) add('dob_future', 'warn', 'DOB in future', `Date of birth ${dob} is in the future — likely a typo.`, SECTION.REGISTRATION)
+  if (ft === 'Insurance') {
+    if (isBlank(p.phone)) add('missing_phone', 'info', 'No phone', 'Patient phone number is missing.', SECTION.REGISTRATION)
+    if (isBlank(p.email)) add('missing_email', 'info', 'No email', 'Patient email is missing.', SECTION.REGISTRATION)
+    if (isBlank(p.nationality)) add('missing_nationality', 'info', 'No nationality', 'Patient nationality is missing.', SECTION.REGISTRATION)
+    if (isBlank(dob)) add('missing_dob', 'info', 'No DOB', 'Date of birth is missing.', SECTION.REGISTRATION)
+    else if (dob === today) add('dob_today', 'info', 'DOB = today', `Date of birth is set to today (${dob}) — confirm it was entered correctly.`, SECTION.REGISTRATION)
+    else if (dob === PLACEHOLDER_DOB) add('dob_placeholder', 'info', 'DOB placeholder', `Date of birth is the default ${PLACEHOLDER_DOB} — confirm the real DOB.`, SECTION.REGISTRATION)
+  }
 
   // ---- Financial classification (warn) -----------------------------------
   if (ft === 'Pending' || ft == null) {

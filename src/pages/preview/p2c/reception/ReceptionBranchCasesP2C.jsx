@@ -43,6 +43,7 @@ export default function ReceptionBranchCasesP2C() {
 
   const [filter, setFilter] = useState('All')
   const [enc, setEnc] = useState('All')
+  const [status, setStatus] = useState('Active')   // P3U — default hides closed/finished cases
   const [query, setQuery] = useState('')
 
   const counts = useMemo(() => {
@@ -50,10 +51,18 @@ export default function ReceptionBranchCasesP2C() {
     for (const f of R1_FINANCIAL_TYPES) out[f] = all.filter((c) => c.financialType === f).length
     return out
   }, [all])
+  const statusCounts = useMemo(() => ({
+    Active: all.filter((c) => c.operationalStatus !== 'Closed').length,
+    All: all.length,
+    Closed: all.filter((c) => c.operationalStatus === 'Closed').length,
+  }), [all])
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase()
     return all.filter((c) => {
+      const closed = c.operationalStatus === 'Closed'
+      if (status === 'Active' && closed) return false
+      if (status === 'Closed' && !closed) return false
       if (filter !== 'All' && c.financialType !== filter) return false
       if (enc !== 'All') {
         const m = encounterMeta(c.encounterPattern)
@@ -69,7 +78,7 @@ export default function ReceptionBranchCasesP2C() {
       }
       return true
     })
-  }, [all, filter, enc, query])
+  }, [all, filter, enc, status, query])
 
   return (
     <OperationalShell role={role} active="cases"
@@ -90,6 +99,7 @@ export default function ReceptionBranchCasesP2C() {
           <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.12em]" style={{ color: 'var(--p-ink-500)' }}>
             <Filter className="w-3.5 h-3.5" /> Filter
           </div>
+          <Chips label="Status" value={status} setValue={setStatus} options={['Active', 'All', 'Closed']} counts={statusCounts} />
           <Chips label="Fin" value={filter} setValue={setFilter} options={FILTERS} counts={counts} />
           <Chips label="Encounter" value={enc} setValue={setEnc} options={ENC_FILTERS} />
           <div className="flex-1 min-w-[200px] relative">

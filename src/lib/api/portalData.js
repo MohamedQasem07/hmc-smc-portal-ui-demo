@@ -295,16 +295,18 @@ export async function insertCase(newCase) {
 /** Record one collection line via the secure RPC (handles FX + treasury movement).
  *  Cash → original currency / physical_cash; Visa/Card → EGP / visa_bank (FX required). */
 export async function recordCollection(db, caseId, line, purpose, locId) {
-  const isVisa = /visa|card/i.test(line.method || '')
-  const method = isVisa ? 'visa_card' : 'cash'
-  const actualCurrency = isVisa ? 'EGP' : (line.currency || 'EUR')
-  const invoiceCurrency = isVisa ? (line.fxRefCurrency || line.currency || 'EUR') : (line.currency || 'EUR')
-  const foreign = isVisa ? Number(line.fxRefAmount ?? line.amount) : Number(line.amount)
-  const fxRate = isVisa
-    ? (Number(line.fxRate) || null)
-    : (actualCurrency === invoiceCurrency ? null : (Number(line.fxRate) || null))
+  // P3U — use the ONE canonical PaymentLines→RPC mapper (the same one admin correction
+  // uses) instead of a divergent derivation. The old cash branch read line.currency /
+  // line.amount (the SETTLED side), so a foreign invoice paid in EGP cash was stored
+  // with invoice_currency='EGP' and the foreign currency + FX were lost — that paid case
+  // then showed a permanent "verify FX" warning that could never clear. lineToRpcCollection
+  // reads fxRefCurrency / fxRefAmount, so the foreign coverage + FX survive for cash too.
+  const { method, invoiceCurrency, actualCurrency, foreign, fxRate } = lineToRpcCollection(line)
   if (!foreign || foreign <= 0) return null
-  if (isVisa && (!fxRate || fxRate <= 0)) return null   // RPC requires FX for Visa — skip incomplete line
+  // FX is mandatory for Visa/Card AND for cross-currency cash (actual != invoice). Skip an
+  // incomplete line instead of mis-storing it (the RPC would reject it anyway).
+  const needsFx = method === 'visa_card' || actualCurrency !== invoiceCurrency
+  if (needsFx && (!fxRate || fxRate <= 0)) return null
   const { data, error } = await db.rpc('portal_record_collection', {
     p_case_id: caseId, p_collection_purpose: purpose, p_payment_method: method,
     p_invoice_currency: invoiceCurrency, p_foreign_amount_covered: foreign,
