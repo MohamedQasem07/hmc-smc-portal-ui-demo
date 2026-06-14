@@ -573,7 +573,11 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {/* noValidate: this is a multi-STEP wizard inside one <form>. Native HTML5
+            constraint validation (required / max / min) would try to focus an invalid
+            control in a HIDDEN step on submit, fail ("not focusable"), and SILENTLY
+            block Register Case. Validation is done in JS via canSubmit / missingToSave. */}
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
 
           {/* P3I — guided step navigator */}
           <FormStepper steps={STEPS} current={step} status={stepStatus} onJump={setStep} />
@@ -772,7 +776,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
               <FieldGrid cols={2}>
                 <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}
                   hint="You can pick a past date to register a late / back-dated case (e.g. yesterday or the 1st of the month).">
-                  <input type="date" value={form.visitCheckInDate} max={TODAY_DATE} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
+                  <input type="date" value={form.visitCheckInDate} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
                 </Field>
                 <Field label={isInpatient ? 'Admission Time *' : 'Visit Check-In Time *'}>
                   <input type="time" value={form.visitCheckInTime} onChange={(e) => update('visitCheckInTime', e.target.value)} className="p-input" />

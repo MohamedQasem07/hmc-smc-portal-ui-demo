@@ -242,7 +242,10 @@ export default function ReceptionNewCaseP2C() {
           </div>
         </section>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {/* noValidate: multi-STEP wizard in one <form>. Native HTML5 validation would
+            try to focus an invalid control in a HIDDEN step on submit, fail ("not
+            focusable"), and SILENTLY block Register Case. JS validation = canSubmit. */}
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
 
           {/* Row 1: Travel + Identity + Location */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
@@ -366,7 +369,7 @@ export default function ReceptionNewCaseP2C() {
               <FieldGrid cols={2}>
                 <Field label={isInpatient ? 'Admission Date *' : 'Visit Check-In Date *'}
                   hint="You can pick a past date to register a late / back-dated case (e.g. yesterday or the 1st of the month).">
-                  <input type="date" value={form.visitCheckInDate} max={TODAY_DATE} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
+                  <input type="date" value={form.visitCheckInDate} onChange={(e) => update('visitCheckInDate', e.target.value)} className="p-input" />
                 </Field>
                 <Field label={isInpatient ? 'Admission Time *' : 'Visit Check-In Time *'}>
                   <input type="time" value={form.visitCheckInTime} onChange={(e) => update('visitCheckInTime', e.target.value)} className="p-input" />
