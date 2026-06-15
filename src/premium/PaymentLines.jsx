@@ -97,6 +97,8 @@ function deriveLine(next) {
   // Visa always settles in EGP
   if (next.method === 'Visa / Card') {
     next.actualCurrency = 'EGP'
+    // A card payment of an EGP invoice settles in EGP at 1:1 — there is no FX to enter.
+    if (next.fxRefCurrency === 'EGP') next.fxRate = 1
     const computed = computeFromFx(next)
     next.actualAmount = computed === '' ? '' : computed
     next.amount = next.actualAmount
@@ -193,6 +195,8 @@ export function PaymentLinesPanel({
           const isVisa = l.method === 'Visa / Card'
           const isCash = l.method === 'Cash'
           const sameCurrency = isCash && l.actualCurrency === l.fxRefCurrency
+          const visaEgp = isVisa && l.fxRefCurrency === 'EGP'   // EGP card payment of an EGP invoice — 1:1, no FX
+          const noFx = sameCurrency || visaEgp
           const needsFx = lineUsesFx(l)
           const computed = needsFx ? computeFromFx(l) : ''
           const showAutoLock = needsFx || sameCurrency  // both cases auto-derive actual amount
@@ -240,13 +244,13 @@ export function PaymentLinesPanel({
 
               {/* FX rate — N/A only when Cash + same currency. Visa always editable. Cash cross-currency editable. */}
               <MobileCell label="FX Rate Used" className="lg:col-span-3"
-                hint={sameCurrency ? 'Not Applicable (cash same-currency)' : 'EGP per 1 unit of foreign currency'}>
-                <input type="number" step="0.0001" value={l.fxRate}
-                  disabled={sameCurrency || locked}
+                hint={sameCurrency ? 'Not Applicable (cash same-currency)' : visaEgp ? 'Not Applicable (EGP card · 1:1)' : 'EGP per 1 unit of foreign currency'}>
+                <input type="number" step="0.0001" value={visaEgp ? 1 : l.fxRate}
+                  disabled={noFx || locked}
                   onChange={(e) => update(i, { fxRate: e.target.value })}
-                  placeholder={sameCurrency ? 'N/A' : 'enter rate'}
+                  placeholder={noFx ? 'N/A' : 'enter rate'}
                   className="p-input h-10"
-                  style={(sameCurrency || locked) ? { background: 'var(--p-surface-deep)', color: 'var(--p-ink-400)' } : {}} />
+                  style={(noFx || locked) ? { background: 'var(--p-surface-deep)', color: 'var(--p-ink-400)' } : {}} />
               </MobileCell>
 
               {/* Actual currency — editable for Cash (any), locked for Visa */}
@@ -309,7 +313,7 @@ export function PaymentLinesPanel({
                     {changed ? <><Pencil className="w-2.5 h-2.5" /> Edited — needs reason</> : <><Lock className="w-2.5 h-2.5" /> Recorded</>}
                   </span>
                 )}
-                {IS_SUPABASE && isVisa && Number(l.fxRefAmount) > 0 && (!l.fxRate || Number(l.fxRate) <= 0) && (
+                {IS_SUPABASE && isVisa && !visaEgp && Number(l.fxRefAmount) > 0 && (!l.fxRate || Number(l.fxRate) <= 0) && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md text-[11px] font-semibold w-full lg:w-auto"
                         style={{ background: 'var(--p-pending-soft)', color: '#A1672A', border: '1px solid #F0C97A' }}>
                     <Info className="w-3 h-3 shrink-0" /> FX rate required — this line is not counted until you enter the rate.

@@ -1352,7 +1352,10 @@ function lineToRpcCollection(line) {
   const invoiceCurrency = line.fxRefCurrency || line.currency || 'EUR'
   const actualCurrency = isVisa ? 'EGP' : (line.actualCurrency || invoiceCurrency)
   const foreign = Number(line.fxRefAmount ?? line.amount)
-  const fxRate = (line.fxRate != null && line.fxRate !== '') ? Number(line.fxRate) : null
+  let fxRate = (line.fxRate != null && line.fxRate !== '') ? Number(line.fxRate) : null
+  // A card payment of an EGP invoice settles in EGP at 1:1 — there is no real FX, but
+  // the RPC still requires a positive rate for visa_card, so use 1 (no manual entry).
+  if (isVisa && invoiceCurrency === 'EGP') fxRate = 1
   return { method, invoiceCurrency, actualCurrency, foreign, fxRate }
 }
 
@@ -1405,24 +1408,58 @@ export async function saveCaseCollections(caseId, lines, { locationCode = null, 
   const db = await getSupabaseClient()
   let locId = null
   if (locationCode) { try { locId = await locationIdForCode(locationCode) } catch { locId = null } }
-  let recorded = 0, corrected = 0
+
+  // ---- Phase 1 — classify + VALIDATE every line BEFORE any mutation. ----
+  // Applying as-we-go meant a later incomplete line (e.g. a Visa line missing its
+  // FX rate) could throw AFTER an earlier correction had already committed, leaving
+  // the form pointing at a now-cancelled collection. The next save then tried to
+  // re-correct it → "collection X is already cancelled", permanently stuck.
+  // We also detect a STALE form: a recorded row whose collection is no longer active
+  // (already corrected/cancelled elsewhere) → ask for a reload instead of failing hard.
+  let activeIds = null
+  if ((lines || []).some((l) => l._status === 'recorded' && l._collectionId)) {
+    const { data: act } = await db.from('portal_collections')
+      .select('id').eq('case_id', caseId).neq('status', 'cancelled')
+    activeIds = new Set((act || []).map((r) => r.id))
+  }
+  const plan = []
   for (const line of (lines || [])) {
     const foreign = Number(line.fxRefAmount ?? line.amount)
     const isRecorded = line._status === 'recorded' && line._collectionId
     if (!isRecorded) {
       if (!(foreign > 0)) continue   // blank new row → skip (new-lines-only)
-      const res = await recordCollection(db, caseId, line, purpose, locId)
-      if (res === null) throw new Error('A new payment line is incomplete — Visa / Card needs an FX rate. Fix or remove it before saving.')
-      recorded++
+      const p = lineToRpcCollection(line)
+      // FX is needed only when the settlement currency differs from the invoice
+      // currency (foreign-currency cash, or a card payment of a foreign invoice).
+      // A card payment of an EGP invoice is 1:1 and needs no rate.
+      if (p.actualCurrency !== p.invoiceCurrency && !(p.fxRate > 0)) {
+        throw new Error('A new payment line needs an FX rate (foreign-currency or card payment of a foreign invoice). Enter the rate or remove the line.')
+      }
+      plan.push({ kind: 'record', line })
     } else {
       if (!(foreign > 0)) {
         throw new Error('Recorded payments can’t be deleted or zeroed in this version. To correct one, change its amount / method / currency and save with a correction reason.')
       }
       if (paymentLineUnchanged(line)) continue   // unchanged recorded row → no action
+      if (activeIds && !activeIds.has(line._collectionId)) {
+        throw new Error('This payment was already updated — please reload the case to see the latest payments, then make your change again.')
+      }
       if (!line._reason || !String(line._reason).trim()) {
         throw new Error('Enter a correction reason for the changed payment row before saving.')
       }
-      await correctCollection(line._collectionId, line, line._reason)
+      plan.push({ kind: 'correct', line })
+    }
+  }
+
+  // ---- Phase 2 — apply the validated plan. ----
+  let recorded = 0, corrected = 0
+  for (const item of plan) {
+    if (item.kind === 'record') {
+      const res = await recordCollection(db, caseId, item.line, purpose, locId)
+      if (res === null) throw new Error('A payment line is incomplete — check the amount and FX rate.')
+      recorded++
+    } else {
+      await correctCollection(item.line._collectionId, item.line, item.line._reason)
       corrected++
     }
   }
