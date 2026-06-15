@@ -724,6 +724,38 @@ export async function fetchAttendance(workDateYmd = null) {
   }
 }
 
+/** RLS-scoped nurse shifts + doctor duties across a DATE RANGE (inclusive),
+ *  optionally for ONE person (staffId). Powers the admin attendance report +
+ *  Excel/CSV export. Same row shape as fetchAttendance (recorder names omitted). */
+export async function fetchAttendanceRange(fromYmd, toYmd, { staffId = null } = {}) {
+  const db = await getSupabaseClient()
+  const maps = await loadRefMaps()
+  let shiftsQ = db.from('portal_nurse_shifts')
+    .select('id, location_id, staff_id, work_date, shift_start_at, shift_end_at, worked_minutes, status, staff:staff_id ( full_name )')
+    .order('work_date', { ascending: false }).order('shift_start_at', { ascending: false })
+  let dutiesQ = db.from('portal_doctor_daily_duty')
+    .select('id, location_id, staff_id, work_date, note, staff:staff_id ( full_name )')
+    .order('work_date', { ascending: false })
+  if (fromYmd) { shiftsQ = shiftsQ.gte('work_date', fromYmd); dutiesQ = dutiesQ.gte('work_date', fromYmd) }
+  if (toYmd) { shiftsQ = shiftsQ.lte('work_date', toYmd); dutiesQ = dutiesQ.lte('work_date', toYmd) }
+  if (staffId) { shiftsQ = shiftsQ.eq('staff_id', staffId); dutiesQ = dutiesQ.eq('staff_id', staffId) }
+  const [{ data: sh, error: e1 }, { data: du, error: e2 }] = await Promise.all([shiftsQ, dutiesQ])
+  if (e1) throw e1
+  if (e2) throw e2
+  const loc = (id) => maps.locById[id] || {}
+  return {
+    shifts: (sh || []).map((s) => ({
+      id: s.id, locationCode: loc(s.location_id).code || null, locationName: loc(s.location_id).name || null,
+      staffId: s.staff_id, staffName: one(s.staff)?.full_name || null, workDate: s.work_date,
+      startAt: s.shift_start_at, endAt: s.shift_end_at, workedMinutes: s.worked_minutes, status: s.status,
+    })),
+    duties: (du || []).map((d) => ({
+      id: d.id, locationCode: loc(d.location_id).code || null, locationName: loc(d.location_id).name || null,
+      staffId: d.staff_id, staffName: one(d.staff)?.full_name || null, workDate: d.work_date, note: d.note,
+    })),
+  }
+}
+
 /** RLS-scoped active staff↔location assignments (own clinic; admin = all).
  *  Feeds the nurse/doctor pickers — only staff valid for the RPC appear. */
 export async function fetchAssignableStaff() {
