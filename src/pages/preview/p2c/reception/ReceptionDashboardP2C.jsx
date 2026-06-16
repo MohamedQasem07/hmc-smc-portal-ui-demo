@@ -78,7 +78,9 @@ export default function ReceptionDashboardP2C() {
   }, [actions, reloadRooms])
   useEffect(() => {
     if (!IS_SUPABASE) return undefined
-    const t = setInterval(() => { refreshAll() }, 25000)
+    // Only poll while the page is actually visible — a backgrounded mobile tab kept
+    // refetching, and on return it fired a burst that flickered the screen.
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refreshAll() }, 30000)
     return () => clearInterval(t)
   }, [refreshAll])
 

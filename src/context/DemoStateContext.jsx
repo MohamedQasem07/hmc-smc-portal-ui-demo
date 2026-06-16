@@ -8,7 +8,7 @@ import { SEED_STAFF, SEED_USERS, nextStaffCode } from '../data/staffUsers'
 import { generateOurRef } from '../lib/ourRef'
 import { IS_SUPABASE } from '../lib/api/config'
 import { useUserMode } from './UserModeContext'
-import { fetchCases, insertCase, upsertBillingPrep, receiveTransfer as sbReceiveTransfer, classifyReceivedCase } from '../lib/api/portalData'
+import { fetchCases, insertCase, upsertBillingPrep, receiveTransfer as sbReceiveTransfer, classifyReceivedCase, fetchRoomsForLocation, assignRoom as sbAssignRoom } from '../lib/api/portalData'
 import { escalateIfAuthError } from '../lib/api/auth'
 
 /* =========================================================================
@@ -627,7 +627,20 @@ export function DemoStateProvider({ children }) {
       ? async (caseId, patch) => { await classifyReceivedCase(caseId, patch); await refetchCases() }
       : (caseId, patch) => dispatch({ type: 'CASE_UPDATE', caseId, patch }),
     refreshCases:         refetchCases,
-    assignRoom:           (caseId, roomNumber, branchId) => dispatch({ type: 'ROOM_ASSIGN', caseId, roomNumber, branchId }),
+    // Supabase: PERSIST the room (the old action only dispatched to local state, so a
+    // room picked at registration vanished on reload — "I set room 3, reopened, it's
+    // gone"). Resolve the picked room NUMBER → the location's room row → assign + refetch.
+    assignRoom: IS_SUPABASE
+      ? async (caseId, roomNumber, branchCode) => {
+          try {
+            const rooms = await fetchRoomsForLocation(branchCode)
+            const room = (rooms || []).find((r) => parseInt(String(r.roomCode).replace(/\D/g, ''), 10) === Number(roomNumber))
+            if (!room) { console.warn('[portal] room', roomNumber, 'not found at', branchCode); return }
+            await sbAssignRoom(caseId, room.id)
+            await refetchCases()
+          } catch (e) { console.warn('[portal] room assign failed', e?.message); await escalateIfAuthError(e) }
+        }
+      : (caseId, roomNumber, branchId) => dispatch({ type: 'ROOM_ASSIGN', caseId, roomNumber, branchId }),
     updateCase:           (caseId, patch) => dispatch({ type: 'CASE_UPDATE', caseId, patch }),
     addExpense:           (payload) => dispatch({ type: 'EXPENSE_ADD', payload }),
     setHandoverDelivered: (handoverId, rowIndex, value) => dispatch({ type: 'HANDOVER_SET_DELIVERED', handoverId, rowIndex, value }),
@@ -674,16 +687,21 @@ export function useDemoState() {
 export function useCases() { return useDemoState().state.cases }
 
 export function useCasesForClinic(clinicId) {
-  const cases = useCases()
-  return useMemo(() => cases.filter((c) => c.registeredAtId === clinicId), [cases, clinicId])
+  const { state, actions } = useDemoState()
+  // P3X — pull fresh whenever the list is opened. A stale or failed post-registration
+  // refetch used to leave the list missing the case the nurse just created, so they
+  // re-registered it (real duplicates). Always re-reading on view stops that.
+  useEffect(() => { actions.refreshCases?.() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  return useMemo(() => state.cases.filter((c) => c.registeredAtId === clinicId), [state.cases, clinicId])
 }
 
 export function useCasesForBranch(branchId) {
-  const cases = useCases()
-  return useMemo(() => cases.filter((c) =>
+  const { state, actions } = useDemoState()
+  useEffect(() => { actions.refreshCases?.() }, [])   // eslint-disable-line react-hooks/exhaustive-deps
+  return useMemo(() => state.cases.filter((c) =>
     c.registeredAtId === branchId ||
     (c.transfer && c.transfer.toBranchId === branchId),
-  ), [cases, branchId])
+  ), [state.cases, branchId])
 }
 
 export function useIncomingTransfers(branchId, { includeReceived = true } = {}) {

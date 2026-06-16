@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Download, CalendarRange, Users, Clock, AlertTriangle } from 'lucide-react'
+import { Download, Printer, CalendarRange, Users, Clock, AlertTriangle } from 'lucide-react'
 import { fetchAttendanceRange } from '../../../../lib/api/portalData'
 
 /* =========================================================================
@@ -89,6 +89,30 @@ export default function AttendanceReport() {
     URL.revokeObjectURL(url)
   }
 
+  function printReport() {
+    const who = person === 'all' ? 'All people' : (people.find((p) => p.id === person)?.name || '')
+    const esc = (s) => String(s == null ? '' : s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]))
+    const body = shown.map((r) => `<tr><td>${esc(r.date)}</td><td>${esc(r.person)}</td><td>${esc(r.role)}</td><td>${esc(r.location)}</td><td>${esc(fmtTime(r.start))}</td><td>${esc(r.end ? fmtTime(r.end) : (r.role === 'Nurse' ? '—' : ''))}</td><td>${r.role === 'Nurse' ? esc(hoursLabel(r.workedMin)) : '—'}</td><td>${esc(r.role === 'Nurse' ? r.status : (r.note || 'On duty'))}</td></tr>`).join('')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Attendance Report</title><style>
+      *{font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      body{margin:24px;color:#0A1B3D} h1{font-size:18px;margin:0 0 2px} .sub{color:#555;font-size:12px;margin:0 0 12px}
+      .meta{font-size:12px;margin:0 0 14px;display:flex;gap:18px;flex-wrap:wrap}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th,td{border:1px solid #cdd6e6;padding:5px 8px;text-align:left} tr:nth-child(even) td{background:#f7f9fc}
+      th{background:#eef2f8;text-transform:uppercase;font-size:10px;letter-spacing:.04em}
+      .gen{margin-top:12px;font-size:11px;color:#777}
+      @media print{body{margin:8px}}</style></head><body>
+      <h1>HMC / SMC — Attendance Report</h1>
+      <p class="sub"><strong>${esc(who)}</strong> &nbsp;·&nbsp; ${esc(from)} → ${esc(to)}</p>
+      <div class="meta"><span><strong>${summary.records}</strong> records</span><span><strong>${summary.days}</strong> person-days</span>${summary.nurseShifts ? `<span><strong>${hoursLabel(summary.totalMin)}</strong> nurse hours (${summary.nurseShifts} shifts)</span>` : ''}${summary.dutyDays ? `<span><strong>${summary.dutyDays}</strong> doctor on-duty days</span>` : ''}</div>
+      <table><thead><tr><th>Date</th><th>Person</th><th>Role</th><th>Location</th><th>Start</th><th>End</th><th>Worked</th><th>Status / Note</th></tr></thead><tbody>${body}</tbody></table>
+      <p class="gen">Generated ${esc(new Date().toLocaleString('en-GB'))}</p>
+      <scr` + `ipt>window.onload=function(){window.focus();window.print()}</scr` + `ipt></body></html>`
+    const w = window.open('', '_blank')
+    if (!w) { setErr('Allow pop-ups to print the report.'); return }
+    w.document.open(); w.document.write(html); w.document.close()
+  }
+
   return (
     <section className="p-card p-5 mt-5 space-y-4">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -101,11 +125,18 @@ export default function AttendanceReport() {
             Pick a date range and (optionally) one person, then export to Excel (CSV).
           </p>
         </div>
-        <button type="button" onClick={exportCsv} disabled={!shown.length}
-          className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-bold p-btn-primary"
-          style={{ opacity: shown.length ? 1 : 0.45, cursor: shown.length ? 'pointer' : 'not-allowed' }}>
-          <Download className="w-4 h-4" /> Export Excel
-        </button>
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={printReport} disabled={!shown.length}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-semibold p-btn-ghost"
+            style={{ opacity: shown.length ? 1 : 0.45, cursor: shown.length ? 'pointer' : 'not-allowed' }}>
+            <Printer className="w-4 h-4" /> Print
+          </button>
+          <button type="button" onClick={exportCsv} disabled={!shown.length}
+            className="inline-flex items-center gap-1.5 h-10 px-4 rounded-full text-sm font-bold p-btn-primary"
+            style={{ opacity: shown.length ? 1 : 0.45, cursor: shown.length ? 'pointer' : 'not-allowed' }}>
+            <Download className="w-4 h-4" /> Export Excel
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

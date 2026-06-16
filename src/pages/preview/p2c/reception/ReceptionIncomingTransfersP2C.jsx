@@ -43,7 +43,7 @@ export default function ReceptionIncomingTransfersP2C() {
   }, [actions])
   useEffect(() => {
     if (!IS_SUPABASE) return undefined
-    const t = setInterval(() => { refresh() }, 25000)
+    const t = setInterval(() => { if (document.visibilityState === 'visible') refresh() }, 30000)
     return () => clearInterval(t)
   }, [refresh])
 

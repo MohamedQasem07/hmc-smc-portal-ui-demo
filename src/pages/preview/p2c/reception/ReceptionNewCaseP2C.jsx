@@ -197,7 +197,9 @@ export default function ReceptionNewCaseP2C() {
     const realId = await actions.addCase(newCase)
     const goId = realId || newId
     if (form.centerRoomNumber) {
-      actions.assignRoom(goId, Number(form.centerRoomNumber), branchId)
+      // Await so the room is PERSISTED before we open the case (was fire-and-forget,
+      // and in supabase the room was never saved at all — now it is).
+      await actions.assignRoom(goId, Number(form.centerRoomNumber), branchId)
     }
     navigate(`${receptionRoute(role, 'cases')}/${goId}`)
   }
