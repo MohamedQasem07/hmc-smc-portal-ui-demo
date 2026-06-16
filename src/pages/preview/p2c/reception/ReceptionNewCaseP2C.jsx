@@ -136,6 +136,9 @@ export default function ReceptionNewCaseP2C() {
       registeredAtName: branchName,
       registeredAtKind: 'branch',
       visitDate: visitDateIso,
+      visitTime: form.visitCheckInTime || form.visitTime || '10:00',   // P3Y — persist the check-in time (was dropped on create)
+      arrivalDate: form.arrivalDate || null,        // P3Y — Egypt travel dates now persist
+      departureDate: form.departureDate || null,
       patient: {
         firstName: form.firstName, lastName: form.lastName,
         name: `${form.firstName} ${form.lastName}`.trim(),

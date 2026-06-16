@@ -69,7 +69,7 @@ export function portalRowToCase(row, maps) {
     routeLabel: ROUTE_FROM_PORTAL[row.route] === 'direct' || !row.route ? `Direct at ${loc.name || ''}` : `Transfer`,
     financialType: FIN_FROM_PORTAL[row.financial_type] || 'Pending',
     billingFacility: row.billing_facility_id ? (maps.facCodeById[row.billing_facility_id] || null) : null,
-    insurance: intake ? { company: one(intake.company)?.name || null, ref: intake.insurance_reference_number || null, hasExcess: !!intake.has_patient_excess } : null,
+    insurance: intake ? { company: one(intake.company)?.name || null, ref: intake.insurance_reference_number || null, email: intake.insurance_company_email || null, phone: intake.insurance_company_phone || null, hasExcess: !!intake.has_patient_excess } : null,
     operationalStatus: OPSTATUS_FROM_PORTAL[row.operational_status] || 'Open',
     encounterPattern: row.encounter_pattern,
     treatmentMode: row.treatment_mode || null,
@@ -96,6 +96,8 @@ export function portalRowToCase(row, maps) {
     closedAt: row.closed_at || null,
     createdAt: row.created_at || null,
     visitTime: row.visit_time || null,
+    arrivalDate: one(row.travel)?.arrival_to_egypt_date || null,
+    departureDate: one(row.travel)?.departure_from_egypt_date || null,
     freeReason: row.free_reason || null,
     freeApprovedBy: row.free_approved_by || null,
     freeApprovedAt: row.free_approved_at || null,
@@ -148,8 +150,9 @@ const CASE_SELECT = `
   free_reason, free_approved_by, free_approved_at, free_approval_notes, closed_at, created_at,
   patient:patient_id ( id, first_name, last_name, date_of_birth, gender, nationality, phone_country_code, phone_number, email, postal_code ),
   center_room:center_room_id ( id, room_code, room_name ),
+  travel:portal_patient_travel_dates ( arrival_to_egypt_date, departure_from_egypt_date ),
   transfer:portal_transfers ( from_location_id, to_location_id, transfer_status, requested_at, received_at, transfer_note ),
-  intake:portal_insurance_intakes ( insurance_reference_number, has_patient_excess, company:insurance_company_id ( name ) ),
+  intake:portal_insurance_intakes ( insurance_reference_number, insurance_company_email, insurance_company_phone, has_patient_excess, company:insurance_company_id ( name ) ),
   prep:portal_insurance_billing_preparations ( invoice_currency, service_charge_pct, billing_preparation_status,
     local_assistance_company_id, local_assistance_reference_number,
     onedrive_folder_path, missing_data_note, transportation_fee, patient_excess_amount, admin_notes, completed_at ),
@@ -175,6 +178,20 @@ async function currentUid(db) {
   return data?.user?.id || null
 }
 
+/** P3Y — Egypt arrival/departure dates round-trip. The dedicated
+ *  portal_patient_travel_dates table (PK = case_id) was never written by any path,
+ *  so the dates the intake form captured + validated vanished on reload. Best-effort
+ *  upsert (the case is already saved; a travel-date failure must not block it). */
+async function upsertTravelDates(db, caseId, arrivalDate, departureDate) {
+  if (!caseId) return
+  try {
+    await db.from('portal_patient_travel_dates').upsert(
+      { case_id: caseId, arrival_to_egypt_date: arrivalDate || null, departure_from_egypt_date: departureDate || null, updated_at: new Date().toISOString() },
+      { onConflict: 'case_id' },
+    )
+  } catch (e) { console.warn('[portal] travel dates upsert skipped:', e?.message) }
+}
+
 /** Insert patient + case from the in-app newCase object. Returns new case id. */
 export async function insertCase(newCase) {
   const db = await getSupabaseClient()
@@ -188,6 +205,12 @@ export async function insertCase(newCase) {
     date_of_birth: pat.dob || '1990-01-01',
     gender: GENDER_TO_PORTAL[pat.gender] || 'female',
     nationality: pat.nationality || null,
+    // P3Y — these were written ONLY on a later edit, so contact details typed at
+    // registration vanished on reload. Persist them on create too (columns exist).
+    phone_country_code: pat.phoneCode || null,
+    phone_number: pat.phone || null,
+    email: pat.email || null,
+    postal_code: pat.postal || null,
     created_by: uid,
   }).select('id').single()
   if (pErr) throw pErr
@@ -205,7 +228,13 @@ export async function insertCase(newCase) {
     encounter_pattern: ENCOUNTER_PATTERN_TO_PORTAL[newCase.encounterPattern] || 'outpatient_single',
     operational_status: 'open',
     visit_date: (newCase.visitDate || '').slice(0, 10) || null,
+    // P3Y — create-path used to drop these (only the later edit wrote them): the
+    // check-in TIME, the hotel ROOM number, and a directly-registered case's
+    // treatment mode all vanished on reload. Columns already exist.
+    visit_time: newCase.visitTime || null,
     hotel_or_location: pat.hotel || null,
+    hotel_room_number: pat.hotelRoom || null,
+    treatment_mode: TREATMENT_TO_PORTAL[newCase.treatmentMode] || 'not_determined',
     short_clinical_note: pat.note || null,
     // Free / Complimentary approval (Bundle 1 / Phase E) — reason + approver required by the UI.
     free_reason: newCase.financialType === 'Free / Complimentary' ? (newCase.complimentary?.reason || null) : null,
@@ -219,6 +248,9 @@ export async function insertCase(newCase) {
   // Server-authoritative OUR Ref (atomic per facility/date counter; collision-free).
   try { await db.rpc('portal_assign_our_ref', { p_case_id: caseId }) }
   catch (e) { console.warn('[portal] our_ref assign failed', e?.message) }
+
+  // P3Y — persist Egypt arrival/departure travel dates (captured at intake, was never saved).
+  if (newCase.arrivalDate || newCase.departureDate) await upsertTravelDates(db, caseId, newCase.arrivalDate, newCase.departureDate)
 
   // Stage-1 insurance intake (clinic-visible) + patient-excess charge.
   if (newCase.financialType === 'Insurance' && facId) {
@@ -1133,6 +1165,11 @@ export async function updateCaseRegistration(caseId, patientId, patch = {}) {
   if (p.note !== undefined) cUpd.short_clinical_note = p.note || null
   const { error: cErr } = await db.from('portal_cases').update(cUpd).eq('id', caseId)
   if (cErr) throw cErr
+
+  // P3Y — travel dates round-trip on edit (upsert; lets the user set or clear them).
+  if (patch.arrivalDate !== undefined || patch.departureDate !== undefined) {
+    await upsertTravelDates(db, caseId, patch.arrivalDate, patch.departureDate)
+  }
 
   // 3) Insurance intake — best-effort upsert when classified Insurance. Never blocks
   //    the save (case + patient already persisted); reports via console if RLS denies.

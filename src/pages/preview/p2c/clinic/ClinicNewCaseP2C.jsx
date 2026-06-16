@@ -336,6 +336,7 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
         // edits (form.visitDate has no UI input). Without this, editing the check-in
         // date silently did nothing.
         visitDate: form.visitCheckInDate || form.visitDate, visitTime: form.visitCheckInTime || form.visitTime,
+        arrivalDate: form.arrivalDate || null, departureDate: form.departureDate || null,   // P3Y — travel dates round-trip on edit
         insurance: { company: form.insuranceCompany, ref: form.insuranceRef, email: form.insuranceEmail, phone: form.insurancePhone },
         hasPatientExcess: form.financialType === 'Insurance' && form.hasExcess === 'Yes',
         // P3K — Free reason/approver now persists on edit (was create-only).
@@ -380,6 +381,9 @@ export default function ClinicNewCaseP2C({ embedded = false, editCase = null, on
       registeredAtName: clinicName,
       registeredAtKind: regAtKind,
       visitDate: visitDateIso,
+      visitTime: form.visitCheckInTime || form.visitTime || '10:00',   // P3Y — persist the check-in time (was dropped on create)
+      arrivalDate: form.arrivalDate || null,        // P3Y — Egypt travel dates now persist
+      departureDate: form.departureDate || null,
       patient: {
         firstName: form.firstName, lastName: form.lastName,
         name: `${form.firstName} ${form.lastName}`.trim(),
@@ -1116,7 +1120,7 @@ function caseToForm(c) {
   const route = c.route === 'transfer_other' ? 'other' : (c.route || 'direct')
   return {
     visitDate, visitTime,
-    arrivalDate: '', departureDate: '',
+    arrivalDate: c.arrivalDate || '', departureDate: c.departureDate || '',   // P3Y — prefill from the saved case (was hardcoded blank)
     firstName: p.firstName || (p.name || '').trim().split(/\s+/)[0] || '',
     lastName: p.lastName || (p.name || '').trim().split(/\s+/).slice(1).join(' ') || '',
     dob: p.dob || '', age: '', gender: p.gender === 'Female' ? 'Female' : 'Male',
@@ -1131,7 +1135,7 @@ function caseToForm(c) {
     billingFacility: c.billingFacility || '',
     insuranceCompany: c.insurance?.company || '', insuranceRef: c.insurance?.ref || '',
     insuranceEmail: c.insurance?.email || '', insurancePhone: c.insurance?.phone || '',
-    hasExcess: c.hasPatientExcess ? 'Yes' : 'No',
+    hasExcess: (c.insurance?.hasExcess || c.hasPatientExcess) ? 'Yes' : 'No',   // P3Y — read insurance.hasExcess (was reading a top-level field that's never set)
     excessAmount: c.excessAmount != null ? String(c.excessAmount) : '',
     excessCurrency: c.excessCurrency || 'EUR',
     // P3J — prefill the cash invoice from the stored amount/currency (passed in
