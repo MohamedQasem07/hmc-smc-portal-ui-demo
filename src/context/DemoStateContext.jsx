@@ -608,6 +608,17 @@ export function DemoStateProvider({ children }) {
     else dispatch({ type: 'CASES_SET', cases: [] })
   }, [currentUser, refetchCases])
 
+  // P3Z — pull fresh cases whenever the user RETURNS to the tab/app (mobile: after
+  // switching apps). A case registered then not immediately seen (a stale list)
+  // self-heals on return, instead of needing a full reload.
+  useEffect(() => {
+    if (!IS_SUPABASE || !currentUser) return undefined
+    const onBack = () => { if (document.visibilityState === 'visible') refetchCases() }
+    window.addEventListener('focus', onBack)
+    document.addEventListener('visibilitychange', onBack)
+    return () => { window.removeEventListener('focus', onBack); document.removeEventListener('visibilitychange', onBack) }
+  }, [currentUser, refetchCases])
+
   // Action creators (addCase / completeInsurance hit Supabase in supabase mode).
   const actions = useMemo(() => ({
     addCase: IS_SUPABASE
