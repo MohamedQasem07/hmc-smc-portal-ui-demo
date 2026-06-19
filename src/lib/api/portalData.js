@@ -16,16 +16,24 @@ let _maps = null
 export async function loadRefMaps(force = false) {
   if (_maps && !force) return _maps
   const db = await getSupabaseClient()
-  const [{ data: locs }, { data: facs }] = await Promise.all([
+  const [{ data: locs, error: lErr }, { data: facs }] = await Promise.all([
     db.from('portal_locations').select('id, code, name, location_type'),
     db.from('portal_billing_facilities').select('id, code'),
   ])
-  _maps = {
+  const maps = {
     locById: Object.fromEntries((locs || []).map((l) => [l.id, l])),
     locIdByCode: Object.fromEntries((locs || []).map((l) => [l.code, l.id])),
     facCodeById: Object.fromEntries((facs || []).map((f) => [f.id, f.code])),
     facIdByCode: Object.fromEntries((facs || []).map((f) => [f.code, f.id])),
   }
+  // P3Z+ — NEVER cache an empty/failed locations load. A transient stale-session read
+  // returns 0 locations; caching that maps EVERY case's registeredAtId to null, so the
+  // branch/clinic filters drop ALL cases (dashboard + search empty) and refetch-on-view
+  // can't recover (it re-reads the cached-empty map) — only a full reload did. There are
+  // always real locations for a valid session, so an empty result means the session was
+  // not ready: return it uncached so the very next call retries and self-heals.
+  if (lErr || !locs || locs.length === 0) return maps
+  _maps = maps
   return _maps
 }
 
