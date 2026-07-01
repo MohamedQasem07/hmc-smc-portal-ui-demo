@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard, ClipboardList, FileBarChart2, FileLock2, Settings,
   Bell, Search, ChevronDown, Sparkles, BookOpen, Plus, Banknote,
-  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users, Archive, UserCheck,
+  Stethoscope, Menu, X, History, Calendar, Send, LogOut, Users, Archive, UserCheck, TrendingUp,
 } from 'lucide-react'
 import { BrandWordmark } from './BrandMark'
 import { Avatar, StatusPill } from './primitives'
@@ -37,6 +37,7 @@ const NAV_ITEMS = [
   { id: 'collections',  label: 'Collections & Treasury', icon: Banknote,     to: '/admin/collections' },
   { id: 'reports-daily',  label: 'Daily Report',      icon: FileBarChart2,   to: '/admin/reports/daily',   indent: true },
   { id: 'reports-monthly',label: 'Monthly Report',    icon: Calendar,        to: '/admin/reports/monthly', indent: true },
+  { id: 'reports-revenue', label: 'Branch Revenue',   icon: TrendingUp,      to: '/admin/reports/revenue', indent: true },
   { id: 'repatriation', label: 'Repatriation Entry',  icon: Stethoscope,     to: '/admin/repatriation' },
   { id: 'p2c-cases',    label: 'Clinic & Reception',  icon: Send,            to: '/admin/p2c-cases', section: 'Clinic & Reception' },
   { id: 'operate-as',   label: 'Operate as Clinic/Branch', icon: UserCheck,  to: '/admin/operate-as', section: 'Clinic & Reception' },

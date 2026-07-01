@@ -1107,6 +1107,25 @@ export async function updateCaseFields(caseId, fields = {}) {
   if (error) throw error
 }
 
+/** Quick-fix the insurance reference number in place (e.g. from the Branch Revenue
+ *  Report's case list) without going through the full registration editor. Updates
+ *  the EXISTING portal_insurance_intakes row only — a case with no intake row yet
+ *  isn't really classified Insurance, so this throws a clear message pointing at the
+ *  full case editor instead of silently creating a partial record. Admin-only in
+ *  practice (RLS on portal_insurance_intakes already governs who may write it). */
+export async function updateInsuranceReference(caseId, refNumber) {
+  if (!caseId) throw new Error('No case id')
+  const db = await getSupabaseClient()
+  const value = (refNumber || '').trim() || '(pending)'
+  const { data, error } = await db.from('portal_insurance_intakes')
+    .update({ insurance_reference_number: value, updated_at: new Date().toISOString() })
+    .eq('case_id', caseId)
+    .select('id')
+  if (error) throw error
+  if (!data || data.length === 0) throw new Error('No insurance record exists yet for this case — open the full case editor to add insurance details first.')
+  return true
+}
+
 /** P3G — Full registration edit for an OPEN case. Reuses the original registration
  *  form (edit mode). Updates the SAME patient + case rows in place — it NEVER
  *  creates a new patient/case, NEVER changes our_ref, NEVER touches center_room_id /

@@ -31,6 +31,7 @@ import PremiumAdminCaseDetail from './pages/preview/PremiumAdminCaseDetail'
 import PremiumAdminCollections from './pages/preview/PremiumAdminCollections'
 import PremiumAdminDailyReport from './pages/preview/PremiumAdminDailyReport'
 import PremiumAdminMonthlyReport from './pages/preview/PremiumAdminMonthlyReport'
+import PremiumAdminBranchRevenueReport from './pages/preview/PremiumAdminBranchRevenueReport'
 import PremiumAdminLegacyReview from './pages/preview/PremiumAdminLegacyReview'
 import PremiumAdminP2CCases from './pages/preview/PremiumAdminP2CCases'
 import PremiumAdminReferenceLists from './pages/preview/PremiumAdminReferenceLists'
@@ -145,6 +146,7 @@ export default function App() {
               <Route path="/admin/collections"          element={<PremiumAdminCollections />} />
               <Route path="/admin/reports/daily"        element={<PremiumAdminDailyReport />} />
               <Route path="/admin/reports/monthly"      element={IS_SUPABASE ? <Navigate to="/admin-dashboard" replace /> : <PremiumAdminMonthlyReport />} />
+              <Route path="/admin/reports/revenue"      element={<PremiumAdminBranchRevenueReport />} />
               <Route path="/admin/legacy-review"        element={<PremiumAdminLegacyReview />} />
               <Route path="/admin/p2c-cases"            element={<PremiumAdminP2CCases />} />
               <Route path="/admin/reference-lists"      element={<PremiumAdminReferenceLists />} />
