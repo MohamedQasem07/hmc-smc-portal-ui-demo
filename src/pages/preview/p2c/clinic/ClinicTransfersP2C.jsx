@@ -12,6 +12,7 @@ import { getClinicName } from '../../../../data/p2c'
 import { R1_TODAY_LABEL, encounterMeta } from '../../../../data/p2cR1'
 import { fmtRelative } from '../../../../lib/format'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R2 — External Clinic Transfers (table dashboard)
@@ -80,9 +81,11 @@ export default function ClinicTransfersP2C() {
       identityName={clinicName} identitySub="External Clinic Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-10 pt-5 pb-12 max-w-[1400px] mx-auto space-y-5">
 
-        <DemoBanner>
-          <strong>Interactive Demo</strong> — new transfers from New Case appear here immediately. Status updates as the receiving branch acts.
-        </DemoBanner>
+        {!IS_SUPABASE && (
+          <DemoBanner>
+            <strong>Interactive Demo</strong> — new transfers from New Case appear here immediately. Status updates as the receiving branch acts.
+          </DemoBanner>
+        )}
 
         <IdentityHeader
           icon={Send}

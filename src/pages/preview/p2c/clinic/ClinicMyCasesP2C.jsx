@@ -15,6 +15,7 @@ import { getClinicName } from '../../../../data/p2c'
 import { R1_FINANCIAL_TYPES, R1_TODAY_LABEL, encounterSummary, encounterMeta } from '../../../../data/p2cR1'
 import { fmtRelative } from '../../../../lib/format'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R1 — External Clinic My Cases (table dashboard)
@@ -78,9 +79,11 @@ export default function ClinicMyCasesP2C() {
       identityName={clinicName} identitySub="External Clinic Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-10 pt-5 pb-12 max-w-[1400px] mx-auto space-y-5">
 
-        <DemoBanner>
-          UI Concept — All cases are placeholders. Showing cases registered at <strong>{clinicName}</strong>. Switch clinics in the top bar.
-        </DemoBanner>
+        {!IS_SUPABASE && (
+          <DemoBanner>
+            UI Concept — All cases are placeholders. Showing cases registered at <strong>{clinicName}</strong>. Switch clinics in the top bar.
+          </DemoBanner>
+        )}
 
         <IdentityHeader
           icon={Stethoscope}

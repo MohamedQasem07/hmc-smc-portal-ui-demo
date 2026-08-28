@@ -18,6 +18,7 @@ import { getClinicName } from '../../../../data/p2c'
 import { R1_CURRENCIES, r1DoctorsFor, r1NurseName, shiftHours } from '../../../../data/p2cR1'
 import { fmtDMY, fmtHM, todayYMD, parseYMD, shiftYMD, fmtLongLabel } from '../../../../lib/displayDate'
 import { cn } from '../../../../lib/cn'
+import { IS_SUPABASE } from '../../../../lib/api/config'
 
 /* =========================================================================
  * P2C.R3 — External Clinic Dashboard (wide desktop redesign)
@@ -28,9 +29,13 @@ import { cn } from '../../../../lib/cn'
  * - Multi-panel operational layout: Cases · Treasury · Attendance · Transfers
  * - Layout collapses cleanly at <md but stays a real operational workspace
  *   at laptop/desktop widths.
+ *
+ * TODAY: in supabase (production) mode this is the real local YYYY-MM-DD at
+ * bundle load, so the dashboard opens on today's date. In mock (5173) mode it
+ * stays '2026-05-27' so the seeded demo cases show up.
  * ========================================================================= */
 
-const TODAY = '2026-05-27'
+const TODAY = IS_SUPABASE ? todayYMD() : '2026-05-27'
 
 export default function ClinicDashboardP2C() {
   const { clinicId } = useUserMode()
@@ -85,9 +90,11 @@ export default function ClinicDashboardP2C() {
       identityName={clinicName} identitySub="External Clinic Workspace">
       <div className="w-full px-4 sm:px-6 lg:px-8 pt-5 pb-12 max-w-[1500px] mx-auto space-y-5">
 
-        <DemoBanner>
-          UI demo — runtime state only. Clinic: <strong>{clinicName}</strong> · Selected Date: <strong>{dateLabel}</strong>. Switch clinics in the top bar; refresh resets all data.
-        </DemoBanner>
+        {!IS_SUPABASE && (
+          <DemoBanner>
+            UI demo — runtime state only. Clinic: <strong>{clinicName}</strong> · Selected Date: <strong>{dateLabel}</strong>. Switch clinics in the top bar; refresh resets all data.
+          </DemoBanner>
+        )}
 
         {/* ── Branch identity hero ─────────────────────────────────────── */}
         <header className="p-mesh p-grid-overlay relative overflow-hidden px-5 sm:px-6 py-5" style={{ borderRadius: 'var(--p-radius-hero)' }}>
