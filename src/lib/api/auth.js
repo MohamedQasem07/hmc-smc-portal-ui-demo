@@ -24,6 +24,19 @@ function toFrontendRole(portalRole, scopeCodes) {
   return { role: portalRole, assignedClinicId: scopeCodes[0] || null }
 }
 
+/** GoTrue answers 429 `over_request_rate_limit` when too many /token calls come
+ *  from one IP in the window. Retrying makes it worse and only extends the block,
+ *  so this is surfaced to the user as "wait", never retried. */
+export function isRateLimited(err) {
+  const status = Number(err?.status || err?.statusCode || 0)
+  const msg = String(err?.message || err?.error_description || err || '').toLowerCase()
+  return status === 429 || String(err?.code || '') === 'over_request_rate_limit' ||
+    msg.includes('rate limit') || msg.includes('too many requests')
+}
+
+const RATE_LIMIT_MESSAGE =
+  'Too many sign-in attempts from this network. Please wait about a minute, then try again.'
+
 async function synthesizeUser(db, authUser) {
   if (!authUser) return null
   const uid = authUser.id
@@ -54,19 +67,55 @@ async function synthesizeUser(db, authUser) {
 
 export async function sbGetSessionUser() {
   const db = await getSupabaseClient()
-  const { data } = await db.auth.getSession()
-  return synthesizeUser(db, data?.session?.user || null)
+  let session = null
+  try { const { data } = await db.auth.getSession(); session = data?.session || null }
+  catch (e) {
+    // A dead or rate-limited refresh token cannot be restored. Purge it locally so
+    // auto-refresh stops retrying against it — those retries are what drove the
+    // /token 429 and left the app in a permanent 401 loop.
+    if (!isLockError(e)) { try { await db.auth.signOut({ scope: 'local' }) } catch { /* ignore */ } }
+    return null
+  }
+  if (!session) return null
+  try { return await synthesizeUser(db, session.user) }
+  catch { return null }   // profile unreadable right now → treat as signed out, don't crash boot
 }
 
 export async function sbSignIn(email, password) {
   const db = await getSupabaseClient()
+  // A poisoned refresh token left over from a previous broken session keeps
+  // auto-refresh hammering /token and can rate-limit (429) the very sign-in we
+  // are about to make. Drop any local session first — the credentials below are
+  // the source of truth, nothing of value is discarded.
+  try { await db.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
+
   const { data, error } = await db.auth.signInWithPassword({
     email: String(email || '').trim(),
     password: password || '',
   })
-  if (error) return { user: null, error: error.message }
+  if (error) {
+    return { user: null, error: isRateLimited(error) ? RATE_LIMIT_MESSAGE : error.message }
+  }
+
+  // The credentials were accepted — the session is live. Building the app user
+  // needs one more read, and THAT read failing must not be reported as a failed
+  // login: it previously threw, so sign-in returned "no user" and bounced the
+  // nurse straight back to /login even though he had authenticated correctly.
   let user = null
-  try { user = await synthesizeUser(db, data.user) } catch (e) { return { user: null, error: e.message } }
+  try { user = await synthesizeUser(db, data.user) }
+  catch (e) {
+    // Transient (401 while the new token settles, or a rate-limited moment) —
+    // the session is valid, so retry once before giving up.
+    try { user = await synthesizeUser(db, data.user) }
+    catch (e2) {
+      return {
+        user: null,
+        error: isRateLimited(e2)
+          ? RATE_LIMIT_MESSAGE
+          : 'Signed in, but your profile could not be loaded. Please try again in a moment.',
+      }
+    }
+  }
   if (!user) {
     await db.auth.signOut()
     return { user: null, error: 'No active portal profile is linked to this account.' }
@@ -81,9 +130,21 @@ export async function sbSignOut() {
 
 export async function sbOnAuthChange(cb) {
   const db = await getSupabaseClient()
+  // The event MUST be filtered before any network read. synthesizeUser costs two
+  // requests (portal_user_profiles + portal_user_location_scopes), and this fired
+  // on EVERY event including TOKEN_REFRESHED. While auto-refresh retried against a
+  // rate-limited /token, each retry emitted an event and each event issued two more
+  // reads — the loop of repeated 401 profile/scope requests in the nurse's console,
+  // which then fed the very rate limit it was failing on. The consumer in
+  // UserModeContext already skipped TOKEN_REFRESHED, but only AFTER the reads.
+  let lastUid = null
   const { data } = db.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { cb(null, 'PASSWORD_RECOVERY'); return }
-    if (!session?.user) { cb(null, event); return }
+    if (event === 'TOKEN_REFRESHED') return          // nothing to re-read
+    if (!session?.user) { lastUid = null; cb(null, event); return }
+    // Supabase re-emits SIGNED_IN on tab focus; same user ⇒ no work.
+    if (event === 'SIGNED_IN' && lastUid === session.user.id) return
+    lastUid = session.user.id
     synthesizeUser(db, session.user).then((u) => cb(u, event)).catch(() => cb(null, event))
   })
   return data?.subscription
