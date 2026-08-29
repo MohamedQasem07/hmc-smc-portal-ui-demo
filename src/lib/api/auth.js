@@ -194,11 +194,23 @@ function isPrivilegeError(err) {
   return String(err?.code || '') === '42501'
 }
 
+/** A Web-Locks contention failure from the auth client ("Acquiring an exclusive
+ *  Navigator LockManager lock … immediately failed"). It means another tab or a
+ *  re-entrant call held the auth lock — NOT that the session died. Treated as
+ *  transient so it can never sign anybody out. P4D switched the client to
+ *  `processLock`, which should stop these being raised at all; this guard stays
+ *  as the belt-and-braces so the class can never again masquerade as an expiry. */
+export function isLockError(err) {
+  const msg = String(err?.message || err || '')
+  return msg.includes('LockManager') || msg.includes('lock:sb-') || err?.isAcquireTimeout === true
+}
+
 /** If `err` is an auth-session failure, clear the stale local session and
  *  notify the app (→ clean re-login). Returns true when it handled an expiry,
  *  so callers can show the right "session expired" message instead of a
  *  misleading blank/empty state. Safe to call with ANY error (no-op otherwise). */
 export async function escalateIfAuthError(err) {
+  if (isLockError(err)) return false      // transient contention, never an expiry
   let expired = isAuthSessionError(err)
   if (!expired && isPrivilegeError(err)) {
     // Ran as anon? Confirm against the live session before forcing a re-login.
@@ -206,7 +218,12 @@ export async function escalateIfAuthError(err) {
       const db = await getSupabaseClient()
       const { data } = await db.auth.getSession()
       expired = !data?.session
-    } catch { expired = true }
+    } catch (e) {
+      // Could not READ the session — only an actual auth failure counts. Lock
+      // contention here must not be mistaken for an expiry and sign the user out.
+      if (isLockError(e)) return false
+      expired = true
+    }
   }
   if (!expired) return false
   try { const db = await getSupabaseClient(); await db.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
@@ -238,7 +255,12 @@ export async function sbEnsureSession() {
   _ensureInFlight = (async () => {
     const db = await getSupabaseClient()
     let session = null
-    try { const { data } = await db.auth.getSession(); session = data?.session || null } catch { session = null }
+    let lockBusy = false
+    try { const { data } = await db.auth.getSession(); session = data?.session || null }
+    catch (e) { if (isLockError(e)) lockBusy = true; session = null }
+    // Lock contention is not an expiry — proceed and let the read itself decide,
+    // rather than signing the user out over a transient failure to read the token.
+    if (lockBusy) return { ok: true }
     if (!session) {
       if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
       return { ok: false, expired: true }

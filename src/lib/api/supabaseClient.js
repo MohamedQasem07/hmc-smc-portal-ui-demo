@@ -39,7 +39,26 @@ export async function getSupabaseClient() {
     return mod.createClient(
       import.meta.env.VITE_SUPABASE_URL,
       import.meta.env.VITE_SUPABASE_ANON_KEY,
-      { db: { schema: 'public' }, auth: { persistSession: true, autoRefreshToken: true } },
+      {
+        db: { schema: 'public' },
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+          // P4D — the default `navigatorLock` guards the auth token with the Web
+          // Locks API, and on some paths asks for it with ifAvailable:true. When
+          // the lock is already held (a second tab, or a re-entrant auth call) it
+          // does not queue — it throws
+          //   "Acquiring an exclusive Navigator LockManager lock … immediately failed"
+          // as an UNHANDLED rejection. The client then cannot read the session it
+          // just created, so sign-in appeared to succeed and bounced straight back
+          // to /login, and every read went out unauthenticated (401 / 42501).
+          // `processLock` serialises the same operations in-process and WAITS
+          // instead of failing fast, which removes that whole failure class.
+          // Cross-tab refreshes are no longer coordinated by the browser, so the
+          // in-tab single-flight in auth.js/sbEnsureSession carries that job.
+          lock: mod.processLock,
+        },
+      },
     )
   })()
   return _clientPromise
