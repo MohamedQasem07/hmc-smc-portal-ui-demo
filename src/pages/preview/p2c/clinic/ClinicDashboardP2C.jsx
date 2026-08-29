@@ -85,6 +85,15 @@ export default function ClinicDashboardP2C() {
   const pendingTransfers = useMemo(() => casesForDate.filter((c) => c.transfer && !c.transfer.receivedAt), [casesForDate])
   const receivedTransfers = useMemo(() => casesForDate.filter((c) => c.transfer && c.transfer.receivedAt), [casesForDate])
 
+  // Clinic totals across ALL dates. Every KPI below is scoped to the selected
+  // day, so on a quiet morning the whole grid reads 0 — which nurses correctly
+  // but alarmingly read as "my branch has no data at all". These two counters
+  // are never date-scoped, so the branch's real workload is always visible.
+  const clinicTotals = useMemo(() => ({
+    total: cases.length,
+    open: cases.filter((c) => c.operationalStatus !== 'Closed').length,
+  }), [cases])
+
   return (
     <OperationalShell role="clinic_nurse" active="dashboard"
       identityName={clinicName} identitySub="External Clinic Workspace">
@@ -110,6 +119,20 @@ export default function ClinicDashboardP2C() {
                 <div className="p-eyebrow" style={{ color: '#7FE7DE' }}>External Clinic Workspace</div>
                 <h1 className="text-xl sm:text-2xl font-extrabold text-white leading-tight truncate" style={{ letterSpacing: '-0.01em' }}>{clinicName}</h1>
                 <p className="text-[12px] mt-0.5" style={{ color: 'rgba(255,255,255,0.66)' }}>{longLabel || dateLabel}</p>
+                <div className="mt-2 flex items-center gap-1.5 flex-wrap">
+                  <Link to="/clinic/cases"
+                    className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold"
+                    style={{ background: 'rgba(255,255,255,0.10)', border: '1px solid rgba(255,255,255,0.18)', color: 'rgba(255,255,255,0.92)' }}>
+                    <ClipboardList className="w-3 h-3" /> {clinicTotals.total} cases in this clinic
+                  </Link>
+                  {clinicTotals.open > 0 && (
+                    <Link to="/clinic/cases"
+                      className="inline-flex items-center gap-1.5 h-6 px-2.5 rounded-full text-[11px] font-bold"
+                      style={{ background: 'rgba(15,181,169,0.22)', border: '1px solid rgba(15,181,169,0.34)', color: '#7FE7DE' }}>
+                      {clinicTotals.open} still open
+                    </Link>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -169,7 +192,9 @@ export default function ClinicDashboardP2C() {
             {casesForDate.length === 0 ? (
               <EmptyState icon={TrendingUp}
                 title="No cases recorded for this date"
-                hint="Pick a different date or register a new case." />
+                hint={clinicTotals.total > 0
+                  ? `Nothing registered on ${dateLabel} yet. ${clinicName} has ${clinicTotals.total} cases on other dates — open My Cases, or pick another date above.`
+                  : 'Pick a different date or register a new case.'} />
             ) : (
               <div className="overflow-x-auto rounded-xl" style={{ border: '1px solid var(--p-border)' }}>
                 <table className="w-full text-[12px]">
