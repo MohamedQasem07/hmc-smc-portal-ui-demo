@@ -1,5 +1,5 @@
 import { getSupabaseClient } from './supabaseClient'
-import { sbAdminUsers, escalateIfAuthError } from './auth'
+import { sbAdminUsers, escalateIfAuthError, sbEnsureSession } from './auth'
 import {
   FINANCIAL_TYPE_TO_PORTAL, ROUTE_TO_PORTAL, ENCOUNTER_PATTERN_TO_PORTAL,
   GENDER_TO_PORTAL, billingPrepToRow,
@@ -170,6 +170,10 @@ const CASE_SELECT = `
 /** RLS-scoped: returns only the cases the current user may see.
  *  Optional { from, to } (YYYY-MM-DD) filters by visit_date for date-scoped reports. */
 export async function fetchCases(opts = {}) {
+  // Validate the session ONCE before the page's burst of reads. Without this each
+  // concurrent read raced its own token refresh; Supabase rotates refresh tokens,
+  // so the burst revoked itself and every later read came back 401 / 42501.
+  await sbEnsureSession()
   const db = await getSupabaseClient()
   const maps = await loadRefMaps()
   let q = db.from('portal_cases').select(CASE_SELECT)

@@ -165,9 +165,14 @@ export function setSessionExpiredHandler(fn) { _onSessionExpired = fn }
 export function isAuthSessionError(err) {
   if (!err) return false
   const msg = String(err.message || err.error_description || err.msg || err).toLowerCase()
-  const status = Number(err.status || err.statusCode || err.code || 0)
+  const code = String(err.code || '').toUpperCase()
+  // err.code on a PostgrestError is the SQLSTATE ("42501"), never an HTTP status,
+  // so it must not be folded into the status check — Number("42501") is not 401.
+  const status = Number(err.status || err.statusCode || 0)
   return (
     status === 401 ||
+    code === 'PGRST301' ||          // PostgREST: JWT expired
+    code === 'PGRST302' ||          // PostgREST: anonymous access disallowed
     msg.includes('refresh token') ||
     msg.includes('jwt expired') ||
     msg.includes('token has expired') ||
@@ -178,33 +183,74 @@ export function isAuthSessionError(err) {
   )
 }
 
+/** Postgres 42501 = insufficient_privilege. Every portal_* table is granted to
+ *  `authenticated` only, so a 42501 means PostgREST ran the request as `anon` —
+ *  i.e. the JWT was missing, expired, or revoked. This is the exact error a
+ *  rotated-away refresh token produces, and the symptom staff report as
+ *  "the app shows none of my branch's data". Probed against the live session
+ *  before it is allowed to force a logout, so a genuine missing GRANT never
+ *  signs anybody out. */
+function isPrivilegeError(err) {
+  return String(err?.code || '') === '42501'
+}
+
 /** If `err` is an auth-session failure, clear the stale local session and
  *  notify the app (→ clean re-login). Returns true when it handled an expiry,
  *  so callers can show the right "session expired" message instead of a
  *  misleading blank/empty state. Safe to call with ANY error (no-op otherwise). */
 export async function escalateIfAuthError(err) {
-  if (!isAuthSessionError(err)) return false
+  let expired = isAuthSessionError(err)
+  if (!expired && isPrivilegeError(err)) {
+    // Ran as anon? Confirm against the live session before forcing a re-login.
+    try {
+      const db = await getSupabaseClient()
+      const { data } = await db.auth.getSession()
+      expired = !data?.session
+    } catch { expired = true }
+  }
+  if (!expired) return false
   try { const db = await getSupabaseClient(); await db.auth.signOut({ scope: 'local' }) } catch { /* ignore */ }
   if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
   return true
 }
 
+/* -------------------------------------------------------------------------
+ * Single-flight session check.
+ * -------------------------------------------------------------------------
+ * A page mount fires many reads at once (each useCasesForClinic refetches, plus
+ * warnings, treasury, rooms…). When the access token has expired, every one of
+ * those independently asked GoTrue to refresh. Supabase ROTATES refresh tokens —
+ * each success revokes the previous one — so a burst of concurrent refreshes
+ * revoke each other, trip the /token rate limit (429), and leave the browser
+ * holding a revoked token. Every subsequent read then runs as `anon` and returns
+ * 401 / 42501, which the UI rendered as an empty workspace.
+ *
+ * Sharing ONE in-flight promise collapses that burst into a single refresh.
+ * ------------------------------------------------------------------------- */
+let _ensureInFlight = null
+
 /** Proactively ensure the access token is still valid before a critical
  *  read/write. Refreshes if it is at/near expiry; if the refresh fails (dead
  *  refresh token) OR there is no session, escalates to a clean re-login.
- *  Returns { ok:true } | { ok:false, expired:true }. */
+ *  Concurrent callers share one check. Returns { ok:true } | { ok:false, expired:true }. */
 export async function sbEnsureSession() {
-  const db = await getSupabaseClient()
-  let session = null
-  try { const { data } = await db.auth.getSession(); session = data?.session || null } catch { session = null }
-  if (!session) {
-    if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
-    return { ok: false, expired: true }
-  }
-  const expMs = Number(session.expires_at || 0) * 1000
-  if (expMs && expMs - Date.now() < 30000) {
-    const { error } = await db.auth.refreshSession()
-    if (error) { await escalateIfAuthError(error); return { ok: false, expired: true } }
-  }
-  return { ok: true }
+  if (_ensureInFlight) return _ensureInFlight
+  _ensureInFlight = (async () => {
+    const db = await getSupabaseClient()
+    let session = null
+    try { const { data } = await db.auth.getSession(); session = data?.session || null } catch { session = null }
+    if (!session) {
+      if (_onSessionExpired) { try { _onSessionExpired() } catch { /* ignore */ } }
+      return { ok: false, expired: true }
+    }
+    // Refresh a little further out than the old 30s: a slow clinic connection
+    // could otherwise start a read on a token that expires mid-flight.
+    const expMs = Number(session.expires_at || 0) * 1000
+    if (expMs && expMs - Date.now() < 120000) {
+      const { error } = await db.auth.refreshSession()
+      if (error) { await escalateIfAuthError(error); return { ok: false, expired: true } }
+    }
+    return { ok: true }
+  })()
+  try { return await _ensureInFlight } finally { _ensureInFlight = null }
 }

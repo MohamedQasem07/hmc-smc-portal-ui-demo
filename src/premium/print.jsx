@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Printer, FileDown, X, AlertTriangle, FlaskConical } from 'lucide-react'
 import { PremiumButton, StatusPill } from './primitives'
+import { IS_SUPABASE } from '../lib/api/config'
+import { useUserMode } from '../context/UserModeContext'
 
 /**
  * PrintExportActions — pair of action buttons shown on every Admin report / cases / detail page.
@@ -24,7 +26,14 @@ export function PrintExportActions({ onOpenPreview, label = 'this view' }) {
  * Uses a clean white card with branded header and footer.
  */
 export function PrintPreviewModal({ open, onClose, title, subtitle, children }) {
+  const { currentUser } = useUserMode()
   if (!open) return null
+  // A printed report leaves the building. In production it must carry the real
+  // date and the real person who ran it — never the seeded demo stamps.
+  const generatedOn = IS_SUPABASE
+    ? new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+    : '27 May 2026'
+  const generatedBy = IS_SUPABASE ? (currentUser?.displayName || '—') : 'Demo Administrator'
   return (
     <div className="theme-premium fixed inset-0 z-50 p-fade-in flex items-stretch sm:items-center justify-center p-0 sm:p-6">
       <div className="absolute inset-0" style={{ background: 'rgba(10, 27, 61, 0.55)', backdropFilter: 'blur(2px)' }} onClick={onClose} />
@@ -41,7 +50,7 @@ export function PrintPreviewModal({ open, onClose, title, subtitle, children }) 
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <StatusPill tone="amber" dot>Demo Print — frontend only</StatusPill>
+            {!IS_SUPABASE && <StatusPill tone="amber" dot>Demo Print — frontend only</StatusPill>}
             <PremiumButton size="sm" leftIcon={<FileDown className="w-3.5 h-3.5" />} onClick={() => window.print()}>
               Print / Save as PDF
             </PremiumButton>
@@ -62,23 +71,23 @@ export function PrintPreviewModal({ open, onClose, title, subtitle, children }) 
                   {subtitle && <p className="text-sm mt-1" style={{ color: 'var(--p-ink-500)' }}>{subtitle}</p>}
                 </div>
                 <div className="text-end text-[11px]" style={{ color: 'var(--p-ink-500)' }}>
-                  Generated 27 May 2026<br />
-                  By Demo Administrator<br />
-                  <span style={{ color: 'var(--p-mixed)', fontWeight: 600 }}>DEMO PREVIEW</span>
+                  Generated {generatedOn}<br />
+                  By {generatedBy}<br />
+                  {!IS_SUPABASE && <span style={{ color: 'var(--p-mixed)', fontWeight: 600 }}>DEMO PREVIEW</span>}
                 </div>
               </div>
             </header>
             <div>{children}</div>
             <footer className="pt-4 mt-8 border-t text-[10px] flex items-center justify-between" style={{ borderColor: 'var(--p-border)', color: 'var(--p-ink-400)' }}>
               <span>HMC / SMC Clinic Portal · Aegis · Internal use only</span>
-              <span>Demo print · No real patient data</span>
+              {!IS_SUPABASE && <span>Demo print · No real patient data</span>}
             </footer>
           </article>
         </div>
 
         <div className="px-5 py-3 border-t flex items-center gap-2 text-[11px] shrink-0" style={{ borderColor: 'var(--p-border)', background: 'var(--p-pending-soft)', color: '#7A4F1F' }}>
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Frontend-only Print Preview. Export PDF uses the browser's native Print-to-PDF dialog. Real billing PDFs are produced by the protected Claude / Manager workflow — never inside the Portal.</span>
+          <span>Export PDF uses the browser's native Print-to-PDF dialog. Invoices and billing PDFs are produced by the protected Claude / Manager workflow — never inside the Portal.</span>
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useReducer, useState, useCallback } from 'react'
+import { createContext, useContext, useEffect, useMemo, useReducer, useRef, useState, useCallback } from 'react'
 import {
   R1_CASES, R1_ROOM_BOARD, R1_NURSE_SHIFTS, R1_DOCTOR_ON_DUTY,
   R1_EXPENSE_ENTRIES, R1_HANDOVERS, R1_CASH_TREASURY, R1_VISA_BANK,
@@ -595,12 +595,23 @@ export function DemoStateProvider({ children }) {
   useEffect(() => { if (!IS_SUPABASE) persistState(state) }, [state])
 
   // Supabase-backed cases — (re)load (RLS-scoped) whenever the signed-in user changes.
+  // Single-flight: a page mount calls this from every useCasesForClinic /
+  // useCasesForBranch on the screen, plus the focus listener below. Firing one
+  // request per caller meant a burst of parallel reads, each racing its own token
+  // refresh — and because Supabase rotates refresh tokens, that burst revoked its
+  // own session (429 on /token) and every later read returned 401 / 42501. Callers
+  // now share whichever fetch is already running.
+  const inFlight = useRef(null)
   const refetchCases = useCallback(async () => {
     if (!IS_SUPABASE) return
-    try { dispatch({ type: 'CASES_SET', cases: await fetchCases() }) }
-    // P3J — a dead session makes RLS-scoped reads return empty; escalate to a
-    // clean re-login instead of silently showing an empty / stale case list.
-    catch (e) { console.error('[portal] fetchCases failed', e); await escalateIfAuthError(e) }
+    if (inFlight.current) return inFlight.current
+    inFlight.current = (async () => {
+      try { dispatch({ type: 'CASES_SET', cases: await fetchCases() }) }
+      // P3J — a dead session makes RLS-scoped reads return empty; escalate to a
+      // clean re-login instead of silently showing an empty / stale case list.
+      catch (e) { console.error('[portal] fetchCases failed', e); await escalateIfAuthError(e) }
+    })()
+    try { return await inFlight.current } finally { inFlight.current = null }
   }, [])
   useEffect(() => {
     if (!IS_SUPABASE) return

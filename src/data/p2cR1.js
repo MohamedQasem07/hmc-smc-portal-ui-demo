@@ -21,6 +21,8 @@
  * patient name and ref. This file is consumed by the R1 screens only.
  * ========================================================================= */
 
+import { IS_SUPABASE } from '../lib/api/config'
+
 const TODAY = new Date('2026-05-27T10:00:00')
 const isoMins = (offset) => {
   const d = new Date(TODAY)
@@ -941,7 +943,13 @@ export function r1HandoversFor(locationId) {
 }
 
 export const R1_TODAY = '2026-05-27'
-export const R1_TODAY_LABEL = '27 May 2026'
+
+/** Display-only date shown in page subtitles. R1_TODAY itself stays fixed —
+ *  mock filters compare against it — but in production the seeded label read
+ *  to staff as "this app is showing old data", so live pages show today. */
+export const R1_TODAY_LABEL = IS_SUPABASE
+  ? new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })
+  : '27 May 2026'
 
 /** Hours worked, given start + optional end ISO strings. */
 export function shiftHours(start, end) {
